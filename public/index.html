@@ -18,6 +18,7 @@
   </div>
 
   <div class="header-actions">
+    <button class="btn-frete-consult" id="btn-frete-consult">CONSULTA FRETE</button>
     <button class="btn-search-load" id="btn-search-load">Buscar</button>
     <div class="date-nav">
       <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
@@ -321,10 +322,31 @@
   </div>
 </div>
 
+<div id="frete-consult-overlay" class="modal-overlay hidden">
+  <div class="modal frete-consult-modal">
+    <div class="modal-header">
+      <span>Consulta Frete</span>
+      <button class="modal-close" id="frete-consult-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body frete-consult-body">
+      <div class="frete-consult-grid" id="frete-consult-grid"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" id="frete-consult-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div id="event-warning-overlay" class="modal-overlay hidden">
   <div class="modal event-warning-modal">
-    <div class="event-warning-message">Verificar Evento</div>
-    <div class="modal-footer">
+    <div class="event-warning-header">
+      <span>Verificar Evento</span>
+    </div>
+    <div class="event-warning-body">
+      <div class="event-warning-label">Evento registrado</div>
+      <div class="event-warning-text" id="event-warning-text"></div>
+    </div>
+    <div class="event-warning-footer">
       <button type="button" class="btn-primary" id="event-warning-ok">OK</button>
     </div>
   </div>
