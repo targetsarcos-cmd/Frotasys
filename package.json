@@ -1,0 +1,19 @@
+{
+  "name": "frota-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "nedb-promises": "^6.2.3",
+    "sql.js": "^1.14.1",
+    "ws": "^8.20.0"
+  }
+}

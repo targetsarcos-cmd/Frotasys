@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FROTA - Controle de Viagens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="ws-status" class="ws-status offline">Desconectado</div>
+
+<header class="header">
+  <div class="header-left">
+    <div class="logo">FROTA<span>SYS</span></div>
+    <div class="header-sub">Controle de viagens e carregamentos</div>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn-search-load" id="btn-search-load">Buscar</button>
+    <div class="date-nav">
+      <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
+      <input type="date" id="date-picker" class="date-picker">
+      <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
+    </div>
+    <button class="btn-settings" id="btn-settings" title="Configurações" aria-label="Configurações">⚙</button>
+    <button class="btn-add" id="btn-nova-viagem">Nova Viagem</button>
+  </div>
+</header>
+
+<main class="main">
+  <section class="toolbar">
+    <div class="origin-filters" id="origin-filters" aria-label="Filtros de origem">
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h2>Faturado</h2>
+        <span id="count-arcos" class="section-count">0 registros</span>
+      </div>
+    </div>
+    <div class="table-wrapper" id="table-faturado-wrap">
+      <table class="data-table" id="table-arcos">
+        <thead>
+          <tr>
+            <th>PLACA</th>
+            <th>NOME</th>
+            <th>TIPO</th>
+            <th>PRODUTO</th>
+            <th>CARROCERIA</th>
+            <th>PAMCARD</th>
+            <th>STATUS</th>
+            <th>USUÁRIO</th>
+            <th>AGENDAMENTO</th>
+            <th>TELEFONE</th>
+            <th>FRETE</th>
+            <th>ORIGEM</th>
+            <th>DESTINO</th>
+            <th>PESO</th>
+            <th>DT</th>
+            <th>CT-E</th>
+            <th>CONTRATO</th>
+            <th>NOTA</th>
+            <th>Nº PEDÁGIO</th>
+            <th>VLR PEDÁGIO</th>
+            <th>HORAS</th>
+            <th>OBSERVAÇÃO</th>
+            <th>DATA</th>
+            <th class="col-actions"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-arcos"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="summary-layout">
+    <div class="summary-panel" id="summary-arcos">
+      <div class="summary-title">Resumo consolidado</div>
+      <div class="summary-cards" id="summary-cards"></div>
+    </div>
+  </section>
+
+  <section class="section-block">
+    <div class="section-header">
+      <div>
+        <h2>Agenciado</h2>
+        <span id="count-agenciando" class="section-count">0 registros</span>
+      </div>
+    </div>
+    <div class="table-wrapper" id="table-agenciado-wrap">
+      <table class="data-table" id="table-agenciando">
+        <thead>
+          <tr>
+            <th>PLACA</th>
+            <th>NOME</th>
+            <th>TIPO</th>
+            <th>PRODUTO</th>
+            <th>CARROCERIA</th>
+            <th>PAMCARD</th>
+            <th>STATUS</th>
+            <th>USUÁRIO</th>
+            <th>AGENDAMENTO</th>
+            <th>TELEFONE</th>
+            <th>FRETE</th>
+            <th>ORIGEM</th>
+            <th>DESTINO</th>
+            <th>PESO</th>
+            <th>DT</th>
+            <th>CT-E</th>
+            <th>CONTRATO</th>
+            <th>NOTA</th>
+            <th>Nº PEDÁGIO</th>
+            <th>VLR PEDÁGIO</th>
+            <th>HORAS</th>
+            <th>OBSERVAÇÃO</th>
+            <th>DATA</th>
+            <th class="col-actions"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-agenciando"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="modal-title">Nova Viagem</span>
+      <button class="modal-close" id="modal-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>PLACA</label>
+          <input type="text" id="f-placa" placeholder="ABC1234" maxlength="8">
+        </div>
+        <div class="form-group">
+          <label>NOME</label>
+          <input type="text" id="f-nome" placeholder="Nome do motorista">
+        </div>
+        <div class="form-group">
+          <label>TIPO</label>
+          <select id="f-tipo">
+            <option value="">-</option>
+            <option value="AGREGADO">AGREGADO</option>
+            <option value="CARRETEIRO">CARRETEIRO</option>
+            <option value="DEDICADO">DEDICADO</option>
+            <option value="FROTA">FROTA</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>PRODUTO</label>
+          <select id="f-produto">
+            <option value="">-</option>
+            <option value="CPII-F">CPII-F</option>
+            <option value="CPIII">CPIII</option>
+            <option value="CPV">CPV</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>REGISTRO</label>
+          <select id="f-secao">
+            <option value="arcos">FATURADO</option>
+            <option value="agenciando">AGENCIADO</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>CARROCERIA</label>
+          <select id="f-carroceria">
+            <option value="">-</option>
+            <option value="GRADE BAIXA">GRADE BAIXA</option>
+            <option value="BAU">BAÚ</option>
+            <option value="SIDER">SIDER</option>
+            <option value="TANQUE">TANQUE</option>
+            <option value="GRANELEIRO">GRANELEIRO</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>PAMCARD</label>
+          <select id="f-pamcard">
+            <option value="">-</option>
+            <option value="PAMCARD OK">PAMCARD OK</option>
+            <option value="FECHAMENTO">FECHAMENTO</option>
+            <option value="SEM PAMCARD">SEM PAMCARD</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>STATUS</label>
+          <select id="f-status">
+            <option value="">-</option>
+            <option value="CRIANDO DT">CRIANDO DT</option>
+            <option value="CADASTRANDO">CADASTRANDO</option>
+            <option value="AGUARDANDO CARREGAMENTO">AGUARDANDO CARREGAMENTO</option>
+            <option value="MANIFESTO">MANIFESTO</option>
+            <option value="CONCLUIDO">CONCLUÍDO</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>USUÁRIO</label>
+          <input type="text" id="f-usuario" placeholder="Usuário responsável">
+        </div>
+        <div class="form-group">
+          <label>AGENDAMENTO</label>
+          <input type="text" id="f-agendamento" placeholder="00:00">
+        </div>
+        <div class="form-group">
+          <label>TELEFONE</label>
+          <input type="text" id="f-telefone" placeholder="(xx) xxxxx-xxxx">
+        </div>
+        <div class="form-group">
+          <label>FRETE</label>
+          <input type="text" id="f-frete" placeholder="Observação de frete">
+        </div>
+        <div class="form-group">
+          <label>ORIGEM</label>
+          <select id="f-origem">
+            <option value="">-</option>
+            <option value="ARCOS">ARCOS</option>
+            <option value="PEDRO LEOPOLDO">PEDRO LEOPOLDO</option>
+            <option value="BARROSO">BARROSO</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>DESTINO</label>
+          <select id="f-destino">
+            <option value="">-</option>
+            <option value="OSASCO">OSASCO</option>
+            <option value="AMERICANA">AMERICANA</option>
+            <option value="SJRP">SJRP</option>
+            <option value="SOROCABA">SOROCABA</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>PESO</label>
+          <input type="number" id="f-peso" placeholder="0.000" step="0.001">
+        </div>
+        <div class="form-group full-width">
+          <label>OBSERVAÇÃO</label>
+          <input type="text" id="f-obs" placeholder="Observação livre">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="btn-cancel">Cancelar</button>
+      <button class="btn-save" id="btn-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="op-modal-overlay" class="modal-overlay hidden">
+  <div class="modal operation-modal">
+    <div class="modal-header">
+      <span id="op-modal-title">Configurar Operação</span>
+      <button class="modal-close" id="op-modal-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="operation-form">
+        <div class="form-group">
+          <label>ORIGEM</label>
+          <input type="text" id="op-origem" placeholder="Nome da origem">
+        </div>
+      </div>
+      <div class="operation-visibility">
+        <div class="summary-title">Visualização do card</div>
+        <div class="operation-choice-layout">
+          <section class="operation-choice-section">
+            <div class="operation-choice-head">
+              <strong>Metas por destino</strong>
+              <span>Mostrar somente os destinos selecionados</span>
+            </div>
+            <div class="operation-choice-grid" id="op-destinos-grid"></div>
+          </section>
+          <section class="operation-choice-section">
+            <div class="operation-choice-head">
+              <strong>Tipos de produto</strong>
+              <span>Usa as opções da aba Configurações</span>
+            </div>
+            <div class="operation-choice-grid" id="op-produtos-grid"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="op-btn-cancel">Cancelar</button>
+      <button class="btn-save" id="op-btn-save">Salvar Operação</button>
+    </div>
+  </div>
+</div>
+
+<div id="search-modal-overlay" class="modal-overlay hidden">
+  <div class="modal search-modal">
+    <div class="modal-header">
+      <span>Buscar carregamento</span>
+      <button class="modal-close" id="search-modal-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="search-box">
+        <div class="form-group">
+          <label>CT-E</label>
+          <input type="text" id="search-cte" placeholder="Digite o CT-E">
+        </div>
+        <div class="form-group">
+          <label>NOTA</label>
+          <input type="text" id="search-nota" placeholder="Digite a nota">
+        </div>
+        <button class="btn-save" id="search-btn">Buscar</button>
+      </div>
+      <div class="search-status" id="search-status"></div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="search-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings-modal-overlay" class="modal-overlay hidden">
+  <div class="modal settings-modal">
+    <div class="modal-header">
+      <span>Configurações</span>
+      <button class="modal-close" id="settings-modal-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-operations" id="settings-operations"></div>
+      <div class="settings-grid" id="settings-grid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="settings-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="ctx-menu" class="ctx-menu hidden">
+  <div class="ctx-item" id="ctx-edit">Editar</div>
+  <div class="ctx-item danger" id="ctx-delete">Excluir</div>
+</div>
+
+<div id="agendamento-menu" class="ctx-menu hidden">
+  <div class="ctx-item" id="agendamento-mark">Agendado</div>
+  <div class="ctx-item" id="agendamento-edit">Editar horário</div>
+</div>
+
+<script src="js/app.js?v=20260520-9"></script>
+</body>
+</html>
