@@ -56,7 +56,7 @@
             <th>USUÁRIO</th>
             <th>AGENDAMENTO</th>
             <th>TELEFONE</th>
-            <th>FRETE</th>
+            <th>EVENTO</th>
             <th>ORIGEM</th>
             <th>DESTINO</th>
             <th>PESO</th>
@@ -106,7 +106,7 @@
             <th>USUÁRIO</th>
             <th>AGENDAMENTO</th>
             <th>TELEFONE</th>
-            <th>FRETE</th>
+            <th>EVENTO</th>
             <th>ORIGEM</th>
             <th>DESTINO</th>
             <th>PESO</th>
@@ -215,8 +215,8 @@
           <input type="text" id="f-telefone" placeholder="(00) 00000-0000 / (00) 00000-0000">
         </div>
         <div class="form-group">
-          <label>FRETE</label>
-          <input type="text" id="f-frete" placeholder="Observação de frete">
+          <label>EVENTO</label>
+          <input type="text" id="f-frete" placeholder="Observação do evento">
         </div>
         <div class="form-group">
           <label>ORIGEM</label>
@@ -317,6 +317,15 @@
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="search-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="event-warning-overlay" class="modal-overlay hidden">
+  <div class="modal event-warning-modal">
+    <div class="event-warning-message">Verificar Evento</div>
+    <div class="modal-footer">
+      <button type="button" class="btn-primary" id="event-warning-ok">OK</button>
     </div>
   </div>
 </div>

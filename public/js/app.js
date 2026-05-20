@@ -78,7 +78,7 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'usuario', label: 'USUÁRIO' },
   { key: 'agendamento', label: 'AGENDAMENTO' },
   { key: 'telefone', label: 'TELEFONE' },
-  { key: 'frete', label: 'FRETE' },
+  { key: 'frete', label: 'EVENTO' },
   { key: 'origem', label: 'ORIGEM' },
   { key: 'destino', label: 'DESTINO' },
   { key: 'peso', label: 'PESO' },
@@ -224,6 +224,10 @@ function initUI() {
   document.getElementById('search-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('search-modal-overlay')) closeSearchModal();
   });
+  document.getElementById('event-warning-ok').addEventListener('click', closeEventWarning);
+  document.getElementById('event-warning-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('event-warning-overlay')) closeEventWarning();
+  });
 
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
@@ -301,6 +305,7 @@ function initUI() {
     if (e.key === 'Escape') {
       closeModal();
       closeSearchModal();
+      closeEventWarning();
       closeSettingsModal();
       hideCtxMenu();
       hideAgendamentoMenu();
@@ -316,6 +321,16 @@ function openSearchModal() {
 
 function closeSearchModal() {
   document.getElementById('search-modal-overlay').classList.add('hidden');
+}
+
+function showEventWarning() {
+  const overlay = document.getElementById('event-warning-overlay');
+  overlay.classList.remove('hidden');
+  document.getElementById('event-warning-ok').focus();
+}
+
+function closeEventWarning() {
+  document.getElementById('event-warning-overlay').classList.add('hidden');
 }
 
 async function searchCarregamento() {
@@ -493,7 +508,7 @@ const FIELDS = [
   { key: 'usuario', label: 'USUÁRIO', quick: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
-  { key: 'frete', label: 'FRETE', quick: true },
+  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'origem', label: 'ORIGEM', select: true },
   { key: 'destino', label: 'DESTINO', select: true },
   { key: 'peso', label: 'PESO', quick: true, number: true },
@@ -1317,9 +1332,11 @@ async function updateViagemField(id, field, value) {
     body: JSON.stringify({ [field]: value })
   });
   if (updated) {
+    const shouldWarnEvent = field === 'cte' && String(value || '').trim() && String(updated.frete || '').trim();
     const idx = state.viagens.findIndex(v => v._id === id);
     if (idx !== -1) state.viagens[idx] = updated;
     renderAll();
+    if (shouldWarnEvent) setTimeout(showEventWarning, 0);
   }
   return updated;
 }
