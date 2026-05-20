@@ -291,6 +291,8 @@ button, input, select {
 }
 
 .data-table {
+  --sticky-placa-width: 132px;
+  --sticky-nome-width: 142px;
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -318,11 +320,11 @@ button, input, select {
 }
 
 .data-table thead th[data-field]:hover,
-.data-table thead th.is-filtered {
+.data-table thead th.is-sorted {
   background: #ffe35a;
 }
 
-.data-table thead th.is-filtered {
+.data-table thead th.is-sorted {
   color: var(--accent);
 }
 
@@ -330,8 +332,9 @@ button, input, select {
 .data-table td[data-field="placa"] {
   position: sticky;
   left: 0;
-  min-width: 132px;
-  width: 132px;
+  min-width: var(--sticky-placa-width);
+  width: var(--sticky-placa-width);
+  max-width: var(--sticky-placa-width);
   z-index: 3;
   background: var(--surface);
 }
@@ -339,9 +342,10 @@ button, input, select {
 .data-table th[data-field="nome"],
 .data-table td[data-field="nome"] {
   position: sticky;
-  left: 132px;
-  min-width: 142px;
-  width: 142px;
+  left: var(--sticky-placa-width);
+  min-width: var(--sticky-nome-width);
+  width: var(--sticky-nome-width);
+  max-width: var(--sticky-nome-width);
   z-index: 3;
   background: var(--surface);
   box-shadow: 8px 0 12px rgba(15, 23, 42, .06);
@@ -355,8 +359,8 @@ button, input, select {
 
 .data-table thead th[data-field="placa"]:hover,
 .data-table thead th[data-field="nome"]:hover,
-.data-table thead th[data-field="placa"].is-filtered,
-.data-table thead th[data-field="nome"].is-filtered {
+.data-table thead th[data-field="placa"].is-sorted,
+.data-table thead th[data-field="nome"].is-sorted {
   background: #ffe35a;
 }
 
@@ -468,7 +472,7 @@ button, input, select {
 }
 
 /* Inline edit cells */
-.data-table td[data-field] {
+.data-table td[data-field]:not([data-field="placa"]):not([data-field="nome"]) {
   position: relative;
 }
 
@@ -575,6 +579,7 @@ button, input, select {
 }
 
 .btn-row {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-dim);
@@ -600,6 +605,43 @@ button, input, select {
   border-color: var(--red);
   color: var(--red);
   background: #fff1f1;
+}
+
+.copy-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  transform: translate(-50%, 4px);
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #172033;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .18);
+  transition: opacity .16s, transform .16s;
+}
+
+.copy-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 7px;
+  height: 7px;
+  background: #172033;
+  transform: translate(-50%, -4px) rotate(45deg);
+}
+
+.copy-bubble.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .empty-state {

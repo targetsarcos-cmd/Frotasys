@@ -14,7 +14,7 @@ const state = {
   operacoes: [],
   configOptions: {},
   configColors: {},
-  columnFilters: {},
+  tableSort: { field: '', direction: 'asc' },
   ws: null
 };
 
@@ -529,7 +529,7 @@ function renderTable(secao) {
       ${cells}
       <td>
         <div class="row-actions">
-          <button class="btn-row" onclick="copyViagem('${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
+          <button class="btn-row" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
           <button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>
           <button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>
         </div>
@@ -544,13 +544,14 @@ function renderTableHeader(secao) {
   if (!headRow) return;
 
   headRow.innerHTML = `${FIELDS.map(field => {
-    const active = state.columnFilters[field.key] ? 'is-filtered' : '';
-    const label = `${field.label}${active ? ' •' : ''}`;
-    return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para filtrar ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
+    const active = state.tableSort.field === field.key ? 'is-sorted' : '';
+    const arrow = active ? ' ↑' : '';
+    const label = `${field.label}${arrow}`;
+    return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
   }).join('')}<th class="col-actions"></th>`;
 
   headRow.querySelectorAll('th[data-field]').forEach(th => {
-    th.onclick = () => openColumnFilter(th.dataset.field);
+    th.onclick = () => sortTableBy(th.dataset.field);
   });
 }
 
@@ -854,48 +855,45 @@ async function moveConfigOption(field, index, direction) {
 }
 
 function filteredRows(secao) {
-  return state.viagens
+  return sortRows(state.viagens
     .filter(v => v.secao === secao)
     .filter(v => v.data === state.currentDate)
-    .filter(v => !state.originFilter || v.origem === state.originFilter)
-    .filter(matchesColumnFilters);
+    .filter(v => !state.originFilter || v.origem === state.originFilter));
 }
 
-function openColumnFilter(fieldKey) {
+function sortTableBy(fieldKey) {
   const field = FIELDS.find(item => item.key === fieldKey);
   if (!field) return;
 
-  const current = state.columnFilters[fieldKey] || '';
-  const value = prompt(`Filtrar ${field.label}. Deixe vazio para limpar.`, current);
-  if (value === null) return;
-
-  const normalized = normalizeFilterText(value);
-  if (normalized) state.columnFilters[fieldKey] = value.trim();
-  else delete state.columnFilters[fieldKey];
-
-  renderAll();
+  state.tableSort = {
+    field: fieldKey,
+    direction: 'asc'
+  };
+  renderTable('arcos');
+  renderTable('agenciando');
 }
 
-function matchesColumnFilters(viagem) {
-  return Object.entries(state.columnFilters).every(([field, term]) => {
-    const haystack = normalizeFilterText(valueForFilter(viagem, field));
-    const needle = normalizeFilterText(term);
-    return !needle || haystack.includes(needle);
+function sortRows(rows) {
+  const { field, direction } = state.tableSort;
+  if (!field) return rows;
+
+  const modifier = direction === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const primary = sortValue(a, field).localeCompare(sortValue(b, field), 'pt-BR', {
+      numeric: true,
+      sensitivity: 'base'
+    });
+    if (primary) return primary * modifier;
+
+    return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
   });
 }
 
-function valueForFilter(viagem, field) {
+function sortValue(viagem, field) {
   const value = viagem[field] || '';
-  if (field === 'telefone') return value;
+  if (field === 'tipo') return normalizeTipo(value);
+  if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   return formatCellValue(field, value);
-}
-
-function normalizeFilterText(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
 }
 
 function renderSummary() {
@@ -1594,7 +1592,7 @@ function editViagem(id) {
   if (viagem) openModal(viagem);
 }
 
-async function copyViagem(id) {
+async function copyViagem(event, id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!viagem) return;
 
@@ -1607,18 +1605,40 @@ async function copyViagem(id) {
     `DT: ${viagem.dt || ''}`
   ].join('\n');
 
+  showCopyBubble(event?.currentTarget);
+
   try {
     await navigator.clipboard.writeText(text);
   } catch (e) {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    textarea.remove();
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    } catch (fallbackError) {
+      console.error('Erro ao copiar viagem', fallbackError);
+    }
   }
+}
+
+function showCopyBubble(button) {
+  if (!button) return;
+
+  button.querySelector('.copy-bubble')?.remove();
+  const bubble = document.createElement('span');
+  bubble.className = 'copy-bubble';
+  bubble.textContent = 'Copiado';
+  button.appendChild(bubble);
+
+  setTimeout(() => bubble.classList.add('is-visible'), 10);
+  setTimeout(() => {
+    bubble.classList.remove('is-visible');
+    setTimeout(() => bubble.remove(), 180);
+  }, 1200);
 }
 
 async function deleteViagem(id) {
