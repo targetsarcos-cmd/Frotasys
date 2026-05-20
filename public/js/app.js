@@ -267,12 +267,15 @@ function initUI() {
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (e.target.matches('input, select, button')) return;
     const td = e.target.closest('td[data-field]:not(.cell-select)');
-    if (td?.dataset.field === 'agendamento') {
-      showAgendamentoMenu(e, td);
-      return;
-    }
     if (td && td.classList.contains('quick-edit')) startInlineEdit(td);
   });
+
+  document.addEventListener('contextmenu', e => {
+    const td = e.target.closest('td[data-field="agendamento"]:not(.cell-select)');
+    if (!td) return;
+    e.stopPropagation();
+    showAgendamentoMenu(e, td);
+  }, true);
 
   document.getElementById('ctx-edit').addEventListener('click', () => {
     if (state.ctxTargetId) editViagem(state.ctxTargetId);
@@ -516,6 +519,7 @@ function renderTable(secao) {
 
   if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="${FIELDS.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
+    updateStickyColumnWidths(document.getElementById(`table-${secao}`));
     return;
   }
 
@@ -536,6 +540,19 @@ function renderTable(secao) {
       </td>
     </tr>`;
   }).join('');
+  updateStickyColumnWidths(document.getElementById(`table-${secao}`));
+}
+
+function updateStickyColumnWidths(table) {
+  if (!table) return;
+
+  const measureField = (field, minWidth) => {
+    const cells = [...table.querySelectorAll(`th[data-field="${field}"], td[data-field="${field}"]`)];
+    return cells.reduce((width, cell) => Math.max(width, Math.ceil(cell.scrollWidth)), minWidth);
+  };
+
+  table.style.setProperty('--sticky-placa-width', `${measureField('placa', 132)}px`);
+  table.style.setProperty('--sticky-nome-width', `${measureField('nome', 142)}px`);
 }
 
 function renderTableHeader(secao) {
@@ -545,7 +562,7 @@ function renderTableHeader(secao) {
 
   headRow.innerHTML = `${FIELDS.map(field => {
     const active = state.tableSort.field === field.key ? 'is-sorted' : '';
-    const arrow = active ? ' ↑' : '';
+    const arrow = active ? (state.tableSort.direction === 'asc' ? ' ↑' : ' ↓') : '';
     const label = `${field.label}${arrow}`;
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
   }).join('')}<th class="col-actions"></th>`;
@@ -864,10 +881,11 @@ function filteredRows(secao) {
 function sortTableBy(fieldKey) {
   const field = FIELDS.find(item => item.key === fieldKey);
   if (!field) return;
+  const sameField = state.tableSort.field === fieldKey;
 
   state.tableSort = {
     field: fieldKey,
-    direction: 'asc'
+    direction: sameField && state.tableSort.direction === 'asc' ? 'desc' : 'asc'
   };
   renderTable('arcos');
   renderTable('agenciando');

@@ -293,7 +293,8 @@ button, input, select {
 .data-table {
   --sticky-placa-width: 132px;
   --sticky-nome-width: 142px;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-family: var(--font-mono);
@@ -304,7 +305,7 @@ button, input, select {
   background: #fff200;
   color: #172033;
   font-weight: 700;
-  padding: 9px 10px;
+  padding: 9px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -348,13 +349,21 @@ button, input, select {
   max-width: var(--sticky-nome-width);
   z-index: 3;
   background: var(--surface);
-  box-shadow: 8px 0 12px rgba(15, 23, 42, .06);
+  box-shadow: 10px 0 18px rgba(15, 23, 42, .08);
 }
 
 .data-table thead th[data-field="placa"],
 .data-table thead th[data-field="nome"] {
   background: #fff200;
   z-index: 5;
+}
+
+.data-table thead th[data-field="placa"] {
+  border-top-left-radius: 8px;
+}
+
+.data-table thead th[data-field="nome"] {
+  border-top-right-radius: 8px;
 }
 
 .data-table thead th[data-field="placa"]:hover,
@@ -371,6 +380,14 @@ button, input, select {
 
 .data-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.data-table tbody tr:last-child td[data-field="placa"] {
+  border-bottom-left-radius: 8px;
+}
+
+.data-table tbody tr:last-child td[data-field="nome"] {
+  border-bottom-right-radius: 8px;
 }
 
 .data-table tbody tr:hover {
@@ -423,7 +440,7 @@ button, input, select {
 }
 
 .data-table td {
-  padding: 7px 10px;
+  padding: 7px 12px;
   border-bottom: 1px solid #edf1f6;
   white-space: nowrap;
   color: var(--text);
@@ -468,7 +485,8 @@ button, input, select {
 .origin-row.origin-barroso td:first-child { border-left-color: var(--barroso); }
 
 .col-actions {
-  width: 188px;
+  width: max-content;
+  min-width: 188px;
 }
 
 /* Inline edit cells */
@@ -511,30 +529,22 @@ button, input, select {
 }
 
 .cell-select {
-  min-width: 130px;
+  min-width: max-content;
 }
 
 .cell-tipo {
-  min-width: 104px;
-  width: 104px;
-}
-
-.data-table th[data-field="tipo"],
-.data-table td[data-field="tipo"] {
-  width: 104px;
+  min-width: max-content;
 }
 
 .data-table th[data-field="telefone"],
 .data-table td[data-field="telefone"] {
-  max-width: 112px;
-  width: 112px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: max-content;
+  min-width: max-content;
 }
 
 .table-select {
-  width: 100%;
-  min-width: 112px;
+  width: max-content;
+  min-width: 132px;
   height: 28px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -549,7 +559,7 @@ button, input, select {
 }
 
 .cell-tipo .table-select {
-  min-width: 88px;
+  min-width: 116px;
 }
 
 .table-select:focus {
