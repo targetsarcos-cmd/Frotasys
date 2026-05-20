@@ -312,6 +312,54 @@ button, input, select {
   z-index: 1;
 }
 
+.data-table thead th[data-field] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table thead th[data-field]:hover,
+.data-table thead th.is-filtered {
+  background: #ffe35a;
+}
+
+.data-table thead th.is-filtered {
+  color: var(--accent);
+}
+
+.data-table th[data-field="placa"],
+.data-table td[data-field="placa"] {
+  position: sticky;
+  left: 0;
+  min-width: 132px;
+  width: 132px;
+  z-index: 3;
+  background: var(--surface);
+}
+
+.data-table th[data-field="nome"],
+.data-table td[data-field="nome"] {
+  position: sticky;
+  left: 132px;
+  min-width: 142px;
+  width: 142px;
+  z-index: 3;
+  background: var(--surface);
+  box-shadow: 8px 0 12px rgba(15, 23, 42, .06);
+}
+
+.data-table thead th[data-field="placa"],
+.data-table thead th[data-field="nome"] {
+  background: #fff200;
+  z-index: 5;
+}
+
+.data-table thead th[data-field="placa"]:hover,
+.data-table thead th[data-field="nome"]:hover,
+.data-table thead th[data-field="placa"].is-filtered,
+.data-table thead th[data-field="nome"].is-filtered {
+  background: #ffe35a;
+}
+
 .data-table tbody tr {
   border-bottom: 1px solid var(--border);
   transition: background .1s;
@@ -325,7 +373,17 @@ button, input, select {
   background: #f8fbff;
 }
 
+.data-table tbody tr:hover td[data-field="placa"],
+.data-table tbody tr:hover td[data-field="nome"] {
+  background: #f8fbff;
+}
+
 .data-table tbody tr.is-documentos-completos td {
+  background: #ecfdf3;
+}
+
+.data-table tbody tr.is-documentos-completos td[data-field="placa"],
+.data-table tbody tr.is-documentos-completos td[data-field="nome"] {
   background: #ecfdf3;
 }
 
@@ -333,11 +391,26 @@ button, input, select {
   background: #dcfce7;
 }
 
+.data-table tbody tr.is-documentos-completos:hover td[data-field="placa"],
+.data-table tbody tr.is-documentos-completos:hover td[data-field="nome"] {
+  background: #dcfce7;
+}
+
 .data-table tbody tr.is-sem-cadastro td {
   background: #fff1df;
 }
 
+.data-table tbody tr.is-sem-cadastro td[data-field="placa"],
+.data-table tbody tr.is-sem-cadastro td[data-field="nome"] {
+  background: #fff1df;
+}
+
 .data-table tbody tr.is-sem-cadastro:hover td {
+  background: #ffe4bf;
+}
+
+.data-table tbody tr.is-sem-cadastro:hover td[data-field="placa"],
+.data-table tbody tr.is-sem-cadastro:hover td[data-field="nome"] {
   background: #ffe4bf;
 }
 
@@ -391,7 +464,7 @@ button, input, select {
 .origin-row.origin-barroso td:first-child { border-left-color: var(--barroso); }
 
 .col-actions {
-  width: 120px;
+  width: 188px;
 }
 
 /* Inline edit cells */
@@ -437,6 +510,24 @@ button, input, select {
   min-width: 130px;
 }
 
+.cell-tipo {
+  min-width: 104px;
+  width: 104px;
+}
+
+.data-table th[data-field="tipo"],
+.data-table td[data-field="tipo"] {
+  width: 104px;
+}
+
+.data-table th[data-field="telefone"],
+.data-table td[data-field="telefone"] {
+  max-width: 112px;
+  width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .table-select {
   width: 100%;
   min-width: 112px;
@@ -451,6 +542,10 @@ button, input, select {
   padding: 0 26px 0 10px;
   outline: none;
   cursor: pointer;
+}
+
+.cell-tipo .table-select {
+  min-width: 88px;
 }
 
 .table-select:focus {

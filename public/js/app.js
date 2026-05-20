@@ -14,6 +14,7 @@ const state = {
   operacoes: [],
   configOptions: {},
   configColors: {},
+  columnFilters: {},
   ws: null
 };
 
@@ -83,6 +84,7 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'peso', label: 'PESO' },
   { key: 'dt', label: 'DT' },
   { key: 'cte', label: 'CT-E' },
+  { key: 'manifesto', label: 'MANIFESTO' },
   { key: 'contrato', label: 'CONTRATO' },
   { key: 'nota', label: 'NOTA' },
   { key: 'num_pedagio', label: 'Nº PEDÁGIO' },
@@ -234,6 +236,12 @@ function initUI() {
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
   document.getElementById('btn-save').addEventListener('click', saveViagem);
+  document.getElementById('f-agendamento').addEventListener('input', e => {
+    e.target.value = maskHourInput(e.target.value);
+  });
+  document.getElementById('f-telefone').addEventListener('input', e => {
+    e.target.value = maskPhoneListInput(e.target.value);
+  });
   document.getElementById('modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('modal-overlay')) closeModal();
   });
@@ -488,6 +496,7 @@ const FIELDS = [
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'dt', label: 'DT', quick: true },
   { key: 'cte', label: 'CT-E', quick: true },
+  { key: 'manifesto', label: 'MANIFESTO', quick: true },
   { key: 'contrato', label: 'CONTRATO', quick: true },
   { key: 'nota', label: 'NOTA', quick: true },
   { key: 'num_pedagio', label: 'Nº PED', quick: true },
@@ -498,6 +507,7 @@ const FIELDS = [
 ];
 
 function renderTable(secao) {
+  renderTableHeader(secao);
   const tbody = document.getElementById(`tbody-${secao}`);
   const rows = filteredRows(secao);
   const count = document.getElementById(`count-${secao}`);
@@ -519,6 +529,7 @@ function renderTable(secao) {
       ${cells}
       <td>
         <div class="row-actions">
+          <button class="btn-row" onclick="copyViagem('${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
           <button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>
           <button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>
         </div>
@@ -527,8 +538,24 @@ function renderTable(secao) {
   }).join('');
 }
 
+function renderTableHeader(secao) {
+  const table = document.getElementById(`table-${secao}`);
+  const headRow = table?.querySelector('thead tr');
+  if (!headRow) return;
+
+  headRow.innerHTML = `${FIELDS.map(field => {
+    const active = state.columnFilters[field.key] ? 'is-filtered' : '';
+    const label = `${field.label}${active ? ' •' : ''}`;
+    return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para filtrar ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
+  }).join('')}<th class="col-actions"></th>`;
+
+  headRow.querySelectorAll('th[data-field]').forEach(th => {
+    th.onclick = () => openColumnFilter(th.dataset.field);
+  });
+}
+
 function hasDocumentosCompletos(viagem) {
-  return ['dt', 'cte', 'nota'].every(field => String(viagem[field] || '').trim() !== '');
+  return ['cte', 'nota', 'manifesto', 'contrato'].every(field => String(viagem[field] || '').trim() !== '');
 }
 
 function hasNotaPreenchida(viagem) {
@@ -558,6 +585,7 @@ function renderCell(v, field) {
   if (field.number && raw !== '') display = formatPeso(raw);
   if (field.time && raw !== '') display = normalizeHours(raw);
   if (field.date && raw !== '') display = formatDateBR(raw);
+  if (field.key === 'telefone') display = firstPhone(raw);
 
   if (field.key === 'placa') {
     const canPromote = v.secao === 'agenciando';
@@ -577,7 +605,8 @@ function renderCell(v, field) {
     if (upper.includes('SEM KANGURU')) cls += ' sem-kanguru';
   }
 
-  return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${cls.trim()}">${escapeHtml(display)}</td>`;
+  const title = field.key === 'telefone' && phoneList(raw).length > 1 ? ` title="${escapeAttr(raw)}"` : '';
+  return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${cls.trim()}"${title}>${escapeHtml(display)}</td>`;
 }
 
 function renderOptions(options, selected) {
@@ -828,7 +857,45 @@ function filteredRows(secao) {
   return state.viagens
     .filter(v => v.secao === secao)
     .filter(v => v.data === state.currentDate)
-    .filter(v => !state.originFilter || v.origem === state.originFilter);
+    .filter(v => !state.originFilter || v.origem === state.originFilter)
+    .filter(matchesColumnFilters);
+}
+
+function openColumnFilter(fieldKey) {
+  const field = FIELDS.find(item => item.key === fieldKey);
+  if (!field) return;
+
+  const current = state.columnFilters[fieldKey] || '';
+  const value = prompt(`Filtrar ${field.label}. Deixe vazio para limpar.`, current);
+  if (value === null) return;
+
+  const normalized = normalizeFilterText(value);
+  if (normalized) state.columnFilters[fieldKey] = value.trim();
+  else delete state.columnFilters[fieldKey];
+
+  renderAll();
+}
+
+function matchesColumnFilters(viagem) {
+  return Object.entries(state.columnFilters).every(([field, term]) => {
+    const haystack = normalizeFilterText(valueForFilter(viagem, field));
+    const needle = normalizeFilterText(term);
+    return !needle || haystack.includes(needle);
+  });
+}
+
+function valueForFilter(viagem, field) {
+  const value = viagem[field] || '';
+  if (field === 'telefone') return value;
+  return formatCellValue(field, value);
+}
+
+function normalizeFilterText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
 }
 
 function renderSummary() {
@@ -1193,10 +1260,17 @@ function startInlineEdit(td) {
 
   const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : 'text';
   const step = field === 'peso' ? '0.001' : field === 'vlr_pedagio' ? '0.01' : '';
-  td.innerHTML = `<input type="${inputType}" value="${escapeAttr(cur)}" ${step ? `step="${step}"` : ''}>`;
+  const placeholder = inputPlaceholder(field);
+  td.innerHTML = `<input type="${inputType}" value="${escapeAttr(cur)}" ${step ? `step="${step}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
   const inp = td.querySelector('input');
   inp.focus();
   inp.select();
+  if (field === 'telefone') {
+    inp.oninput = () => { inp.value = maskPhoneListInput(inp.value); };
+  }
+  if (field === 'horas' || field === 'agendamento') {
+    inp.oninput = () => { inp.value = maskHourInput(inp.value); };
+  }
   inp.onkeydown = e => {
     if (e.key === 'Enter') commitInlineEdit(td, id, field, inp.value);
     if (e.key === 'Escape') {
@@ -1243,6 +1317,7 @@ function cancelInlineEdit() {
 
 function normalizeFieldValue(field, value) {
   if (field === 'horas' || field === 'agendamento') return normalizeHours(value);
+  if (field === 'telefone') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
   if (field === 'data') return String(value || '').trim();
@@ -1253,8 +1328,15 @@ function formatCellValue(field, value) {
   if (field === 'vlr_pedagio' && value !== '') return formatMoney(value);
   if (field === 'peso' && value !== '') return formatPeso(value);
   if ((field === 'horas' || field === 'agendamento') && value !== '') return normalizeHours(value);
+  if (field === 'telefone' && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
   return value || '';
+}
+
+function inputPlaceholder(field) {
+  if (field === 'telefone') return '(00) 00000-0000 / (00) 00000-0000';
+  if (field === 'horas' || field === 'agendamento') return '00:00';
+  return '';
 }
 
 function loadConfigColors() {
@@ -1466,7 +1548,7 @@ async function saveViagem() {
     status: v('f-status'),
     usuario: v('f-usuario'),
     agendamento: normalizeHours(v('f-agendamento')),
-    telefone: v('f-telefone'),
+    telefone: normalizePhoneList(v('f-telefone')),
     frete: v('f-frete'),
     origem: v('f-origem'),
     destino: v('f-destino'),
@@ -1510,6 +1592,33 @@ function v(id) {
 function editViagem(id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (viagem) openModal(viagem);
+}
+
+async function copyViagem(id) {
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!viagem) return;
+
+  const text = [
+    `NOME: ${viagem.nome || ''}`,
+    `PLACA: ${viagem.placa || ''}`,
+    `ORIGEM: ${viagem.origem || ''}`,
+    `DESTINO: ${viagem.destino || ''}`,
+    `PESO: ${formatPeso(viagem.peso || '')}`,
+    `DT: ${viagem.dt || ''}`
+  ].join('\n');
+
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
 }
 
 async function deleteViagem(id) {
@@ -1631,6 +1740,43 @@ function normalizeHours(value) {
   const hh = digits.slice(0, -2).padStart(2, '0').slice(-2);
   const mm = digits.slice(-2).padStart(2, '0');
   return `${hh}:${mm}`;
+}
+
+function maskHourInput(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function phoneList(value) {
+  return String(value || '')
+    .split(/\s*(?:\/|,|;|\|)\s*/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function firstPhone(value) {
+  return phoneList(value)[0] || String(value || '');
+}
+
+function normalizePhoneList(value) {
+  return phoneList(value)
+    .map(formatPhone)
+    .join(' / ');
+}
+
+function formatPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+  if (digits.length === 0) return '';
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function maskPhoneListInput(value) {
+  const parts = String(value || '').split('/');
+  return parts.map(part => formatPhone(part)).join(parts.length > 1 ? ' / ' : '');
 }
 
 function formatDateBR(date) {
