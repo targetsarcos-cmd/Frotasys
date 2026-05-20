@@ -2,18 +2,19 @@
   "name": "frota-app",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
     "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
     "express": "^5.2.1",
-    "nedb-promises": "^6.2.3",
-    "sql.js": "^1.14.1",
+    "pg": "^8.13.1",
     "ws": "^8.20.0"
   }
 }

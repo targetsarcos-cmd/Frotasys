@@ -1539,6 +1539,7 @@ function showAgendamentoMenu(e, cell) {
   const viagem = state.viagens.find(item => item._id === state.agendamentoTargetId);
   const mark = document.getElementById('agendamento-mark');
   mark.textContent = viagem?.agendamentoVerde ? 'Remover agendamento' : 'Agendado';
+  document.getElementById('agendamento-edit').textContent = 'Editar';
 
   const menu = document.getElementById('agendamento-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 170)}px`;

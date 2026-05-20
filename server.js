@@ -2,28 +2,19 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
-const Datastore = require('nedb-promises');
 const path = require('path');
-const fs = require('fs');
+const supabase = require('./supabaseClient');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Ensure data directory exists
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-
-// Databases
-const viagens = Datastore.create({ filename: path.join(dataDir, 'viagens.db'), autoload: true });
-const metas = Datastore.create({ filename: path.join(dataDir, 'metas.db'), autoload: true });
-const operacoes = Datastore.create({ filename: path.join(dataDir, 'operacoes.db'), autoload: true });
-const configOptions = Datastore.create({ filename: path.join(dataDir, 'config-options.db'), autoload: true });
-const operacoesInitFile = path.join(dataDir, 'operacoes.initialized');
+const TABLES = {
+  viagens: 'viagens',
+  metas: 'metas',
+  operacoes: 'operacoes',
+  configOptions: 'config_options'
+};
 
 const DEFAULT_OPERACOES = [
   { origem: 'ARCOS', metaTipo: 'arcos', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA'], ordem: 1 },
@@ -49,6 +40,137 @@ const UNIQUE_VIAGEM_FIELDS = [
   { key: 'num_pedagio', label: 'Nº DO PEDÁGIO' }
 ];
 
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+function supabaseToFrontend(record) {
+  const doc = { ...(record?.dados || {}) };
+  doc._id = record.id;
+  doc.id = record.id;
+  if (!doc.createdAt && record.created_at) doc.createdAt = record.created_at;
+  if (record.updated_at) doc.updatedAt = record.updated_at;
+  return doc;
+}
+
+function frontendToSupabase(data = {}) {
+  const doc = { ...data };
+  delete doc._id;
+  delete doc.id;
+  delete doc.created_at;
+  delete doc.updated_at;
+  return { dados: doc };
+}
+
+function legacyNedbToSupabase(doc = {}) {
+  return frontendToSupabase(doc);
+}
+
+async function selectDocs(table) {
+  const { data, error } = await supabase.from(table).select('*');
+  if (error) throw error;
+  return (data || []).map(supabaseToFrontend);
+}
+
+async function countDocs(table, predicate = () => true) {
+  const docs = await selectDocs(table);
+  return docs.filter(predicate).length;
+}
+
+async function findOneById(table, id) {
+  const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? supabaseToFrontend(data) : null;
+}
+
+async function findOne(table, predicate) {
+  const docs = await selectDocs(table);
+  return docs.find(predicate) || null;
+}
+
+async function insertDoc(table, data) {
+  const now = new Date().toISOString();
+  const payload = legacyNedbToSupabase({
+    ...data,
+    createdAt: data.createdAt || now,
+    updatedAt: data.updatedAt || now
+  });
+  const { data: inserted, error } = await supabase.from(table).insert(payload).select('*').single();
+  if (error) throw error;
+  return supabaseToFrontend(inserted);
+}
+
+async function insertDocs(table, docs) {
+  const now = new Date().toISOString();
+  const payload = docs.map(doc => legacyNedbToSupabase({
+    ...doc,
+    createdAt: doc.createdAt || now,
+    updatedAt: doc.updatedAt || now
+  }));
+  const { data, error } = await supabase.from(table).insert(payload).select('*');
+  if (error) throw error;
+  return (data || []).map(supabaseToFrontend);
+}
+
+async function updateDoc(table, id, patch) {
+  const current = await findOneById(table, id);
+  if (!current) return null;
+  const next = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString()
+  };
+  const { data, error } = await supabase
+    .from(table)
+    .update(frontendToSupabase(next))
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return supabaseToFrontend(data);
+}
+
+async function updateWhere(table, predicate, patchFactory) {
+  const docs = await selectDocs(table);
+  const targets = docs.filter(predicate);
+  return Promise.all(targets.map(doc => {
+    const patch = typeof patchFactory === 'function' ? patchFactory(doc) : patchFactory;
+    return updateDoc(table, doc._id, patch);
+  }));
+}
+
+async function deleteDoc(table, id) {
+  const { error } = await supabase.from(table).delete().eq('id', id);
+  if (error) throw error;
+}
+
+async function deleteWhere(table, predicate) {
+  const docs = await selectDocs(table);
+  const targets = docs.filter(predicate);
+  return Promise.all(targets.map(doc => deleteDoc(table, doc._id)));
+}
+
+function sortDocs(docs, sortSpec) {
+  const entries = Object.entries(sortSpec || {});
+  return [...docs].sort((a, b) => {
+    for (const [key, direction] of entries) {
+      const aValue = a[key] ?? '';
+      const bValue = b[key] ?? '';
+      const result = String(aValue).localeCompare(String(bValue), 'pt-BR', { numeric: true });
+      if (result !== 0) return direction < 0 ? -result : result;
+    }
+    return 0;
+  });
+}
+
+function matchesQuery(doc, query) {
+  return Object.entries(query || {}).every(([key, value]) => doc[key] === value);
+}
+
 function slug(value) {
   return String(value || '')
     .normalize('NFD')
@@ -59,35 +181,32 @@ function slug(value) {
 }
 
 async function ensureDefaultOperacoes() {
-  const count = await operacoes.count({});
-  if (count > 0) {
-    if (!fs.existsSync(operacoesInitFile)) fs.writeFileSync(operacoesInitFile, new Date().toISOString());
-    return;
-  }
-  if (!fs.existsSync(operacoesInitFile)) {
-    await operacoes.insert(DEFAULT_OPERACOES);
-    fs.writeFileSync(operacoesInitFile, new Date().toISOString());
-  }
+  const total = await countDocs(TABLES.operacoes);
+  if (total > 0) return;
+  await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
 async function ensureDefaultConfigOptions() {
-  const total = await configOptions.count({});
+  const total = await countDocs(TABLES.configOptions);
   if (total > 0) return;
 
+  const docs = [];
   for (const field of CONFIG_FIELDS) {
-    await Promise.all(DEFAULT_CONFIG_OPTIONS[field].map((value, index) => configOptions.insert({
-      field,
-      value,
-      normalized: normalizeUniqueValue(value),
-      ordem: index + 1,
-      createdAt: new Date().toISOString()
-    })));
+    DEFAULT_CONFIG_OPTIONS[field].forEach((value, index) => {
+      docs.push({
+        field,
+        value,
+        normalized: normalizeUniqueValue(value),
+        ordem: index + 1
+      });
+    });
   }
+  await insertDocs(TABLES.configOptions, docs);
 }
 
 async function configOptionsGrouped() {
   await ensureDefaultConfigOptions();
-  const docs = await configOptions.find({}).sort({ field: 1, ordem: 1, value: 1 });
+  const docs = sortDocs(await selectDocs(TABLES.configOptions), { field: 1, ordem: 1, value: 1 });
   return CONFIG_FIELDS.reduce((acc, field) => {
     acc[field] = docs.filter(doc => doc.field === field).map(doc => doc.value);
     return acc;
@@ -105,7 +224,7 @@ async function findDuplicateViagemFields(data, currentId = null) {
 
   if (filledFields.length === 0) return null;
 
-  const docs = await viagens.find({});
+  const docs = await selectDocs(TABLES.viagens);
   for (const field of filledFields) {
     const duplicate = docs.find(doc => {
       if (currentId && doc._id === currentId) return false;
@@ -118,7 +237,6 @@ async function findDuplicateViagemFields(data, currentId = null) {
   return null;
 }
 
-// WebSocket broadcast
 function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(client => {
@@ -139,7 +257,7 @@ app.get('/api/viagens', async (req, res) => {
     const query = {};
     if (data) query.data = data;
     if (secao) query.secao = secao;
-    const docs = await viagens.find(query).sort({ createdAt: 1 });
+    const docs = sortDocs((await selectDocs(TABLES.viagens)).filter(doc => matchesQuery(doc, query)), { createdAt: 1 });
     res.json(docs);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -153,7 +271,7 @@ app.get('/api/viagens/search', async (req, res) => {
     const cteTerm = normalizeUniqueValue(req.query.cte);
     if (!term && !notaTerm && !cteTerm) return res.json([]);
 
-    const docs = await viagens.find({});
+    const docs = await selectDocs(TABLES.viagens);
     const matches = docs
       .filter(doc => {
         const nota = normalizeUniqueValue(doc.nota);
@@ -181,8 +299,7 @@ app.post('/api/viagens', async (req, res) => {
       });
     }
 
-    const doc = { ...req.body, createdAt: new Date().toISOString() };
-    const inserted = await viagens.insert(doc);
+    const inserted = await insertDoc(TABLES.viagens, req.body);
     broadcast({ type: 'viagem_criada', payload: inserted });
     res.json(inserted);
   } catch (e) {
@@ -192,7 +309,7 @@ app.post('/api/viagens', async (req, res) => {
 
 app.put('/api/viagens/:id', async (req, res) => {
   try {
-    const current = await viagens.findOne({ _id: req.params.id });
+    const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const nextData = { ...current, ...req.body };
@@ -204,8 +321,7 @@ app.put('/api/viagens/:id', async (req, res) => {
       });
     }
 
-    await viagens.update({ _id: req.params.id }, { $set: req.body });
-    const updated = await viagens.findOne({ _id: req.params.id });
+    const updated = await updateDoc(TABLES.viagens, req.params.id, req.body);
     broadcast({ type: 'viagem_atualizada', payload: updated });
     res.json(updated);
   } catch (e) {
@@ -215,8 +331,8 @@ app.put('/api/viagens/:id', async (req, res) => {
 
 app.delete('/api/viagens/:id', async (req, res) => {
   try {
-    await viagens.remove({ _id: req.params.id });
-    broadcast({ type: 'viagem_removida', payload: { _id: req.params.id } });
+    await deleteDoc(TABLES.viagens, req.params.id);
+    broadcast({ type: 'viagem_removida', payload: { _id: req.params.id, id: req.params.id } });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -229,7 +345,7 @@ app.get('/api/metas', async (req, res) => {
   try {
     const { data } = req.query;
     const query = data ? { data } : {};
-    const docs = await metas.find(query);
+    const docs = (await selectDocs(TABLES.metas)).filter(doc => matchesQuery(doc, query));
     res.json(docs);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -238,19 +354,17 @@ app.get('/api/metas', async (req, res) => {
 
 app.post('/api/metas', async (req, res) => {
   try {
-    // Upsert by date, destination, operation type and optional product.
     const { data, destino, valor, tipo, produto } = req.body;
-    const existingDocs = await metas.find({ data, destino, tipo });
+    const existingDocs = (await selectDocs(TABLES.metas)).filter(doc => doc.data === data && doc.destino === destino && doc.tipo === tipo);
     const productKey = String(produto || '').trim().toUpperCase();
     const existing = existingDocs.find(doc => String(doc.produto || '').trim().toUpperCase() === productKey);
     let result;
     if (existing) {
-      await metas.update({ _id: existing._id }, { $set: { valor, produto: produto || undefined } });
-      result = await metas.findOne({ _id: existing._id });
+      result = await updateDoc(TABLES.metas, existing._id, { valor, produto: produto || undefined });
     } else {
       const payload = { data, destino, valor, tipo };
       if (produto) payload.produto = produto;
-      result = await metas.insert(payload);
+      result = await insertDoc(TABLES.metas, payload);
     }
     broadcast({ type: 'meta_atualizada', payload: result });
     res.json(result);
@@ -264,7 +378,7 @@ app.post('/api/metas', async (req, res) => {
 app.get('/api/operacoes', async (req, res) => {
   try {
     await ensureDefaultOperacoes();
-    const docs = await operacoes.find({}).sort({ ordem: 1, origem: 1 });
+    const docs = sortDocs(await selectDocs(TABLES.operacoes), { ordem: 1, origem: 1 });
     res.json(docs);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -273,7 +387,7 @@ app.get('/api/operacoes', async (req, res) => {
 
 app.post('/api/operacoes', async (req, res) => {
   try {
-    const docs = await operacoes.find({});
+    const docs = await selectDocs(TABLES.operacoes);
     const grouped = await configOptionsGrouped();
     const produtos = Array.isArray(req.body.produtos) ? req.body.produtos : grouped.produto;
     const doc = {
@@ -282,10 +396,9 @@ app.post('/api/operacoes', async (req, res) => {
       produtos,
       resumoProdutos: Array.isArray(req.body.resumoProdutos) ? req.body.resumoProdutos : produtos,
       resumoDestinos: Array.isArray(req.body.resumoDestinos) ? req.body.resumoDestinos : grouped.destino,
-      ordem: Number(req.body.ordem) || docs.length + 1,
-      createdAt: new Date().toISOString()
+      ordem: Number(req.body.ordem) || docs.length + 1
     };
-    const inserted = await operacoes.insert(doc);
+    const inserted = await insertDoc(TABLES.operacoes, doc);
     broadcast({ type: 'operacao_criada', payload: inserted });
     res.json(inserted);
   } catch (e) {
@@ -302,8 +415,8 @@ app.put('/api/operacoes/:id', async (req, res) => {
     if (req.body.resumoProdutos !== undefined) patch.resumoProdutos = Array.isArray(req.body.resumoProdutos) ? req.body.resumoProdutos : [];
     if (req.body.resumoDestinos !== undefined) patch.resumoDestinos = Array.isArray(req.body.resumoDestinos) ? req.body.resumoDestinos : [];
     if (req.body.ordem !== undefined) patch.ordem = Number(req.body.ordem) || 0;
-    await operacoes.update({ _id: req.params.id }, { $set: patch });
-    const updated = await operacoes.findOne({ _id: req.params.id });
+    const updated = await updateDoc(TABLES.operacoes, req.params.id, patch);
+    if (!updated) return res.status(404).json({ error: 'Operação não encontrada' });
     broadcast({ type: 'operacao_atualizada', payload: updated });
     res.json(updated);
   } catch (e) {
@@ -313,27 +426,23 @@ app.put('/api/operacoes/:id', async (req, res) => {
 
 app.delete('/api/operacoes/:id', async (req, res) => {
   try {
-    const current = await operacoes.findOne({ _id: req.params.id });
+    const current = await findOneById(TABLES.operacoes, req.params.id);
     if (!current) return res.status(404).json({ error: 'Operação não encontrada' });
 
-    await operacoes.remove({ _id: req.params.id });
+    await deleteDoc(TABLES.operacoes, req.params.id);
 
     const normalizedOrigem = normalizeUniqueValue(current.origem);
-    const sameOriginOps = await operacoes.find({});
+    const sameOriginOps = await selectDocs(TABLES.operacoes);
     if (!sameOriginOps.some(op => normalizeUniqueValue(op.origem) === normalizedOrigem)) {
-      await configOptions.remove({ field: 'origem', normalized: normalizedOrigem }, { multi: true });
-      const remainingOrigins = await configOptions.find({ field: 'origem' }).sort({ ordem: 1, value: 1 });
-      await Promise.all(remainingOrigins.map((doc, index) =>
-        configOptions.update({ _id: doc._id }, { $set: { ordem: index + 1 } })
-      ));
+      await deleteWhere(TABLES.configOptions, doc => doc.field === 'origem' && doc.normalized === normalizedOrigem);
+      const remainingOrigins = sortDocs((await selectDocs(TABLES.configOptions)).filter(doc => doc.field === 'origem'), { ordem: 1, value: 1 });
+      await Promise.all(remainingOrigins.map((doc, index) => updateDoc(TABLES.configOptions, doc._id, { ordem: index + 1 })));
     }
 
-    const allOps = await operacoes.find({}).sort({ ordem: 1, origem: 1 });
-    await Promise.all(allOps.map((op, index) =>
-      operacoes.update({ _id: op._id }, { $set: { ordem: index + 1 } })
-    ));
+    const allOps = sortDocs(await selectDocs(TABLES.operacoes), { ordem: 1, origem: 1 });
+    await Promise.all(allOps.map((op, index) => updateDoc(TABLES.operacoes, op._id, { ordem: index + 1 })));
 
-    broadcast({ type: 'operacao_removida', payload: { _id: req.params.id } });
+    broadcast({ type: 'operacao_removida', payload: { _id: req.params.id, id: req.params.id } });
     broadcast({ type: 'config_atualizada', payload: await configOptionsGrouped() });
     res.json({ ok: true });
   } catch (e) {
@@ -360,33 +469,32 @@ app.post('/api/config-options/:field', async (req, res) => {
     if (!value) return res.status(400).json({ error: 'Informe um valor' });
 
     const normalized = normalizeUniqueValue(value);
-    const existing = await configOptions.findOne({ field, normalized });
+    const existing = await findOne(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized);
     if (!existing) {
-      const count = await configOptions.count({ field });
-      await configOptions.insert({ field, value, normalized, ordem: count + 1, createdAt: new Date().toISOString() });
+      const count = await countDocs(TABLES.configOptions, doc => doc.field === field);
+      await insertDoc(TABLES.configOptions, { field, value, normalized, ordem: count + 1 });
     }
 
     if (field === 'origem') {
       await ensureDefaultOperacoes();
-      const op = await operacoes.findOne({ origem: value });
+      const op = await findOne(TABLES.operacoes, doc => doc.origem === value);
       if (!op) {
-        const count = await operacoes.count({});
+        const count = await countDocs(TABLES.operacoes);
         const grouped = await configOptionsGrouped();
-        await operacoes.insert({
+        await insertDoc(TABLES.operacoes, {
           origem: value,
           metaTipo: slug(value),
           produtos: grouped.produto.length ? grouped.produto : DEFAULT_CONFIG_OPTIONS.produto,
           resumoProdutos: grouped.produto.length ? grouped.produto : DEFAULT_CONFIG_OPTIONS.produto,
           resumoDestinos: grouped.destino.length ? grouped.destino : DEFAULT_CONFIG_OPTIONS.destino,
-          ordem: count + 1,
-          createdAt: new Date().toISOString()
+          ordem: count + 1
         });
       }
     }
 
     const grouped = await configOptionsGrouped();
     broadcast({ type: 'config_atualizada', payload: grouped });
-    if (field === 'origem') broadcast({ type: 'operacao_atualizada', payload: await operacoes.findOne({ origem: value }) });
+    if (field === 'origem') broadcast({ type: 'operacao_atualizada', payload: await findOne(TABLES.operacoes, doc => doc.origem === value) });
     res.json(grouped);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -399,7 +507,7 @@ app.put('/api/config-options/:field/reorder', async (req, res) => {
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
 
     const requested = Array.isArray(req.body.values) ? req.body.values : [];
-    const docs = await configOptions.find({ field });
+    const docs = (await selectDocs(TABLES.configOptions)).filter(doc => doc.field === field);
     const docsByNormalized = new Map(docs.map(doc => [doc.normalized, doc]));
     const orderedNormalized = [];
 
@@ -410,19 +518,21 @@ app.put('/api/config-options/:field/reorder', async (req, res) => {
       }
     });
 
-    docs
-      .sort((a, b) => (Number(a.ordem) || 0) - (Number(b.ordem) || 0) || String(a.value).localeCompare(String(b.value)))
-      .forEach(doc => {
-        if (!orderedNormalized.includes(doc.normalized)) orderedNormalized.push(doc.normalized);
-      });
+    sortDocs(docs, { ordem: 1, value: 1 }).forEach(doc => {
+      if (!orderedNormalized.includes(doc.normalized)) orderedNormalized.push(doc.normalized);
+    });
 
     await Promise.all(orderedNormalized.map((normalized, index) =>
-      configOptions.update({ field, normalized }, { $set: { ordem: index + 1 } }, { multi: true })
+      updateWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized, { ordem: index + 1 })
     ));
 
     if (field === 'origem') {
       await Promise.all(orderedNormalized.map((normalized, index) =>
-        operacoes.update({ origem: docsByNormalized.get(normalized)?.value }, { $set: { ordem: index + 1 } }, { multi: true })
+        updateWhere(
+          TABLES.operacoes,
+          doc => normalizeUniqueValue(doc.origem) === normalized,
+          { ordem: index + 1 }
+        )
       ));
     }
 
@@ -441,17 +551,12 @@ app.delete('/api/config-options/:field/:value', async (req, res) => {
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
 
     const normalized = normalizeUniqueValue(decodeURIComponent(req.params.value));
-    await configOptions.remove({ field, normalized }, { multi: true });
-    const remaining = await configOptions.find({ field }).sort({ ordem: 1, value: 1 });
-    await Promise.all(remaining.map((doc, index) =>
-      configOptions.update({ _id: doc._id }, { $set: { ordem: index + 1 } })
-    ));
+    await deleteWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized);
+    const remaining = sortDocs((await selectDocs(TABLES.configOptions)).filter(doc => doc.field === field), { ordem: 1, value: 1 });
+    await Promise.all(remaining.map((doc, index) => updateDoc(TABLES.configOptions, doc._id, { ordem: index + 1 })));
 
     if (field === 'origem') {
-      const ops = await operacoes.find({});
-      await Promise.all(ops
-        .filter(op => normalizeUniqueValue(op.origem) === normalized)
-        .map(op => operacoes.remove({ _id: op._id })));
+      await deleteWhere(TABLES.operacoes, op => normalizeUniqueValue(op.origem) === normalized);
     }
 
     const grouped = await configOptionsGrouped();
@@ -466,7 +571,7 @@ app.delete('/api/config-options/:field/:value', async (req, res) => {
 
 app.get('/api/datas', async (req, res) => {
   try {
-    const docs = await viagens.find({}, { data: 1 });
+    const docs = await selectDocs(TABLES.viagens);
     const datas = [...new Set(docs.map(d => d.data))].filter(Boolean).sort();
     res.json(datas);
   } catch (e) {
@@ -478,10 +583,10 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   const os = require('os');
   const nets = os.networkInterfaces();
-  console.log(`\n✅ Servidor rodando!`);
+  console.log(`\nServidor rodando!`);
   console.log(`   Local:   http://localhost:${PORT}`);
   Object.values(nets).flat().filter(n => n.family === 'IPv4' && !n.internal).forEach(n => {
     console.log(`   Rede:    http://${n.address}:${PORT}`);
   });
-  console.log(`\n⚡ Outros computadores na rede acessam pelo endereço "Rede" acima\n`);
+  console.log(`\nOutros computadores na rede acessam pelo endereço "Rede" acima\n`);
 });
