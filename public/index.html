@@ -6,7 +6,7 @@
 <title>FROTA - Controle de Viagens</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260520-colunas-fixas">
+<link rel="stylesheet" href="css/style.css?v=20260521-lista-espera">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
 
   <div class="header-actions">
     <button class="btn-frete-consult" id="btn-frete-consult">CONSULTA FRETE</button>
-    <button class="btn-undo" id="btn-undo-last" title="Desfazer última alteração em DT, CT-E, MANIFESTO ou CONTRATO" disabled>Desfazer</button>
+    <button class="btn-waitlist" id="btn-lista-espera">LISTA DE ESPERA</button>
     <button class="btn-search-load" id="btn-search-load">Buscar</button>
     <div class="date-nav">
       <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
@@ -370,6 +370,59 @@
   </div>
 </div>
 
+<div id="waitlist-overlay" class="modal-overlay hidden">
+  <div class="modal waitlist-modal">
+    <div class="modal-header">
+      <span>Lista de Espera</span>
+      <button class="modal-close" id="waitlist-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body waitlist-body">
+      <form class="waitlist-form" id="waitlist-form">
+        <div class="form-group">
+          <label>PLACA</label>
+          <input type="text" id="waitlist-placa" placeholder="ABC1234">
+        </div>
+        <div class="form-group">
+          <label>NOME</label>
+          <input type="text" id="waitlist-nome" placeholder="Nome do motorista">
+        </div>
+        <div class="form-group">
+          <label>TIPO</label>
+          <select id="waitlist-tipo"></select>
+        </div>
+        <div class="form-group">
+          <label>DATA</label>
+          <input type="date" id="waitlist-data">
+        </div>
+        <div class="form-group">
+          <label>HORA</label>
+          <input type="time" id="waitlist-hora">
+        </div>
+        <button type="submit" class="btn-primary" id="waitlist-add">Adicionar</button>
+      </form>
+      <div class="waitlist-table-wrap">
+        <table class="waitlist-table">
+          <thead>
+            <tr>
+              <th>ORDEM</th>
+              <th>PLACA</th>
+              <th>NOME</th>
+              <th>TIPO</th>
+              <th>DATA</th>
+              <th>HORA</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="waitlist-body-rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" id="waitlist-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div id="event-warning-overlay" class="modal-overlay hidden">
   <div class="modal event-warning-modal">
     <div class="event-warning-header">
@@ -475,6 +528,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260521-auth"></script>
+<script src="js/app.js?v=20260521-lista-espera"></script>
 </body>
 </html>

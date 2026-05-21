@@ -17,6 +17,7 @@ const state = {
   configColors: {},
   tableSort: { field: '', direction: 'asc' },
   freteConsultas: {},
+  listaEspera: [],
   userProfile: null,
   undoAction: null,
   ws: null
@@ -238,23 +239,28 @@ function handleWsMessage(msg) {
   } else if (type === 'config_cores_atualizadas') {
     state.configColors = mergeConfigColors(payload);
     renderAll();
+  } else if (type === 'lista_espera_atualizada') {
+    state.listaEspera = normalizeListaEspera(payload);
+    renderListaEspera();
   }
 }
 
 // ─── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadAll() {
-  const [viagens, metas, operacoes, configOptions, configColors] = await Promise.all([
+  const [viagens, metas, operacoes, configOptions, configColors, listaEspera] = await Promise.all([
     apiFetch(`/api/viagens?data=${state.currentDate}`),
     apiFetch(`/api/metas?data=${state.currentDate}`),
     apiFetch('/api/operacoes'),
     apiFetch('/api/config-options'),
-    apiFetch('/api/config-colors')
+    apiFetch('/api/config-colors'),
+    apiFetch('/api/lista-espera')
   ]);
   state.viagens = viagens || [];
   state.metas = metas || [];
   state.configOptions = normalizeConfigOptions(configOptions);
   state.configColors = mergeConfigColors(configColors);
   state.operacoes = normalizeOperacoes(operacoes);
+  state.listaEspera = normalizeListaEspera(listaEspera);
   renderAll();
 }
 
@@ -291,7 +297,7 @@ function initUI() {
   });
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
-  document.getElementById('btn-undo-last').addEventListener('click', undoLastAction);
+  document.getElementById('btn-undo-last')?.addEventListener('click', undoLastAction);
 
   document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
   document.getElementById('btn-users-admin').addEventListener('click', openUsersModal);
@@ -307,6 +313,18 @@ function initUI() {
   document.getElementById('frete-consult-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('frete-consult-overlay')) closeFreteConsultModal();
   });
+  document.getElementById('btn-lista-espera').addEventListener('click', openListaEsperaModal);
+  document.getElementById('waitlist-close').addEventListener('click', closeListaEsperaModal);
+  document.getElementById('waitlist-btn-close').addEventListener('click', closeListaEsperaModal);
+  document.getElementById('waitlist-form').addEventListener('submit', addListaEsperaItem);
+  document.getElementById('waitlist-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('waitlist-overlay')) closeListaEsperaModal();
+  });
+  document.getElementById('waitlist-body-rows').addEventListener('click', handleListaEsperaClick);
+  document.getElementById('waitlist-body-rows').addEventListener('change', handleListaEsperaChange);
+  document.getElementById('waitlist-body-rows').addEventListener('focusin', handleListaEsperaFocus);
+  document.getElementById('waitlist-body-rows').addEventListener('focusout', handleListaEsperaBlur);
+  document.getElementById('waitlist-body-rows').addEventListener('keydown', handleListaEsperaKeydown);
   document.getElementById('btn-search-load').addEventListener('click', openSearchModal);
   document.getElementById('search-modal-close').addEventListener('click', closeSearchModal);
   document.getElementById('search-btn-close').addEventListener('click', closeSearchModal);
@@ -421,6 +439,7 @@ function initUI() {
       closeModal();
       closeSearchModal();
       closeFreteConsultModal();
+      closeListaEsperaModal();
       closeEventWarning();
       closeSettingsModal();
       closeUsersModal();
@@ -607,6 +626,211 @@ function openFreteConsultModal() {
 
 function closeFreteConsultModal() {
   document.getElementById('frete-consult-overlay').classList.add('hidden');
+}
+
+async function openListaEsperaModal() {
+  syncDynamicSelects();
+  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  document.getElementById('waitlist-data').value = todayStr();
+  document.getElementById('waitlist-overlay').classList.remove('hidden');
+  await loadListaEspera();
+  document.getElementById('waitlist-placa').focus();
+}
+
+function closeListaEsperaModal() {
+  document.getElementById('waitlist-overlay').classList.add('hidden');
+}
+
+async function loadListaEspera() {
+  const items = await apiFetch('/api/lista-espera');
+  if (items) state.listaEspera = normalizeListaEspera(items);
+  renderListaEspera();
+}
+
+function normalizeListaEspera(items = []) {
+  return (Array.isArray(items) ? items : []).map((item, index) => ({
+    ...item,
+    placa: String(item.placa || '').trim().toUpperCase(),
+    nome: String(item.nome || '').trim().toUpperCase(),
+    tipo: normalizeTipo(item.tipo),
+    data: String(item.data || '').trim(),
+    hora: String(item.hora || '').trim(),
+    ordem: Number(item.ordem) || index + 1
+  })).sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+function renderListaEspera() {
+  const tbody = document.getElementById('waitlist-body-rows');
+  if (!tbody) return;
+
+  if (!state.listaEspera.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = state.listaEspera.map((item, index) => `
+    <tr data-id="${escapeAttr(item._id)}">
+      <td>${index + 1}º</td>
+      <td contenteditable="true" spellcheck="false" data-field="placa" data-value="${escapeAttr(item.placa)}">${escapeHtml(item.placa)}</td>
+      <td contenteditable="true" spellcheck="false" data-field="nome" data-value="${escapeAttr(item.nome)}">${escapeHtml(item.nome)}</td>
+      <td>
+        <select data-field="tipo">
+          ${renderOptions(['', ...configOptionList('tipo')], item.tipo)}
+        </select>
+      </td>
+      <td><input type="date" data-field="data" value="${escapeAttr(item.data)}"></td>
+      <td><input type="time" data-field="hora" value="${escapeAttr(item.hora)}"></td>
+      <td>
+        <div class="waitlist-actions">
+          <button type="button" class="btn-row waitlist-generate" data-action="generate">Gerar Viagem</button>
+          <button type="button" class="btn-row danger" data-action="delete">Excluir</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function addListaEsperaItem(event) {
+  event.preventDefault();
+  if (!canEditViagens()) return;
+
+  const payload = {
+    placa: v('waitlist-placa').toUpperCase(),
+    nome: v('waitlist-nome').toUpperCase(),
+    tipo: normalizeTipo(v('waitlist-tipo')),
+    data: v('waitlist-data'),
+    hora: v('waitlist-hora')
+  };
+
+  if (!payload.placa && !payload.nome) {
+    alert('Informe ao menos PLACA ou NOME.');
+    return;
+  }
+
+  const button = document.getElementById('waitlist-add');
+  button.disabled = true;
+  button.textContent = 'Adicionando...';
+  const created = await apiFetch('/api/lista-espera', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  button.disabled = false;
+  button.textContent = 'Adicionar';
+  if (!created) return;
+
+  document.getElementById('waitlist-form').reset();
+  document.getElementById('waitlist-data').value = todayStr();
+  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  await loadListaEspera();
+  document.getElementById('waitlist-placa').focus();
+}
+
+async function handleListaEsperaClick(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const row = button.closest('tr[data-id]');
+  if (!row) return;
+
+  if (button.dataset.action === 'generate') {
+    await gerarViagemListaEspera(row.dataset.id, button);
+  } else if (button.dataset.action === 'delete') {
+    await deleteListaEsperaItem(row.dataset.id);
+  }
+}
+
+async function handleListaEsperaChange(event) {
+  const field = event.target.dataset.field;
+  if (!field) return;
+  const row = event.target.closest('tr[data-id]');
+  if (!row) return;
+  await updateListaEsperaItem(row.dataset.id, { [field]: normalizeListaEsperaField(field, event.target.value) });
+}
+
+function handleListaEsperaFocus(event) {
+  const cell = event.target.closest?.('.waitlist-table td[contenteditable="true"]');
+  if (!cell) return;
+  cell.dataset.value = cell.textContent.trim();
+}
+
+function handleListaEsperaBlur(event) {
+  const cell = event.target.closest?.('.waitlist-table td[contenteditable="true"]');
+  if (!cell) return;
+  commitListaEsperaCell(cell);
+}
+
+function handleListaEsperaKeydown(event) {
+  const cell = event.target.closest?.('.waitlist-table td[contenteditable="true"]');
+  if (!cell) return;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    cell.blur();
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cell.textContent = cell.dataset.value || '';
+    cell.blur();
+  }
+}
+
+async function commitListaEsperaCell(cell) {
+  const previous = cell.dataset.value || '';
+  const field = cell.dataset.field;
+  const next = normalizeListaEsperaField(field, cell.textContent);
+  if (next === previous) return;
+
+  const row = cell.closest('tr[data-id]');
+  if (!row) return;
+  const updated = await updateListaEsperaItem(row.dataset.id, { [field]: next });
+  if (!updated) cell.textContent = previous;
+}
+
+function normalizeListaEsperaField(field, value) {
+  if (field === 'tipo') return normalizeTipo(value);
+  if (field === 'placa' || field === 'nome') return String(value || '').trim().toUpperCase();
+  return String(value || '').trim();
+}
+
+async function updateListaEsperaItem(id, patch) {
+  if (!canEditViagens()) return null;
+  const updated = await apiFetch(`/api/lista-espera/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(patch)
+  });
+  if (!updated) return null;
+  const idx = state.listaEspera.findIndex(item => item._id === updated._id);
+  if (idx !== -1) state.listaEspera[idx] = updated;
+  else state.listaEspera.push(updated);
+  state.listaEspera = normalizeListaEspera(state.listaEspera);
+  renderListaEspera();
+  return updated;
+}
+
+async function deleteListaEsperaItem(id) {
+  if (!canEditViagens()) return;
+  if (!confirm('Excluir este item da lista de espera?')) return;
+  const removed = await apiFetch(`/api/lista-espera/${id}`, { method: 'DELETE' });
+  if (!removed) return;
+  state.listaEspera = state.listaEspera.filter(item => item._id !== id);
+  renderListaEspera();
+}
+
+async function gerarViagemListaEspera(id, button) {
+  if (!canEditViagens()) return;
+  button.disabled = true;
+  button.textContent = 'Gerando...';
+  const result = await apiFetch(`/api/lista-espera/${id}/gerar-viagem`, {
+    method: 'POST',
+    body: JSON.stringify({ data: state.currentDate })
+  });
+  button.disabled = false;
+  button.textContent = 'Gerar Viagem';
+  if (!result) return;
+  state.listaEspera = normalizeListaEspera(result.lista);
+  if (result.viagem && !state.viagens.some(v => v._id === result.viagem._id)) {
+    state.viagens.push(result.viagem);
+  }
+  renderListaEspera();
+  renderAll();
 }
 
 function loadFreteConsultas() {
@@ -960,6 +1184,7 @@ function updateStickyColumnWidths(table) {
 
   table.style.setProperty('--sticky-placa-width', `${measureField('placa', 132)}px`);
   table.style.setProperty('--sticky-nome-width', `${measureField('nome', 142)}px`);
+  table.style.setProperty('--sticky-tipo-width', `${measureField('tipo', 136)}px`);
 }
 
 function renderTableHeader(secao) {
@@ -1138,6 +1363,7 @@ function syncDynamicSelects() {
   ['tipo', 'produto', 'carroceria', 'kanguru', 'pamcard', 'status', 'origem', 'destino'].forEach(field => {
     setSelectOptions(document.getElementById(`f-${field}`), getSelectOptions(field));
   });
+  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
 }
 
 function setSelectOptions(select, options) {
@@ -1292,7 +1518,7 @@ function filteredRows(secao) {
   return sortRows(state.viagens
     .filter(v => v.secao === secao)
     .filter(v => v.data === state.currentDate)
-    .filter(v => !state.originFilter || v.origem === state.originFilter));
+    .filter(v => !state.originFilter || v.origem === state.originFilter || (secao === 'agenciando' && !v.origem)));
 }
 
 function sortTableBy(fieldKey) {

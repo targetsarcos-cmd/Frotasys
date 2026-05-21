@@ -30,6 +30,7 @@ const CONFIG_SEED_MARKERS = {
   kanguru: 'CONFIG_KANGURU_V1',
   statusSemCadastro: 'CONFIG_STATUS_SEM_CADASTRO_V1'
 };
+const WAITLIST_FIELD = '__lista_espera';
 const DEFAULT_CONFIG_OPTIONS = {
   tipo: ['AGREGADO', 'CARRETEIRO', 'DEDICADO', 'FROTA'],
   produto: ['CPII-F', 'CPIII', 'CPV'],
@@ -269,6 +270,46 @@ function seedMarkerDoc(marker) {
   };
 }
 
+function normalizeTipo(value) {
+  const raw = normalizeUniqueValue(value);
+  if (raw === 'AGREG' || raw === 'AGREGADO') return 'AGREGADO';
+  if (raw === 'CARRE' || raw === 'CARRETEIRO') return 'CARRETEIRO';
+  if (raw === 'DEDICADO') return 'DEDICADO';
+  if (raw === 'FROTA') return 'FROTA';
+  return raw;
+}
+
+function normalizeWaitlistItem(data = {}) {
+  return {
+    placa: normalizeUniqueValue(data.placa),
+    nome: normalizeUniqueValue(data.nome),
+    tipo: normalizeTipo(data.tipo),
+    data: String(data.data || '').trim(),
+    hora: String(data.hora || '').trim(),
+    ordem: Number(data.ordem) || 0
+  };
+}
+
+function waitlistDocToFrontend(doc = {}) {
+  return {
+    _id: doc._id,
+    id: doc._id,
+    placa: doc.placa || '',
+    nome: doc.nome || '',
+    tipo: doc.tipo || '',
+    data: doc.data || '',
+    hora: doc.hora || '',
+    ordem: Number(doc.ordem) || 0,
+    createdAt: doc.createdAt || '',
+    updatedAt: doc.updatedAt || ''
+  };
+}
+
+async function waitlistDocs() {
+  const docs = (await selectDocs(TABLES.configOptions)).filter(doc => doc.field === WAITLIST_FIELD);
+  return sortDocs(docs.map(waitlistDocToFrontend), { ordem: 1, data: 1, hora: 1, createdAt: 1 });
+}
+
 async function configOptionsGrouped() {
   await ensureDefaultConfigOptions();
   const docs = sortDocs(await selectDocs(TABLES.configOptions), { field: 1, ordem: 1, value: 1 });
@@ -415,6 +456,98 @@ app.get('/api/auth/me', (req, res) => {
     },
     profile: req.userProfile
   });
+});
+
+// ─── LISTA DE ESPERA API ─────────────────────────────────────────────────────
+
+app.get('/api/lista-espera', async (req, res) => {
+  try {
+    res.json(await waitlistDocs());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/lista-espera', requireViagemEditor, async (req, res) => {
+  try {
+    const item = normalizeWaitlistItem(req.body);
+    if (!item.data) item.data = new Date().toISOString().slice(0, 10);
+    if (!item.placa && !item.nome) {
+      return res.status(400).json({ error: 'Informe ao menos PLACA ou NOME.' });
+    }
+
+    const ordem = item.ordem || (await countDocs(TABLES.configOptions, doc => doc.field === WAITLIST_FIELD)) + 1;
+    const inserted = await insertDoc(TABLES.configOptions, {
+      field: WAITLIST_FIELD,
+      value: `${item.placa} ${item.nome}`.trim(),
+      normalized: normalizeUniqueValue(`${item.placa} ${item.nome}`),
+      ...item,
+      ordem
+    });
+    const payload = waitlistDocToFrontend(inserted);
+    broadcast({ type: 'lista_espera_atualizada', payload: await waitlistDocs() });
+    res.json(payload);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
+  try {
+    const current = await findOneById(TABLES.configOptions, req.params.id);
+    if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
+
+    const item = normalizeWaitlistItem({ ...current, ...req.body });
+    if (!item.placa && !item.nome) {
+      return res.status(400).json({ error: 'Informe ao menos PLACA ou NOME.' });
+    }
+
+    const updated = await updateDoc(TABLES.configOptions, req.params.id, {
+      value: `${item.placa} ${item.nome}`.trim(),
+      normalized: normalizeUniqueValue(`${item.placa} ${item.nome}`),
+      ...item
+    });
+    const payload = waitlistDocToFrontend(updated);
+    broadcast({ type: 'lista_espera_atualizada', payload: await waitlistDocs() });
+    res.json(payload);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
+  try {
+    const current = await findOneById(TABLES.configOptions, req.params.id);
+    if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
+    await deleteDoc(TABLES.configOptions, req.params.id);
+    broadcast({ type: 'lista_espera_atualizada', payload: await waitlistDocs() });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, res) => {
+  try {
+    const item = await findOneById(TABLES.configOptions, req.params.id);
+    if (!item || item.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
+
+    const viagem = await insertDoc(TABLES.viagens, {
+      placa: item.placa || '',
+      nome: item.nome || '',
+      tipo: normalizeTipo(item.tipo),
+      secao: 'agenciando',
+      data: String(req.body?.data || '').trim() || new Date().toISOString().slice(0, 10)
+    });
+
+    await deleteDoc(TABLES.configOptions, req.params.id);
+    const lista = await waitlistDocs();
+    broadcast({ type: 'viagem_criada', payload: viagem });
+    broadcast({ type: 'lista_espera_atualizada', payload: lista });
+    res.json({ viagem, lista });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/users', requireAdmin, async (req, res) => {
