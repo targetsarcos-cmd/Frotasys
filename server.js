@@ -624,6 +624,13 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
       patch.usuario = '';
       nextData.status = 'CONCLUIDO';
       nextData.usuario = '';
+    } else if (normalizeContratoConclusao(nextData.conclusaoContrato) && !hasDocumentosCompletos(nextData)) {
+      patch.conclusaoContrato = '';
+      patch.status = '';
+      patch.usuario = '';
+      nextData.conclusaoContrato = '';
+      nextData.status = '';
+      nextData.usuario = '';
     } else if (statusChanged) {
       patch.usuario = profileDisplayName(req.userProfile);
       nextData.usuario = patch.usuario;

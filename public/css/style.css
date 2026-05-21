@@ -287,6 +287,7 @@ button, input, select {
 .btn-save-metas,
 .btn-add-operation,
 .btn-frete-consult,
+.btn-undo,
 .btn-search-load,
 .btn-users,
 .btn-logout,
@@ -308,6 +309,7 @@ button, input, select {
 .btn-save-metas:hover,
 .btn-add-operation:hover,
 .btn-frete-consult:hover,
+.btn-undo:hover,
 .btn-search-load:hover,
 .btn-users:hover,
 .btn-logout:hover,
@@ -321,6 +323,7 @@ button, input, select {
 .btn-save-metas:disabled,
 .btn-add-operation:disabled,
 .btn-frete-consult:disabled,
+.btn-undo:disabled,
 .btn-search-load:disabled,
 .btn-users:disabled,
 .btn-logout:disabled,
@@ -345,6 +348,19 @@ button, input, select {
 
 .btn-frete-consult:hover {
   background: #0b6b64;
+}
+
+.btn-undo {
+  background: #eef3f8;
+  color: #223047;
+}
+
+.btn-undo:hover {
+  background: #dde7f1;
+}
+
+.btn-undo:disabled {
+  cursor: not-allowed;
 }
 
 .btn-users {

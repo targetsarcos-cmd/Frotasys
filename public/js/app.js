@@ -18,6 +18,7 @@ const state = {
   tableSort: { field: '', direction: 'asc' },
   freteConsultas: {},
   userProfile: null,
+  undoAction: null,
   ws: null
 };
 
@@ -72,6 +73,13 @@ const DEFAULT_CONFIG_COLORS = {
 };
 const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f766e', '#4f46e5', '#c05621', '#0891b2'];
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
+const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
+const UNDO_FIELD_LABELS = {
+  dt: 'DT',
+  cte: 'CT-E',
+  manifesto: 'MANIFESTO',
+  contrato: 'CONTRATO'
+};
 const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
 const DEFAULT_FRETE_CONSULTAS = {
   terceiros: {
@@ -283,6 +291,7 @@ function initUI() {
   });
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
+  document.getElementById('btn-undo-last').addEventListener('click', undoLastAction);
 
   document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
   document.getElementById('btn-users-admin').addEventListener('click', openUsersModal);
@@ -400,6 +409,14 @@ function initUI() {
   });
 
   document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      if (shouldHandleUndoShortcut(e)) {
+        e.preventDefault();
+        undoLastAction();
+      }
+      return;
+    }
+
     if (e.key === 'Escape') {
       closeModal();
       closeSearchModal();
@@ -439,6 +456,7 @@ function applyPermissions() {
   document.body.dataset.role = state.userProfile?.role || 'visualizador';
   const loggedUser = document.getElementById('logged-user-name');
   if (loggedUser) loggedUser.textContent = loggedUserDisplayName();
+  updateUndoButton();
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-settings').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
@@ -446,6 +464,49 @@ function applyPermissions() {
 
 function loggedUserDisplayName() {
   return String(state.userProfile?.nome || state.userProfile?.email || '').trim();
+}
+
+function shouldHandleUndoShortcut(event) {
+  const modalOpen = [...document.querySelectorAll('.modal-overlay')]
+    .some(overlay => !overlay.classList.contains('hidden'));
+  if (modalOpen) return false;
+
+  const target = event.target;
+  const tagName = target?.tagName;
+  return !target?.isContentEditable && !['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName);
+}
+
+function isUndoField(field) {
+  return UNDO_FIELDS.includes(field);
+}
+
+function setUndoAction(action) {
+  state.undoAction = action;
+  updateUndoButton();
+}
+
+function clearUndoAction() {
+  state.undoAction = null;
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  const button = document.getElementById('btn-undo-last');
+  if (!button) return;
+  const action = state.undoAction;
+  button.disabled = !action;
+  button.title = action
+    ? `Desfazer última alteração em ${UNDO_FIELD_LABELS[action.field] || action.field}`
+    : 'Desfazer última alteração em DT, CT-E, MANIFESTO ou CONTRATO';
+}
+
+async function undoLastAction() {
+  const action = state.undoAction;
+  if (!action) return;
+
+  clearUndoAction();
+  const undone = await updateViagemField(action.id, action.field, action.previousValue, { skipUndo: true });
+  if (!undone) setUndoAction(action);
 }
 
 async function openUsersModal() {
@@ -810,6 +871,7 @@ function renderAll() {
   renderTable('arcos');
   renderTable('agenciando');
   renderSummary();
+  updateUndoButton();
 }
 
 function renderOriginFilters() {
@@ -1676,21 +1738,32 @@ async function commitInlineEdit(td, id, field, value) {
   }
 }
 
-async function updateViagemField(id, field, value) {
+async function updateViagemField(id, field, value, options = {}) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) {
     renderAll();
     return null;
   }
+  const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
+  const nextValue = normalizeFieldValue(field, value);
   const updated = await apiFetch(`/api/viagens/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ [field]: value })
+    body: JSON.stringify({ [field]: nextValue })
   });
   if (updated) {
     const eventText = String(updated.frete || '').trim();
-    const shouldWarnEvent = field === 'cte' && String(value || '').trim() && eventText;
+    const shouldWarnEvent = field === 'cte' && String(nextValue || '').trim() && eventText;
     const idx = state.viagens.findIndex(v => v._id === id);
     if (idx !== -1) state.viagens[idx] = updated;
+    if (!options.skipUndo && isUndoField(field) && previousValue !== nextValue) {
+      setUndoAction({
+        id,
+        field,
+        previousValue,
+        nextValue,
+        at: Date.now()
+      });
+    }
     renderAll();
     if (shouldWarnEvent) setTimeout(() => showEventWarning(eventText), 0);
   }
