@@ -410,6 +410,18 @@ function canEditViagens() {
   return ['admin', 'operador'].includes(state.userProfile?.role);
 }
 
+function isViagemConcluida(viagem) {
+  return hasDocumentosCompletos(viagem) || normalizeOption(viagem?.status) === 'CONCLUIDO';
+}
+
+function canEditViagem(viagem) {
+  return canEditViagens() && (isAdmin() || !isViagemConcluida(viagem));
+}
+
+function canDeleteViagem(viagem) {
+  return isAdmin() || !isViagemConcluida(viagem);
+}
+
 function applyPermissions() {
   document.body.dataset.role = state.userProfile?.role || 'visualizador';
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
@@ -839,7 +851,7 @@ function renderTable(secao) {
 
   tbody.innerHTML = rows.map(v => {
     const originClass = originSlug(v.origem);
-    const completeClass = hasDocumentosCompletos(v) ? 'is-documentos-completos' : '';
+    const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
     const semCadastroClass = secao === 'agenciando' && isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
     const cells = FIELDS.map(f => renderCell(v, f)).join('');
 
@@ -848,8 +860,8 @@ function renderTable(secao) {
       <td>
         <div class="row-actions">
           <button class="btn-row" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
-          ${canEditViagens() ? `<button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>` : ''}
-          <button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>
+          ${canEditViagem(v) ? `<button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>` : ''}
+          ${canDeleteViagem(v) ? `<button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -899,14 +911,15 @@ function isStatusSemCadastro(status) {
 }
 
 function renderCell(v, field) {
-  const raw = field.key === 'tipo' ? normalizeTipo(v[field.key]) : (v[field.key] || '');
+  let raw = field.key === 'tipo' ? normalizeTipo(v[field.key]) : (v[field.key] || '');
+  if (field.key === 'usuario' && isViagemConcluida(v)) raw = '';
   const safeRaw = escapeAttr(raw);
 
   if (field.select) {
     const cls = field.key === 'origem' ? originSlug(raw) : field.key === 'status' ? statusSlug(raw) : field.key === 'tipo' ? tipoSlug(raw) : '';
     const style = selectColorStyle(field.key, raw);
     return `<td class="cell-select cell-${field.key}" data-field="${field.key}" data-id="${escapeAttr(v._id)}">
-      <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)" ${canEditViagens() ? '' : 'disabled'}>
+      <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)" ${canEditViagem(v) ? '' : 'disabled'}>
         ${renderOptions(getSelectOptions(field.key), raw)}
       </select>
     </td>`;
@@ -920,7 +933,7 @@ function renderCell(v, field) {
   if (field.key === 'telefone') display = firstPhone(raw);
 
   if (field.key === 'placa') {
-    const canPromote = v.secao === 'agenciando';
+    const canPromote = v.secao === 'agenciando' && canEditViagem(v);
     return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell">
       <span class="placa-content">
         <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'Já está faturado'}">↑</button>
@@ -1572,6 +1585,8 @@ let activeInlineCell = null;
 async function updateInlineSelect(select) {
   if (!canEditViagens()) return;
   const id = select.dataset.id;
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!canEditViagem(viagem)) return renderAll();
   const field = select.dataset.field;
   const value = normalizeFieldValue(field, select.value);
   select.disabled = true;
@@ -1584,6 +1599,7 @@ async function promoteToFaturado(event, id) {
   event.stopPropagation();
   if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
+  if (!canEditViagem(viagem)) return;
   if (!viagem || viagem.secao === 'arcos') return;
   await updateViagemField(id, 'secao', 'arcos');
 }
@@ -1594,6 +1610,8 @@ function startInlineEdit(td) {
   const field = td.dataset.field;
   if (field === 'usuario') return;
   const id = td.dataset.id;
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!canEditViagem(viagem)) return;
   const cur = td.dataset.raw ?? td.textContent.trim();
   activeInlineCell = td;
 
@@ -1635,6 +1653,11 @@ async function commitInlineEdit(td, id, field, value) {
 }
 
 async function updateViagemField(id, field, value) {
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!canEditViagem(viagem)) {
+    renderAll();
+    return null;
+  }
   const updated = await apiFetch(`/api/viagens/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ [field]: value })
@@ -1869,6 +1892,10 @@ async function syncOperationOriginConfig(origem, previousOrigem = '') {
 
 async function saveViagem() {
   if (!canEditViagens()) return;
+  if (state.editingId) {
+    const viagem = state.viagens.find(item => item._id === state.editingId);
+    if (!canEditViagem(viagem)) return closeModal();
+  }
   const data = {
     placa: v('f-placa').toUpperCase(),
     nome: v('f-nome').toUpperCase(),
@@ -1922,8 +1949,8 @@ function v(id) {
 
 // ─── EDIT / DELETE ────────────────────────────────────────────────────────────
 function editViagem(id) {
-  if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
+  if (!canEditViagem(viagem)) return;
   if (viagem) openModal(viagem);
 }
 
@@ -1977,6 +2004,8 @@ function showCopyBubble(button) {
 }
 
 async function deleteViagem(id) {
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!canDeleteViagem(viagem)) return;
   if (!confirm('Excluir este registro?')) return;
   await apiFetch(`/api/viagens/${id}`, { method: 'DELETE' });
   state.viagens = state.viagens.filter(v => v._id !== id);
@@ -1987,6 +2016,12 @@ async function deleteViagem(id) {
 function showCtxMenu(e, id) {
   e.preventDefault();
   state.ctxTargetId = id;
+  const viagem = state.viagens.find(v => v._id === id);
+  const editItem = document.getElementById('ctx-edit');
+  const deleteItem = document.getElementById('ctx-delete');
+  editItem.style.display = canEditViagem(viagem) ? '' : 'none';
+  deleteItem.style.display = canDeleteViagem(viagem) ? '' : 'none';
+  if (editItem.style.display === 'none' && deleteItem.style.display === 'none') return;
   const menu = document.getElementById('ctx-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 160)}px`;
   menu.style.top = `${Math.min(e.clientY, window.innerHeight - 90)}px`;

@@ -46,6 +46,7 @@ const UNIQUE_VIAGEM_FIELDS = [
   { key: 'cte', label: 'CT-E' },
   { key: 'num_pedagio', label: 'Nº DO PEDÁGIO' }
 ];
+const CONCLUSAO_FIELDS = ['cte', 'manifesto', 'contrato', 'nota'];
 
 app.use(cors());
 app.use(express.json());
@@ -61,6 +62,10 @@ app.get('/login', (req, res) => {
 
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
+  if (hasDocumentosCompletos(doc) || isStatusConcluido(doc.status)) {
+    doc.status = 'CONCLUIDO';
+    doc.usuario = '';
+  }
   doc._id = record.id;
   doc.id = record.id;
   if (!doc.createdAt && record.created_at) doc.createdAt = record.created_at;
@@ -323,6 +328,18 @@ function profileDisplayName(profile = {}) {
   return String(profile.nome || profile.email || 'Usuário').trim();
 }
 
+function hasDocumentosCompletos(data = {}) {
+  return CONCLUSAO_FIELDS.every(field => String(data[field] || '').trim() !== '');
+}
+
+function isStatusConcluido(status) {
+  return normalizeUniqueValue(status) === 'CONCLUIDO';
+}
+
+function isViagemBloqueada(data = {}) {
+  return hasDocumentosCompletos(data) || isStatusConcluido(data.status);
+}
+
 async function profileForUser(userId) {
   const { data, error } = await supabase
     .from('user_profiles')
@@ -519,7 +536,10 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
     delete payload.usuario;
-    if (payload.status !== undefined && normalizeUniqueValue(payload.status)) {
+    if (hasDocumentosCompletos(payload) || isStatusConcluido(payload.status)) {
+      payload.status = 'CONCLUIDO';
+      payload.usuario = '';
+    } else if (payload.status !== undefined && normalizeUniqueValue(payload.status)) {
       payload.usuario = profileDisplayName(req.userProfile);
     }
 
@@ -543,14 +563,26 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (isViagemBloqueada(current) && req.userProfile?.role !== 'admin') {
+      return res.status(403).json({ error: 'Viagem concluída. Somente administrador pode editar.' });
+    }
 
     const patch = { ...req.body };
     delete patch.usuario;
     const statusWasSent = Object.prototype.hasOwnProperty.call(req.body, 'status');
     const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
-    if (statusChanged) patch.usuario = profileDisplayName(req.userProfile);
 
     const nextData = { ...current, ...patch };
+    if (hasDocumentosCompletos(nextData) || isStatusConcluido(nextData.status)) {
+      patch.status = 'CONCLUIDO';
+      patch.usuario = '';
+      nextData.status = 'CONCLUIDO';
+      nextData.usuario = '';
+    } else if (statusChanged) {
+      patch.usuario = profileDisplayName(req.userProfile);
+      nextData.usuario = patch.usuario;
+    }
+
     const duplicate = await findDuplicateViagemFields(nextData, req.params.id);
     if (duplicate) {
       return res.status(409).json({
@@ -569,6 +601,11 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
 app.delete('/api/viagens/:id', async (req, res) => {
   try {
+    const current = await findOneById(TABLES.viagens, req.params.id);
+    if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (isViagemBloqueada(current) && req.userProfile?.role !== 'admin') {
+      return res.status(403).json({ error: 'Viagem concluída. Somente administrador pode excluir.' });
+    }
     await deleteDoc(TABLES.viagens, req.params.id);
     broadcast({ type: 'viagem_removida', payload: { _id: req.params.id, id: req.params.id } });
     res.json({ ok: true });
