@@ -201,7 +201,7 @@ function initWS() {
 function handleWsMessage(msg) {
   const { type, payload } = msg;
   if (type === 'viagem_criada') {
-    if (payload.data === state.currentDate) {
+    if (payload.data === state.currentDate && !state.viagens.some(v => v._id === payload._id)) {
       state.viagens.push(payload);
       renderAll();
     }
@@ -656,7 +656,19 @@ function normalizeListaEspera(items = []) {
     data: String(item.data || '').trim(),
     hora: String(item.hora || '').trim(),
     ordem: Number(item.ordem) || index + 1
-  })).sort((a, b) => (a.ordem || 0) - (b.ordem || 0) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  })).sort(compareListaEsperaItems);
+}
+
+function compareListaEsperaItems(a, b) {
+  const position = listaEsperaPositionValue(a).localeCompare(listaEsperaPositionValue(b), 'pt-BR', { numeric: true });
+  if (position) return position;
+  return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+}
+
+function listaEsperaPositionValue(item = {}) {
+  const date = String(item.data || '').trim() || '9999-12-31';
+  const time = String(item.hora || '').trim() || '99:99';
+  return `${date} ${time}`;
 }
 
 function renderListaEspera() {

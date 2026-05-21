@@ -307,7 +307,19 @@ function waitlistDocToFrontend(doc = {}) {
 
 async function waitlistDocs() {
   const docs = (await selectDocs(TABLES.configOptions)).filter(doc => doc.field === WAITLIST_FIELD);
-  return sortDocs(docs.map(waitlistDocToFrontend), { ordem: 1, data: 1, hora: 1, createdAt: 1 });
+  return docs.map(waitlistDocToFrontend).sort(compareWaitlistItems);
+}
+
+function compareWaitlistItems(a, b) {
+  const position = waitlistPositionValue(a).localeCompare(waitlistPositionValue(b), 'pt-BR', { numeric: true });
+  if (position) return position;
+  return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+}
+
+function waitlistPositionValue(item = {}) {
+  const date = String(item.data || '').trim() || '9999-12-31';
+  const time = String(item.hora || '').trim() || '99:99';
+  return `${date} ${time}`;
 }
 
 async function configOptionsGrouped() {
@@ -532,6 +544,14 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
     const item = await findOneById(TABLES.configOptions, req.params.id);
     if (!item || item.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
 
+    const { data: removedRows, error: removeError } = await supabase
+      .from(TABLES.configOptions)
+      .delete()
+      .eq('id', req.params.id)
+      .select('*');
+    if (removeError) throw removeError;
+    if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
+
     const viagem = await insertDoc(TABLES.viagens, {
       placa: item.placa || '',
       nome: item.nome || '',
@@ -540,7 +560,6 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       data: String(req.body?.data || '').trim() || new Date().toISOString().slice(0, 10)
     });
 
-    await deleteDoc(TABLES.configOptions, req.params.id);
     const lista = await waitlistDocs();
     broadcast({ type: 'viagem_criada', payload: viagem });
     broadcast({ type: 'lista_espera_atualizada', payload: lista });
