@@ -48,6 +48,10 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
   doc._id = record.id;
@@ -244,6 +248,117 @@ function broadcast(data) {
   });
 }
 
+function publicProfile(profile = {}) {
+  return {
+    id: profile.id,
+    user_id: profile.user_id,
+    nome: profile.nome || '',
+    email: profile.email || '',
+    role: profile.role || 'visualizador',
+    ativo: profile.ativo !== false,
+    created_at: profile.created_at
+  };
+}
+
+async function profileForUser(userId) {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id,user_id,nome,email,role,ativo,created_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? publicProfile(data) : null;
+}
+
+function requireAuth(req, res, next) {
+  Promise.resolve().then(async () => {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) return res.status(401).json({ error: 'Login necessário.' });
+
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
+
+    const profile = await profileForUser(data.user.id);
+    if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
+
+    req.authUser = data.user;
+    req.userProfile = profile;
+    next();
+  }).catch(next);
+}
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.userProfile?.role)) {
+      return res.status(403).json({ error: 'Permissão insuficiente.' });
+    }
+    next();
+  };
+}
+
+const requireAdmin = requireRole('admin');
+const requireViagemEditor = requireRole('admin', 'operador');
+
+// Configure SUPABASE_URL and SUPABASE_ANON_KEY in Render environment variables.
+// Never expose SUPABASE_SERVICE_ROLE to frontend code.
+app.get('/api/auth/config', (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+  });
+});
+
+app.use('/api', requireAuth);
+
+app.get('/api/auth/me', (req, res) => {
+  res.json({
+    user: {
+      id: req.authUser.id,
+      email: req.authUser.email
+    },
+    profile: req.userProfile
+  });
+});
+
+app.get('/api/users', requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id,user_id,nome,email,role,ativo,created_at')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json((data || []).map(publicProfile));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const patch = {};
+    if (req.body.role !== undefined) {
+      if (!['admin', 'operador', 'visualizador'].includes(req.body.role)) {
+        return res.status(400).json({ error: 'Perfil inválido.' });
+      }
+      patch.role = req.body.role;
+    }
+    if (req.body.ativo !== undefined) patch.ativo = Boolean(req.body.ativo);
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nada para atualizar.' });
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update(patch)
+      .eq('id', req.params.id)
+      .select('id,user_id,nome,email,role,ativo,created_at')
+      .single();
+    if (error) throw error;
+    res.json(publicProfile(data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 wss.on('connection', (ws) => {
   console.log('Cliente conectado');
   ws.on('close', () => console.log('Cliente desconectado'));
@@ -289,7 +404,7 @@ app.get('/api/viagens/search', async (req, res) => {
   }
 });
 
-app.post('/api/viagens', async (req, res) => {
+app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const duplicate = await findDuplicateViagemFields(req.body);
     if (duplicate) {
@@ -307,7 +422,7 @@ app.post('/api/viagens', async (req, res) => {
   }
 });
 
-app.put('/api/viagens/:id', async (req, res) => {
+app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
@@ -329,7 +444,7 @@ app.put('/api/viagens/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/viagens/:id', async (req, res) => {
+app.delete('/api/viagens/:id', requireAdmin, async (req, res) => {
   try {
     await deleteDoc(TABLES.viagens, req.params.id);
     broadcast({ type: 'viagem_removida', payload: { _id: req.params.id, id: req.params.id } });
@@ -352,7 +467,7 @@ app.get('/api/metas', async (req, res) => {
   }
 });
 
-app.post('/api/metas', async (req, res) => {
+app.post('/api/metas', requireAdmin, async (req, res) => {
   try {
     const { data, destino, valor, tipo, produto } = req.body;
     const existingDocs = (await selectDocs(TABLES.metas)).filter(doc => doc.data === data && doc.destino === destino && doc.tipo === tipo);
@@ -385,7 +500,7 @@ app.get('/api/operacoes', async (req, res) => {
   }
 });
 
-app.post('/api/operacoes', async (req, res) => {
+app.post('/api/operacoes', requireAdmin, async (req, res) => {
   try {
     const docs = await selectDocs(TABLES.operacoes);
     const grouped = await configOptionsGrouped();
@@ -406,7 +521,7 @@ app.post('/api/operacoes', async (req, res) => {
   }
 });
 
-app.put('/api/operacoes/:id', async (req, res) => {
+app.put('/api/operacoes/:id', requireAdmin, async (req, res) => {
   try {
     const patch = {};
     if (req.body.origem !== undefined) patch.origem = String(req.body.origem || '').trim().toUpperCase();
@@ -424,7 +539,7 @@ app.put('/api/operacoes/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/operacoes/:id', async (req, res) => {
+app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
   try {
     const current = await findOneById(TABLES.operacoes, req.params.id);
     if (!current) return res.status(404).json({ error: 'Operação não encontrada' });
@@ -460,7 +575,7 @@ app.get('/api/config-options', async (req, res) => {
   }
 });
 
-app.post('/api/config-options/:field', async (req, res) => {
+app.post('/api/config-options/:field', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
@@ -501,7 +616,7 @@ app.post('/api/config-options/:field', async (req, res) => {
   }
 });
 
-app.put('/api/config-options/:field/reorder', async (req, res) => {
+app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
@@ -545,7 +660,7 @@ app.put('/api/config-options/:field/reorder', async (req, res) => {
   }
 });
 
-app.delete('/api/config-options/:field/:value', async (req, res) => {
+app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });

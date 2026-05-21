@@ -16,6 +16,7 @@ const state = {
   configColors: {},
   tableSort: { field: '', direction: 'asc' },
   freteConsultas: {},
+  userProfile: null,
   ws: null
 };
 
@@ -148,11 +149,15 @@ function todayStr() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('date-picker').value = state.currentDate;
+  const auth = await FrotasysAuth.init({ requireAuth: true });
+  if (!auth.profile) return;
+  state.userProfile = auth.profile;
   state.configColors = loadConfigColors();
   initWS();
   initUI();
+  applyPermissions();
   loadAll();
 });
 
@@ -237,9 +242,19 @@ async function loadAll() {
 
 async function apiFetch(url, opts = {}) {
   try {
-    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const token = await FrotasysAuth.getAccessToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts.headers || {})
+    };
+    const res = await fetch(url, { ...opts, headers });
     const data = await res.json();
     if (!res.ok) {
+      if (res.status === 401) {
+        await FrotasysAuth.signOut();
+        return null;
+      }
       alert(data.error || 'Não foi possível salvar.');
       return null;
     }
@@ -259,6 +274,13 @@ function initUI() {
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
 
+  document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
+  document.getElementById('btn-users-admin').addEventListener('click', openUsersModal);
+  document.getElementById('users-modal-close').addEventListener('click', closeUsersModal);
+  document.getElementById('users-btn-close').addEventListener('click', closeUsersModal);
+  document.getElementById('users-modal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('users-modal-overlay')) closeUsersModal();
+  });
   document.getElementById('btn-frete-consult').addEventListener('click', openFreteConsultModal);
   document.getElementById('frete-consult-close').addEventListener('click', closeFreteConsultModal);
   document.getElementById('frete-consult-btn-close').addEventListener('click', closeFreteConsultModal);
@@ -362,11 +384,72 @@ function initUI() {
       closeFreteConsultModal();
       closeEventWarning();
       closeSettingsModal();
+      closeUsersModal();
       hideCtxMenu();
       hideAgendamentoMenu();
       cancelInlineEdit();
     }
   });
+}
+
+function isAdmin() {
+  return state.userProfile?.role === 'admin';
+}
+
+function canEditViagens() {
+  return ['admin', 'operador'].includes(state.userProfile?.role);
+}
+
+function applyPermissions() {
+  document.body.dataset.role = state.userProfile?.role || 'visualizador';
+  document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
+  document.getElementById('btn-settings').classList.toggle('is-hidden', !isAdmin());
+  document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
+}
+
+async function openUsersModal() {
+  if (!isAdmin()) return;
+  document.getElementById('users-modal-overlay').classList.remove('hidden');
+  await loadUsers();
+}
+
+function closeUsersModal() {
+  document.getElementById('users-modal-overlay').classList.add('hidden');
+}
+
+async function loadUsers() {
+  const users = await apiFetch('/api/users');
+  const tbody = document.getElementById('users-table-body');
+  if (!users) {
+    tbody.innerHTML = '<tr><td colspan="4">Não foi possível carregar usuários.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(user => `
+    <tr>
+      <td>${escapeHtml(user.nome || '-')}</td>
+      <td>${escapeHtml(user.email || '-')}</td>
+      <td>
+        <select class="user-role-select" onchange="updateUserProfile('${escapeAttr(user.id)}', { role: this.value })">
+          ${['admin', 'operador', 'visualizador'].map(role => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <label class="user-active-toggle">
+          <input type="checkbox" ${user.ativo ? 'checked' : ''} onchange="updateUserProfile('${escapeAttr(user.id)}', { ativo: this.checked })">
+          <span>${user.ativo ? 'Ativo' : 'Inativo'}</span>
+        </label>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function updateUserProfile(id, patch) {
+  if (!isAdmin()) return;
+  const updated = await apiFetch(`/api/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(patch)
+  });
+  if (updated) await loadUsers();
 }
 
 function openSearchModal() {
@@ -544,11 +627,8 @@ async function fetchCarregamentosByNotaOrCte({ cte, nota }) {
   const searchUrl = `/api/viagens/search?${params.toString()}`;
 
   try {
-    const res = await fetch(searchUrl, { headers: { 'Content-Type': 'application/json' } });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) return data;
-    }
+    const data = await apiFetch(searchUrl);
+    if (Array.isArray(data)) return data;
   } catch (e) {
     console.warn('Busca dedicada indisponível, usando busca local.', e);
   }
@@ -721,8 +801,8 @@ function renderTable(secao) {
       <td>
         <div class="row-actions">
           <button class="btn-row" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
-          <button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>
-          <button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>
+          ${canEditViagens() ? `<button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>` : ''}
+          ${isAdmin() ? `<button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -779,7 +859,7 @@ function renderCell(v, field) {
     const cls = field.key === 'origem' ? originSlug(raw) : field.key === 'status' ? statusSlug(raw) : field.key === 'tipo' ? tipoSlug(raw) : '';
     const style = selectColorStyle(field.key, raw);
     return `<td class="cell-select cell-${field.key}" data-field="${field.key}" data-id="${escapeAttr(v._id)}">
-      <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)">
+      <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)" ${canEditViagens() ? '' : 'disabled'}>
         ${renderOptions(getSelectOptions(field.key), raw)}
       </select>
     </td>`;
@@ -927,6 +1007,7 @@ function setSelectOptions(select, options) {
 }
 
 function openSettingsModal() {
+  if (!isAdmin()) return;
   renderSettingsModal();
   document.getElementById('settings-modal-overlay').classList.remove('hidden');
 }
@@ -1315,6 +1396,7 @@ function setTotalCell(row, value) {
 }
 
 function startMetaEdit(cell) {
+  if (!isAdmin()) return;
   if (cell.querySelector('input')) return;
   const cur = parseNumber(cell.textContent);
   const dest = cell.dataset.dest;
@@ -1438,6 +1520,7 @@ function renderTransportChart(faturadoRows) {
 let activeInlineCell = null;
 
 async function updateInlineSelect(select) {
+  if (!canEditViagens()) return;
   const id = select.dataset.id;
   const field = select.dataset.field;
   const value = normalizeFieldValue(field, select.value);
@@ -1449,12 +1532,14 @@ async function updateInlineSelect(select) {
 
 async function promoteToFaturado(event, id) {
   event.stopPropagation();
+  if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
   if (!viagem || viagem.secao === 'arcos') return;
   await updateViagemField(id, 'secao', 'arcos');
 }
 
 function startInlineEdit(td) {
+  if (!canEditViagens()) return;
   if (activeInlineCell) cancelInlineEdit();
   const field = td.dataset.field;
   const id = td.dataset.id;
@@ -1743,6 +1828,7 @@ async function syncOperationOriginConfig(origem, previousOrigem = '') {
 }
 
 async function saveViagem() {
+  if (!canEditViagens()) return;
   const data = {
     placa: v('f-placa').toUpperCase(),
     nome: v('f-nome').toUpperCase(),
@@ -1796,6 +1882,7 @@ function v(id) {
 
 // ─── EDIT / DELETE ────────────────────────────────────────────────────────────
 function editViagem(id) {
+  if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
   if (viagem) openModal(viagem);
 }
@@ -1850,6 +1937,7 @@ function showCopyBubble(button) {
 }
 
 async function deleteViagem(id) {
+  if (!isAdmin()) return;
   if (!confirm('Excluir este registro?')) return;
   await apiFetch(`/api/viagens/${id}`, { method: 'DELETE' });
   state.viagens = state.viagens.filter(v => v._id !== id);
@@ -1899,6 +1987,7 @@ async function toggleAgendamentoVerde() {
 
 // ─── METAS SAVE ───────────────────────────────────────────────────────────────
 async function saveMetas() {
+  if (!isAdmin()) return;
   const inputs = document.querySelectorAll('#metas-form input[data-dest]');
   const btn = document.getElementById('btn-save-metas');
   btn.textContent = 'Salvando...';

@@ -25,8 +25,10 @@
       <input type="date" id="date-picker" class="date-picker">
       <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
     </div>
+    <button class="btn-users is-hidden" id="btn-users-admin">Usuários</button>
     <button class="btn-settings" id="btn-settings" title="Configurações" aria-label="Configurações">⚙</button>
     <button class="btn-add" id="btn-nova-viagem">Nova Viagem</button>
+    <button class="btn-logout" id="btn-logout">Sair</button>
   </div>
 </header>
 
@@ -368,6 +370,33 @@
   </div>
 </div>
 
+<div id="users-modal-overlay" class="modal-overlay hidden">
+  <div class="modal users-modal">
+    <div class="modal-header">
+      <span>Usuários</span>
+      <button class="modal-close" id="users-modal-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="users-table-wrap">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Perfil</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="users-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div id="ctx-menu" class="ctx-menu hidden">
   <div class="ctx-item" id="ctx-edit">Editar</div>
   <div class="ctx-item danger" id="ctx-delete">Excluir</div>
@@ -378,6 +407,8 @@
   <div class="ctx-item" id="agendamento-edit">Editar</div>
 </div>
 
-<script src="js/app.js?v=20260520-copiar-linha"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/auth.js?v=20260521-auth"></script>
+<script src="js/app.js?v=20260521-auth"></script>
 </body>
 </html>
