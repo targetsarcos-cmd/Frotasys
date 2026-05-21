@@ -673,8 +673,13 @@ button, input, select {
 .data-table td[data-field="manifesto"],
 .data-table th[data-field="contrato"],
 .data-table td[data-field="contrato"] {
-  color: rgb(255, 0, 0);
+  color: #000;
   font-weight: 900;
+}
+
+.data-table th[data-field="dt"],
+.data-table td[data-field="dt"] {
+  color: rgb(255, 0, 0);
 }
 
 .placa-content {
