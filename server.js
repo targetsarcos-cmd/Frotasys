@@ -46,7 +46,7 @@ const UNIQUE_VIAGEM_FIELDS = [
   { key: 'cte', label: 'CT-E' },
   { key: 'num_pedagio', label: 'Nº DO PEDÁGIO' }
 ];
-const CONCLUSAO_FIELDS = ['cte', 'manifesto', 'contrato', 'nota'];
+const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
 
 app.use(cors());
 app.use(express.json());
@@ -62,7 +62,7 @@ app.get('/login', (req, res) => {
 
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
-  if (hasDocumentosCompletos(doc) || isStatusConcluido(doc.status)) {
+  if (isViagemBloqueada(doc)) {
     doc.status = 'CONCLUIDO';
     doc.usuario = '';
   }
@@ -328,16 +328,13 @@ function profileDisplayName(profile = {}) {
   return String(profile.nome || profile.email || 'Usuário').trim();
 }
 
-function hasDocumentosCompletos(data = {}) {
-  return CONCLUSAO_FIELDS.every(field => String(data[field] || '').trim() !== '');
-}
-
-function isStatusConcluido(status) {
-  return normalizeUniqueValue(status) === 'CONCLUIDO';
+function normalizeContratoConclusao(value) {
+  const normalized = normalizeUniqueValue(value);
+  return CONTRATO_CONCLUSAO_OPTIONS.includes(normalized) ? normalized : '';
 }
 
 function isViagemBloqueada(data = {}) {
-  return hasDocumentosCompletos(data) || isStatusConcluido(data.status);
+  return Boolean(normalizeContratoConclusao(data.conclusaoContrato));
 }
 
 async function profileForUser(userId) {
@@ -536,7 +533,11 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
     delete payload.usuario;
-    if (hasDocumentosCompletos(payload) || isStatusConcluido(payload.status)) {
+    if (payload.conclusaoContrato !== undefined) {
+      payload.conclusaoContrato = normalizeContratoConclusao(payload.conclusaoContrato);
+    }
+
+    if (isViagemBloqueada(payload)) {
       payload.status = 'CONCLUIDO';
       payload.usuario = '';
     } else if (payload.status !== undefined && normalizeUniqueValue(payload.status)) {
@@ -569,11 +570,15 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
     const patch = { ...req.body };
     delete patch.usuario;
+    if (patch.conclusaoContrato !== undefined) {
+      patch.conclusaoContrato = normalizeContratoConclusao(patch.conclusaoContrato);
+      if (!patch.conclusaoContrato) delete patch.conclusaoContrato;
+    }
     const statusWasSent = Object.prototype.hasOwnProperty.call(req.body, 'status');
     const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
 
     const nextData = { ...current, ...patch };
-    if (hasDocumentosCompletos(nextData) || isStatusConcluido(nextData.status)) {
+    if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
       patch.usuario = '';
       nextData.status = 'CONCLUIDO';

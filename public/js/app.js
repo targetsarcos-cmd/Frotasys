@@ -8,6 +8,7 @@ const state = {
   editingOperationId: null,
   ctxTargetId: null,
   agendamentoTargetId: null,
+  contratoTargetId: null,
   productSummaryOpen: true,
   collapsedMetaProducts: {},
   collapsedTotalProducts: {},
@@ -355,12 +356,20 @@ function initUI() {
   document.addEventListener('click', e => {
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
+    if (!e.target.closest('#contrato-menu')) hideContratoMenu();
     if (e.target.matches('input, select, button')) return;
     const td = e.target.closest('td[data-field]:not(.cell-select)');
     if (td && td.classList.contains('quick-edit')) startInlineEdit(td);
   });
 
   document.addEventListener('contextmenu', e => {
+    const contratoCell = e.target.closest('td[data-field="contrato"]:not(.cell-select)');
+    if (contratoCell) {
+      e.stopPropagation();
+      showContratoMenu(e, contratoCell);
+      return;
+    }
+
     const td = e.target.closest('td[data-field="agendamento"]:not(.cell-select)');
     if (!td) return;
     e.stopPropagation();
@@ -381,6 +390,8 @@ function initUI() {
     const cell = document.querySelector(`td[data-field="agendamento"][data-id="${CSS.escape(id)}"]`);
     if (cell) startInlineEdit(cell);
   });
+  document.getElementById('contrato-adiantamento').addEventListener('click', () => concluirContrato('ADIANTAMENTO EFETUADO'));
+  document.getElementById('contrato-sem-contrato').addEventListener('click', () => concluirContrato('NAO FAZ CONTRATO'));
 
   document.addEventListener('dblclick', e => {
     const td = e.target.closest('td[data-field]:not(.cell-select)');
@@ -397,6 +408,7 @@ function initUI() {
       closeUsersModal();
       hideCtxMenu();
       hideAgendamentoMenu();
+      hideContratoMenu();
       cancelInlineEdit();
     }
   });
@@ -411,7 +423,7 @@ function canEditViagens() {
 }
 
 function isViagemConcluida(viagem) {
-  return hasDocumentosCompletos(viagem) || normalizeOption(viagem?.status) === 'CONCLUIDO';
+  return Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
 }
 
 function canEditViagem(viagem) {
@@ -906,6 +918,11 @@ function renderTableHeader(secao) {
 
 function hasDocumentosCompletos(viagem) {
   return ['cte', 'nota', 'manifesto', 'contrato'].every(field => String(viagem[field] || '').trim() !== '');
+}
+
+function normalizeContratoConclusao(value) {
+  const normalized = normalizeOption(value);
+  return ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'].includes(normalized) ? normalized : '';
 }
 
 function hasNotaPreenchida(viagem) {
@@ -2055,6 +2072,33 @@ function showAgendamentoMenu(e, cell) {
 function hideAgendamentoMenu() {
   document.getElementById('agendamento-menu').classList.add('hidden');
   state.agendamentoTargetId = null;
+}
+
+function showContratoMenu(e, cell) {
+  e.preventDefault();
+  const viagem = state.viagens.find(item => item._id === cell.dataset.id);
+  if (!canEditViagem(viagem)) return;
+
+  hideCtxMenu();
+  hideAgendamentoMenu();
+  state.contratoTargetId = cell.dataset.id;
+
+  const menu = document.getElementById('contrato-menu');
+  menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
+  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 95)}px`;
+  menu.classList.remove('hidden');
+}
+
+function hideContratoMenu() {
+  document.getElementById('contrato-menu').classList.add('hidden');
+  state.contratoTargetId = null;
+}
+
+async function concluirContrato(tipo) {
+  const id = state.contratoTargetId;
+  hideContratoMenu();
+  if (!id) return;
+  await updateViagemField(id, 'conclusaoContrato', tipo);
 }
 
 async function toggleAgendamentoVerde() {
