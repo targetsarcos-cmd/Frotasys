@@ -631,6 +631,7 @@ function closeFreteConsultModal() {
 async function openListaEsperaModal() {
   syncDynamicSelects();
   setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
   document.getElementById('waitlist-data').value = todayStr();
   document.getElementById('waitlist-overlay').classList.remove('hidden');
   await loadListaEspera();
@@ -653,6 +654,7 @@ function normalizeListaEspera(items = []) {
     placa: String(item.placa || '').trim().toUpperCase(),
     nome: String(item.nome || '').trim().toUpperCase(),
     tipo: normalizeTipo(item.tipo),
+    origem: String(item.origem || '').trim().toUpperCase(),
     data: String(item.data || '').trim(),
     hora: String(item.hora || '').trim(),
     ordem: Number(item.ordem) || index + 1
@@ -676,7 +678,7 @@ function renderListaEspera() {
   if (!tbody) return;
 
   if (!state.listaEspera.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
     return;
   }
 
@@ -688,6 +690,11 @@ function renderListaEspera() {
       <td>
         <select data-field="tipo">
           ${renderOptions(['', ...configOptionList('tipo')], item.tipo)}
+        </select>
+      </td>
+      <td>
+        <select data-field="origem">
+          ${renderOptions(['', ...originList()], item.origem)}
         </select>
       </td>
       <td><input type="date" data-field="data" value="${escapeAttr(item.data)}"></td>
@@ -710,6 +717,7 @@ async function addListaEsperaItem(event) {
     placa: v('waitlist-placa').toUpperCase(),
     nome: v('waitlist-nome').toUpperCase(),
     tipo: normalizeTipo(v('waitlist-tipo')),
+    origem: v('waitlist-origem').toUpperCase(),
     data: v('waitlist-data'),
     hora: v('waitlist-hora')
   };
@@ -733,6 +741,7 @@ async function addListaEsperaItem(event) {
   document.getElementById('waitlist-form').reset();
   document.getElementById('waitlist-data').value = todayStr();
   setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
   await loadListaEspera();
   document.getElementById('waitlist-placa').focus();
 }
@@ -798,7 +807,7 @@ async function commitListaEsperaCell(cell) {
 
 function normalizeListaEsperaField(field, value) {
   if (field === 'tipo') return normalizeTipo(value);
-  if (field === 'placa' || field === 'nome') return String(value || '').trim().toUpperCase();
+  if (field === 'placa' || field === 'nome' || field === 'origem') return String(value || '').trim().toUpperCase();
   return String(value || '').trim();
 }
 
@@ -1376,6 +1385,7 @@ function syncDynamicSelects() {
     setSelectOptions(document.getElementById(`f-${field}`), getSelectOptions(field));
   });
   setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
 }
 
 function setSelectOptions(select, options) {

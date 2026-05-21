@@ -284,6 +284,7 @@ function normalizeWaitlistItem(data = {}) {
     placa: normalizeUniqueValue(data.placa),
     nome: normalizeUniqueValue(data.nome),
     tipo: normalizeTipo(data.tipo),
+    origem: normalizeUniqueValue(data.origem),
     data: String(data.data || '').trim(),
     hora: String(data.hora || '').trim(),
     ordem: Number(data.ordem) || 0
@@ -297,6 +298,7 @@ function waitlistDocToFrontend(doc = {}) {
     placa: doc.placa || '',
     nome: doc.nome || '',
     tipo: doc.tipo || '',
+    origem: doc.origem || '',
     data: doc.data || '',
     hora: doc.hora || '',
     ordem: Number(doc.ordem) || 0,
@@ -556,6 +558,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       placa: item.placa || '',
       nome: item.nome || '',
       tipo: normalizeTipo(item.tipo),
+      origem: item.origem || '',
       secao: 'agenciando',
       data: String(req.body?.data || '').trim() || new Date().toISOString().slice(0, 10)
     });
