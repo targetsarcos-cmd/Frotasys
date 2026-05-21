@@ -23,6 +23,7 @@ const DEFAULT_OPERACOES = [
 ];
 
 const CONFIG_FIELDS = ['tipo', 'produto', 'carroceria', 'kanguru', 'pamcard', 'status', 'origem', 'destino'];
+const CONFIG_COLOR_FIELDS = ['tipo', 'status', 'origem', 'destino'];
 const DEFAULT_CONFIG_OPTIONS = {
   tipo: ['AGREGADO', 'CARRETEIRO', 'DEDICADO', 'FROTA'],
   produto: ['CPII-F', 'CPIII', 'CPV'],
@@ -192,21 +193,24 @@ async function ensureDefaultOperacoes() {
 }
 
 async function ensureDefaultConfigOptions() {
-  const total = await countDocs(TABLES.configOptions);
-  if (total > 0) return;
+  const existing = await selectDocs(TABLES.configOptions);
+  const existingKeys = new Set(existing.map(doc => `${doc.field}:${doc.normalized || normalizeUniqueValue(doc.value)}`));
 
   const docs = [];
   for (const field of CONFIG_FIELDS) {
+    const fieldCount = existing.filter(doc => doc.field === field).length;
     DEFAULT_CONFIG_OPTIONS[field].forEach((value, index) => {
+      const normalized = normalizeUniqueValue(value);
+      if (existingKeys.has(`${field}:${normalized}`)) return;
       docs.push({
         field,
         value,
-        normalized: normalizeUniqueValue(value),
-        ordem: index + 1
+        normalized,
+        ordem: fieldCount + index + 1
       });
     });
   }
-  await insertDocs(TABLES.configOptions, docs);
+  if (docs.length) await insertDocs(TABLES.configOptions, docs);
 }
 
 async function configOptionsGrouped() {
@@ -218,8 +222,26 @@ async function configOptionsGrouped() {
   }, {});
 }
 
+async function configColorsGrouped() {
+  await ensureDefaultConfigOptions();
+  const docs = await selectDocs(TABLES.configOptions);
+  return CONFIG_COLOR_FIELDS.reduce((acc, field) => {
+    acc[field] = {};
+    docs
+      .filter(doc => doc.field === field && isHexColor(doc.color))
+      .forEach(doc => {
+        acc[field][normalizeUniqueValue(doc.value)] = doc.color;
+      });
+    return acc;
+  }, {});
+}
+
 function normalizeUniqueValue(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+function isHexColor(color) {
+  return /^#[0-9a-f]{6}$/i.test(String(color || ''));
 }
 
 async function findDuplicateViagemFields(data, currentId = null) {
@@ -493,7 +515,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   }
 });
 
-app.delete('/api/viagens/:id', requireAdmin, async (req, res) => {
+app.delete('/api/viagens/:id', async (req, res) => {
   try {
     await deleteDoc(TABLES.viagens, req.params.id);
     broadcast({ type: 'viagem_removida', payload: { _id: req.params.id, id: req.params.id } });
@@ -619,6 +641,42 @@ app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
 app.get('/api/config-options', async (req, res) => {
   try {
     res.json(await configOptionsGrouped());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/config-colors', async (req, res) => {
+  try {
+    res.json(await configColorsGrouped());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/config-colors/:field/:value', requireAdmin, async (req, res) => {
+  try {
+    const field = req.params.field;
+    if (!CONFIG_COLOR_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo sem cor configurável' });
+
+    const color = String(req.body.color || '').trim();
+    if (!isHexColor(color)) return res.status(400).json({ error: 'Cor inválida' });
+
+    const value = String(decodeURIComponent(req.params.value) || '').trim().toUpperCase();
+    const normalized = normalizeUniqueValue(value);
+    if (!normalized) return res.status(400).json({ error: 'Informe um valor' });
+
+    const existing = await findOne(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized);
+    if (existing) {
+      await updateDoc(TABLES.configOptions, existing._id, { color });
+    } else {
+      const count = await countDocs(TABLES.configOptions, doc => doc.field === field);
+      await insertDoc(TABLES.configOptions, { field, value, normalized, color, ordem: count + 1 });
+    }
+
+    const colors = await configColorsGrouped();
+    broadcast({ type: 'config_cores_atualizadas', payload: colors });
+    res.json(colors);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

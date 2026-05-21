@@ -51,7 +51,6 @@ const CONFIG_FIELDS = [
   { key: 'destino', label: 'DESTINO' }
 ];
 
-const CONFIG_COLOR_KEY = 'frota-config-colors';
 const CONFIG_COLOR_FIELDS = ['tipo', 'status', 'origem', 'destino'];
 const DEFAULT_CONFIG_COLORS = {
   tipo: {
@@ -159,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
-  state.configColors = loadConfigColors();
+  state.configColors = mergeConfigColors({});
   initWS();
   initUI();
   applyPermissions();
@@ -227,20 +226,25 @@ function handleWsMessage(msg) {
   } else if (type === 'config_atualizada') {
     state.configOptions = normalizeConfigOptions(payload);
     loadAll();
+  } else if (type === 'config_cores_atualizadas') {
+    state.configColors = mergeConfigColors(payload);
+    renderAll();
   }
 }
 
 // ─── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadAll() {
-  const [viagens, metas, operacoes, configOptions] = await Promise.all([
+  const [viagens, metas, operacoes, configOptions, configColors] = await Promise.all([
     apiFetch(`/api/viagens?data=${state.currentDate}`),
     apiFetch(`/api/metas?data=${state.currentDate}`),
     apiFetch('/api/operacoes'),
-    apiFetch('/api/config-options')
+    apiFetch('/api/config-options'),
+    apiFetch('/api/config-colors')
   ]);
   state.viagens = viagens || [];
   state.metas = metas || [];
   state.configOptions = normalizeConfigOptions(configOptions);
+  state.configColors = mergeConfigColors(configColors);
   state.operacoes = normalizeOperacoes(operacoes);
   renderAll();
 }
@@ -845,7 +849,7 @@ function renderTable(secao) {
         <div class="row-actions">
           <button class="btn-row" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
           ${canEditViagens() ? `<button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>` : ''}
-          ${isAdmin() ? `<button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>` : ''}
+          <button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>
         </div>
       </td>
     </tr>`;
@@ -1117,13 +1121,21 @@ function renderConfigColorPicker(field, value) {
   </label>`;
 }
 
-function setConfigColor(field, value, color) {
+async function setConfigColor(field, value, color) {
   if (!CONFIG_COLOR_FIELDS.includes(field) || !isHexColor(color)) return;
   const normalized = normalizeOption(value);
   state.configColors[field] = { ...(state.configColors[field] || {}), [normalized]: color };
-  saveConfigColors();
   renderAll();
   renderSettingsModal();
+  const saved = await apiFetch(`/api/config-colors/${encodeURIComponent(field)}/${encodeURIComponent(value)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ color })
+  });
+  if (saved) {
+    state.configColors = mergeConfigColors(saved);
+    renderAll();
+    renderSettingsModal();
+  }
 }
 
 async function addConfigOption(field) {
@@ -1668,19 +1680,6 @@ function inputPlaceholder(field) {
   return '';
 }
 
-function loadConfigColors() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CONFIG_COLOR_KEY) || '{}');
-    return mergeConfigColors(saved);
-  } catch (e) {
-    return mergeConfigColors({});
-  }
-}
-
-function saveConfigColors() {
-  localStorage.setItem(CONFIG_COLOR_KEY, JSON.stringify(state.configColors));
-}
-
 function mergeConfigColors(saved = {}) {
   return CONFIG_COLOR_FIELDS.reduce((acc, field) => {
     acc[field] = {};
@@ -1976,7 +1975,6 @@ function showCopyBubble(button) {
 }
 
 async function deleteViagem(id) {
-  if (!isAdmin()) return;
   if (!confirm('Excluir este registro?')) return;
   await apiFetch(`/api/viagens/${id}`, { method: 'DELETE' });
   state.viagens = state.viagens.filter(v => v._id !== id);
