@@ -33,6 +33,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   tipo: ['AGREGADO', 'CARRETEIRO', 'DEDICADO', 'FROTA'],
   produto: DEFAULT_PRODUTOS,
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
+  kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
   status: STATUS,
   origem: DEFAULT_OPERACOES.map(op => op.origem),
@@ -43,6 +44,7 @@ const CONFIG_FIELDS = [
   { key: 'tipo', label: 'TIPO' },
   { key: 'produto', label: 'PRODUTO' },
   { key: 'carroceria', label: 'CARROCERIA' },
+  { key: 'kanguru', label: 'KANGURU' },
   { key: 'pamcard', label: 'PAMCARD' },
   { key: 'status', label: 'STATUS' },
   { key: 'origem', label: 'ORIGEM' },
@@ -50,7 +52,7 @@ const CONFIG_FIELDS = [
 ];
 
 const CONFIG_COLOR_KEY = 'frota-config-colors';
-const CONFIG_COLOR_FIELDS = ['tipo', 'status'];
+const CONFIG_COLOR_FIELDS = ['tipo', 'status', 'origem', 'destino'];
 const DEFAULT_CONFIG_COLORS = {
   tipo: {
     AGREGADO: '#9a6500',
@@ -64,7 +66,9 @@ const DEFAULT_CONFIG_COLORS = {
     'AGUARDANDO CARREGAMENTO': '#b7791f',
     MANIFESTO: '#2563eb',
     CONCLUIDO: '#16803f'
-  }
+  },
+  origem: {},
+  destino: {}
 };
 const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f766e', '#4f46e5', '#c05621', '#0891b2'];
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
@@ -122,6 +126,7 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'produto', label: 'PRODUTO' },
   { key: 'secao', label: 'REGISTRO' },
   { key: 'carroceria', label: 'CARROCERIA' },
+  { key: 'kanguru', label: 'KANGURU' },
   { key: 'pamcard', label: 'PAMCARD' },
   { key: 'status', label: 'STATUS' },
   { key: 'usuario', label: 'USUÁRIO' },
@@ -792,6 +797,7 @@ const FIELDS = [
   { key: 'tipo', label: 'TIPO', select: true },
   { key: 'produto', label: 'PRODUTO', select: true },
   { key: 'carroceria', label: 'CARROCERIA', select: true },
+  { key: 'kanguru', label: 'KANGURU', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
   { key: 'status', label: 'STATUS', select: true },
   { key: 'usuario', label: 'USUÁRIO', quick: true },
@@ -921,12 +927,6 @@ function renderCell(v, field) {
 
   let cls = field.quick ? 'quick-edit' : '';
   if (field.key === 'agendamento' && v.agendamentoVerde) cls += ' has-agendamento';
-  if (field.key === 'frete') {
-    const upper = String(raw).toUpperCase();
-    if (upper.includes('TEM KAN-GURU') || upper.includes('TEM KANGURU')) cls += ' has-kanguru';
-    if (upper.includes('SEM KANGURU')) cls += ' sem-kanguru';
-  }
-
   const title = field.key === 'telefone' && phoneList(raw).length > 1 ? ` title="${escapeAttr(raw)}"` : '';
   return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${cls.trim()}"${title}>${escapeHtml(display)}</td>`;
 }
@@ -945,6 +945,7 @@ function getSelectOptions(field) {
   if (field === 'produto') return ['', ...productList()];
   if (field === 'carroceria') return ['', ...configOptionList('carroceria')];
   if (field === 'pamcard') return ['', ...configOptionList('pamcard')];
+  if (field === 'kanguru') return ['', ...configOptionList('kanguru')];
   if (field === 'status') return ['', ...configOptionList('status')];
   if (field === 'origem') return ['', ...originList()];
   if (field === 'destino') return ['', ...destinationList()];
@@ -1031,7 +1032,7 @@ function findOperation(id) {
 }
 
 function syncDynamicSelects() {
-  ['tipo', 'produto', 'carroceria', 'pamcard', 'status', 'origem', 'destino'].forEach(field => {
+  ['tipo', 'produto', 'carroceria', 'kanguru', 'pamcard', 'status', 'origem', 'destino'].forEach(field => {
     setSelectOptions(document.getElementById(`f-${field}`), getSelectOptions(field));
   });
 }
@@ -1062,7 +1063,7 @@ function renderSettingsModal() {
     return `<section class="settings-section ${hasColors ? 'has-colors' : ''}" data-field="${field.key}">
       <div class="settings-section-head">
         <strong>${field.label}</strong>
-        <span>${values.length} itens${hasColors ? ' - cores editáveis' : ''}</span>
+        <span>${values.length} itens${hasColors ? ' - cor de fundo' : ''}</span>
       </div>
       <div class="settings-add-row">
         <input type="text" id="settings-input-${field.key}" placeholder="Adicionar ${field.label.toLowerCase()}">
@@ -1110,7 +1111,7 @@ function renderSettingsOperations() {
 
 function renderConfigColorPicker(field, value) {
   const color = configColor(field, value);
-  return `<label class="settings-color-control" title="Cor de ${escapeAttr(value)}">
+  return `<label class="settings-color-control" title="Cor de fundo de ${escapeAttr(value)}">
     <input type="color" value="${escapeAttr(color)}" data-field="${escapeAttr(field)}" data-value="${escapeAttr(value)}" onchange="setConfigColor(this.dataset.field, this.dataset.value, this.value)">
     <span style="${escapeAttr(colorPreviewStyle(color))}"></span>
   </label>`;
@@ -1695,7 +1696,7 @@ function mergeConfigColors(saved = {}) {
 
 function configColor(field, value) {
   const normalized = normalizeOption(value);
-  if (!normalized) return '#64748b';
+  if (!normalized) return '#ffffff';
   const saved = state.configColors?.[field]?.[normalized];
   if (isHexColor(saved)) return saved;
   const paletteIndex = Math.abs(hashText(normalized)) % FALLBACK_CONFIG_COLORS.length;
@@ -1711,7 +1712,7 @@ function selectColorStyle(field, value) {
 function colorPreviewStyle(color) {
   const rgb = hexToRgb(color);
   if (!rgb) return '';
-  return `color:${color};border-color:rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .34);background:rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .10);`;
+  return `color:#000;border-color:rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .78);background:rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .38);`;
 }
 
 function hexToRgb(color) {
@@ -1738,7 +1739,7 @@ function openModal(viagem = null) {
   syncDynamicSelects();
   state.editingId = viagem ? viagem._id : null;
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
-  const fields = ['placa','nome','tipo','produto','secao','carroceria','pamcard','status','usuario','agendamento','telefone','frete','origem','destino','peso','obs'];
+  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','telefone','frete','origem','destino','peso','obs'];
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
     if (!el) return;
@@ -1873,6 +1874,7 @@ async function saveViagem() {
     produto: v('f-produto'),
     secao: state.editingId ? v('f-secao') : 'agenciando',
     carroceria: v('f-carroceria'),
+    kanguru: v('f-kanguru'),
     pamcard: v('f-pamcard'),
     status: v('f-status'),
     usuario: v('f-usuario'),

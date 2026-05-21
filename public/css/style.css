@@ -462,7 +462,7 @@ button, input, select {
 
 .data-table thead th {
   background: #fff200;
-  color: #172033;
+  color: #000;
   font-weight: 700;
   padding: 9px 12px;
   text-align: left;
@@ -485,7 +485,7 @@ button, input, select {
 }
 
 .data-table thead th.is-sorted {
-  color: var(--accent);
+  color: #000;
 }
 
 .data-table th[data-field="placa"],
@@ -602,7 +602,7 @@ button, input, select {
   padding: 7px 12px;
   border-bottom: 1px solid #edf1f6;
   white-space: nowrap;
-  color: var(--text);
+  color: #000;
   vertical-align: middle;
 }
 
@@ -676,7 +676,7 @@ button, input, select {
 .data-table td[data-field] input {
   background: var(--surface);
   border: 1px solid var(--accent);
-  color: var(--text);
+  color: #000;
   font-family: var(--font-mono);
   font-size: 11.5px;
   padding: 5px 7px;
@@ -708,7 +708,7 @@ button, input, select {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  color: var(--text);
+  color: #000;
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
@@ -726,20 +726,9 @@ button, input, select {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
 }
 
-.table-select.origin-arcos { color: var(--arcos); border-color: rgba(37, 99, 235, .32); background: rgba(37, 99, 235, .08); }
-.table-select.origin-pedro-leopoldo { color: var(--pedro); border-color: rgba(15, 118, 110, .32); background: rgba(15, 118, 110, .08); }
-.table-select.origin-barroso { color: var(--barroso); border-color: rgba(192, 86, 33, .34); background: rgba(192, 86, 33, .09); }
-
-.table-select.tipo-agregado { color: #9a6500; border-color: rgba(214, 158, 46, .38); background: rgba(251, 191, 36, .16); }
-.table-select.tipo-carreteiro { color: var(--red); border-color: rgba(201, 52, 52, .34); background: rgba(201, 52, 52, .10); }
-.table-select.tipo-dedicado { color: #0891b2; border-color: rgba(8, 145, 178, .34); background: rgba(8, 145, 178, .10); }
-.table-select.tipo-frota { color: var(--green); border-color: rgba(22, 128, 63, .32); background: rgba(22, 128, 63, .10); }
-
-.table-select.status-criando-dt { color: var(--indigo); border-color: rgba(79, 70, 229, .28); background: rgba(79, 70, 229, .08); }
-.table-select.status-cadastrando { color: var(--teal); border-color: rgba(15, 118, 110, .28); background: rgba(15, 118, 110, .08); }
-.table-select.status-aguardando-carregamento { color: var(--yellow); border-color: rgba(183, 121, 31, .30); background: rgba(183, 121, 31, .10); }
-.table-select.status-manifesto { color: var(--accent); border-color: rgba(37, 99, 235, .30); background: rgba(37, 99, 235, .08); }
-.table-select.status-concluido { color: var(--green); border-color: rgba(22, 128, 63, .30); background: rgba(22, 128, 63, .08); }
+.table-select option {
+  color: #000;
+}
 
 /* Row action buttons */
 .row-actions {
@@ -2364,18 +2353,18 @@ button, input, select {
 }
 
 td.has-kanguru {
-  color: var(--yellow);
+  color: #000;
   font-weight: 800;
 }
 
 td.sem-kanguru {
-  color: var(--red);
+  color: #000;
   font-weight: 800;
 }
 
 td.has-agendamento {
   background: #ecfdf3;
-  color: var(--green);
+  color: #000;
   font-weight: 850;
 }
 
