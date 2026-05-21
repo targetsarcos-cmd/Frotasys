@@ -27,7 +27,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'CONCLUIDO'];
+const STATUS = ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'S/ CADASTRO', 'CONCLUIDO'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -870,7 +870,7 @@ function renderTable(secao) {
   tbody.innerHTML = rows.map(v => {
     const originClass = originSlug(v.origem);
     const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
-    const semCadastroClass = secao === 'agenciando' && isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
+    const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
     const cells = FIELDS.map(f => renderCell(v, f)).join('');
 
     return `<tr data-id="${escapeHtml(v._id)}" class="origin-row ${originClass} ${completeClass} ${semCadastroClass}" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
@@ -930,7 +930,7 @@ function hasNotaPreenchida(viagem) {
 }
 
 function isStatusSemCadastro(status) {
-  return normalizeOption(status) === 'SEM CADASTRO';
+  return ['SEM CADASTRO', 'S/ CADASTRO'].includes(normalizeOption(status));
 }
 
 function renderCell(v, field) {
@@ -1785,6 +1785,8 @@ function openModal(viagem = null) {
   syncDynamicSelects();
   state.editingId = viagem ? viagem._id : null;
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
+  document.querySelectorAll('#modal-overlay .hidden-on-new').forEach(el => el.classList.toggle('is-hidden', !viagem));
+  document.querySelectorAll('#modal-overlay .bulk-only').forEach(el => el.classList.toggle('is-hidden', !!viagem));
   const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','telefone','frete','origem','destino','peso','obs'];
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
@@ -1793,6 +1795,8 @@ function openModal(viagem = null) {
   });
   const usuarioInput = document.getElementById('f-usuario');
   if (usuarioInput && !viagem) usuarioInput.value = '';
+  const quantidadeInput = document.getElementById('f-quantidade');
+  if (quantidadeInput) quantidadeInput.value = '1';
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('f-placa').focus();
 }
@@ -1938,8 +1942,9 @@ async function saveViagem() {
     obs: v('f-obs'),
     data: state.currentDate
   };
+  const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
 
-  if (!data.placa && !data.nome) {
+  if (quantidade === 1 && !data.placa && !data.nome) {
     alert('Informe ao menos PLACA ou NOME');
     return;
   }
@@ -1954,9 +1959,21 @@ async function saveViagem() {
   btn.textContent = 'Salvando...';
   btn.disabled = true;
 
-  const saved = state.editingId
-    ? await apiFetch(`/api/viagens/${state.editingId}`, { method: 'PUT', body: JSON.stringify(data) })
-    : await apiFetch('/api/viagens', { method: 'POST', body: JSON.stringify(data) });
+  let saved;
+  if (state.editingId) {
+    saved = await apiFetch(`/api/viagens/${state.editingId}`, { method: 'PUT', body: JSON.stringify(data) });
+  } else if (quantidade === 1) {
+    saved = await apiFetch('/api/viagens', { method: 'POST', body: JSON.stringify(data) });
+  } else {
+    const payloads = Array.from({ length: quantidade }, () => ({ ...data, placa: '', nome: '' }));
+    const results = [];
+    for (const payload of payloads) {
+      const created = await apiFetch('/api/viagens', { method: 'POST', body: JSON.stringify(payload) });
+      if (!created) break;
+      results.push(created);
+    }
+    saved = results.length === quantidade ? results : null;
+  }
 
   btn.textContent = 'Salvar';
   btn.disabled = false;

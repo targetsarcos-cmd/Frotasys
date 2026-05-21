@@ -27,7 +27,8 @@ const CONFIG_COLOR_FIELDS = ['tipo', 'status', 'origem', 'destino'];
 const CONFIG_SEED_MARKER_FIELD = '__system_seed';
 const CONFIG_SEED_MARKERS = {
   defaults: 'CONFIG_DEFAULTS_V1',
-  kanguru: 'CONFIG_KANGURU_V1'
+  kanguru: 'CONFIG_KANGURU_V1',
+  statusSemCadastro: 'CONFIG_STATUS_SEM_CADASTRO_V1'
 };
 const DEFAULT_CONFIG_OPTIONS = {
   tipo: ['AGREGADO', 'CARRETEIRO', 'DEDICADO', 'FROTA'],
@@ -35,7 +36,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
   kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
-  status: ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'CONCLUIDO'],
+  status: ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'S/ CADASTRO', 'CONCLUIDO'],
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA']
 };
@@ -239,6 +240,20 @@ async function ensureDefaultConfigOptions() {
         });
       }
       docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.kanguru));
+    }
+
+    if (!markers.has(CONFIG_SEED_MARKERS.statusSemCadastro)) {
+      const hasStatusSemCadastro = existing.some(doc => doc.field === 'status' && ['S/ CADASTRO', 'SEM CADASTRO'].includes(normalizeUniqueValue(doc.value)));
+      if (!hasStatusSemCadastro) {
+        const statusCount = existing.filter(doc => doc.field === 'status').length;
+        docs.push({
+          field: 'status',
+          value: 'S/ CADASTRO',
+          normalized: normalizeUniqueValue('S/ CADASTRO'),
+          ordem: statusCount + 1
+        });
+      }
+      docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.statusSemCadastro));
     }
   }
 

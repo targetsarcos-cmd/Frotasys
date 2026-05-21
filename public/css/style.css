@@ -598,22 +598,14 @@ button, input, select {
   background: #dcfce7;
 }
 
-.data-table tbody tr.is-sem-cadastro td {
-  background: #fff1df;
-}
-
 .data-table tbody tr.is-sem-cadastro td[data-field="placa"],
 .data-table tbody tr.is-sem-cadastro td[data-field="nome"] {
-  background: #fff1df;
-}
-
-.data-table tbody tr.is-sem-cadastro:hover td {
-  background: #ffe4bf;
+  background: #fee2e2;
 }
 
 .data-table tbody tr.is-sem-cadastro:hover td[data-field="placa"],
 .data-table tbody tr.is-sem-cadastro:hover td[data-field="nome"] {
-  background: #ffe4bf;
+  background: #fecaca;
 }
 
 .data-table tbody tr.dragging {
@@ -2287,6 +2279,11 @@ button, input, select {
 
 .form-group.full-width {
   grid-column: 1 / -1;
+}
+
+.form-group.hidden-on-new.is-hidden,
+.form-group.bulk-only.is-hidden {
+  display: none;
 }
 
 .form-group label {
