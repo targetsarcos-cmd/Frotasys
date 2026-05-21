@@ -804,7 +804,7 @@ const FIELDS = [
   { key: 'kanguru', label: 'KANGURU', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
   { key: 'status', label: 'STATUS', select: true },
-  { key: 'usuario', label: 'USUÁRIO', quick: true },
+  { key: 'usuario', label: 'USUÁRIO' },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
   { key: 'frete', label: 'EVENTO', quick: true },
@@ -1592,6 +1592,7 @@ function startInlineEdit(td) {
   if (!canEditViagens()) return;
   if (activeInlineCell) cancelInlineEdit();
   const field = td.dataset.field;
+  if (field === 'usuario') return;
   const id = td.dataset.id;
   const cur = td.dataset.raw ?? td.textContent.trim();
   activeInlineCell = td;
@@ -1744,6 +1745,8 @@ function openModal(viagem = null) {
     if (!el) return;
     el.value = viagem ? (f === 'tipo' ? normalizeTipo(viagem[f]) : (viagem[f] || '')) : (f === 'secao' ? 'agenciando' : '');
   });
+  const usuarioInput = document.getElementById('f-usuario');
+  if (usuarioInput && !viagem) usuarioInput.value = '';
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('f-placa').focus();
 }
@@ -1876,7 +1879,6 @@ async function saveViagem() {
     kanguru: v('f-kanguru'),
     pamcard: v('f-pamcard'),
     status: v('f-status'),
-    usuario: v('f-usuario'),
     agendamento: normalizeHours(v('f-agendamento')),
     telefone: normalizePhoneList(v('f-telefone')),
     frete: v('f-frete'),

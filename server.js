@@ -24,6 +24,11 @@ const DEFAULT_OPERACOES = [
 
 const CONFIG_FIELDS = ['tipo', 'produto', 'carroceria', 'kanguru', 'pamcard', 'status', 'origem', 'destino'];
 const CONFIG_COLOR_FIELDS = ['tipo', 'status', 'origem', 'destino'];
+const CONFIG_SEED_MARKER_FIELD = '__system_seed';
+const CONFIG_SEED_MARKERS = {
+  defaults: 'CONFIG_DEFAULTS_V1',
+  kanguru: 'CONFIG_KANGURU_V1'
+};
 const DEFAULT_CONFIG_OPTIONS = {
   tipo: ['AGREGADO', 'CARRETEIRO', 'DEDICADO', 'FROTA'],
   produto: ['CPII-F', 'CPIII', 'CPV'],
@@ -194,23 +199,54 @@ async function ensureDefaultOperacoes() {
 
 async function ensureDefaultConfigOptions() {
   const existing = await selectDocs(TABLES.configOptions);
-  const existingKeys = new Set(existing.map(doc => `${doc.field}:${doc.normalized || normalizeUniqueValue(doc.value)}`));
 
   const docs = [];
-  for (const field of CONFIG_FIELDS) {
-    const fieldCount = existing.filter(doc => doc.field === field).length;
-    DEFAULT_CONFIG_OPTIONS[field].forEach((value, index) => {
-      const normalized = normalizeUniqueValue(value);
-      if (existingKeys.has(`${field}:${normalized}`)) return;
-      docs.push({
-        field,
-        value,
-        normalized,
-        ordem: fieldCount + index + 1
+  if (existing.length === 0) {
+    for (const field of CONFIG_FIELDS) {
+      DEFAULT_CONFIG_OPTIONS[field].forEach((value, index) => {
+        docs.push({
+          field,
+          value,
+          normalized: normalizeUniqueValue(value),
+          ordem: index + 1
+        });
       });
-    });
+    }
+    docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.defaults));
+    docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.kanguru));
+  } else {
+    const markers = new Set(
+      existing
+        .filter(doc => doc.field === CONFIG_SEED_MARKER_FIELD)
+        .map(doc => doc.normalized || normalizeUniqueValue(doc.value))
+    );
+
+    if (!markers.has(CONFIG_SEED_MARKERS.kanguru)) {
+      const hasKanguruOptions = existing.some(doc => doc.field === 'kanguru');
+      if (!hasKanguruOptions) {
+        DEFAULT_CONFIG_OPTIONS.kanguru.forEach((value, index) => {
+          docs.push({
+            field: 'kanguru',
+            value,
+            normalized: normalizeUniqueValue(value),
+            ordem: index + 1
+          });
+        });
+      }
+      docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.kanguru));
+    }
   }
+
   if (docs.length) await insertDocs(TABLES.configOptions, docs);
+}
+
+function seedMarkerDoc(marker) {
+  return {
+    field: CONFIG_SEED_MARKER_FIELD,
+    value: marker,
+    normalized: marker,
+    ordem: 0
+  };
 }
 
 async function configOptionsGrouped() {
@@ -281,6 +317,10 @@ function publicProfile(profile = {}) {
     ativo: profile.ativo !== false,
     created_at: profile.created_at
   };
+}
+
+function profileDisplayName(profile = {}) {
+  return String(profile.nome || profile.email || 'Usuário').trim();
 }
 
 async function profileForUser(userId) {
@@ -477,7 +517,13 @@ app.get('/api/viagens/search', async (req, res) => {
 
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
-    const duplicate = await findDuplicateViagemFields(req.body);
+    const payload = { ...req.body };
+    delete payload.usuario;
+    if (payload.status !== undefined && normalizeUniqueValue(payload.status)) {
+      payload.usuario = profileDisplayName(req.userProfile);
+    }
+
+    const duplicate = await findDuplicateViagemFields(payload);
     if (duplicate) {
       return res.status(409).json({
         error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
@@ -485,7 +531,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       });
     }
 
-    const inserted = await insertDoc(TABLES.viagens, req.body);
+    const inserted = await insertDoc(TABLES.viagens, payload);
     broadcast({ type: 'viagem_criada', payload: inserted });
     res.json(inserted);
   } catch (e) {
@@ -498,7 +544,13 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
-    const nextData = { ...current, ...req.body };
+    const patch = { ...req.body };
+    delete patch.usuario;
+    const statusWasSent = Object.prototype.hasOwnProperty.call(req.body, 'status');
+    const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
+    if (statusChanged) patch.usuario = profileDisplayName(req.userProfile);
+
+    const nextData = { ...current, ...patch };
     const duplicate = await findDuplicateViagemFields(nextData, req.params.id);
     if (duplicate) {
       return res.status(409).json({
@@ -507,7 +559,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
       });
     }
 
-    const updated = await updateDoc(TABLES.viagens, req.params.id, req.body);
+    const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
     broadcast({ type: 'viagem_atualizada', payload: updated });
     res.json(updated);
   } catch (e) {
