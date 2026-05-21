@@ -661,6 +661,22 @@ button, input, select {
   vertical-align: middle;
 }
 
+.data-table th[data-field="placa"],
+.data-table td[data-field="placa"],
+.data-table th[data-field="nome"],
+.data-table td[data-field="nome"],
+.data-table th[data-field="dt"],
+.data-table td[data-field="dt"],
+.data-table th[data-field="cte"],
+.data-table td[data-field="cte"],
+.data-table th[data-field="manifesto"],
+.data-table td[data-field="manifesto"],
+.data-table th[data-field="contrato"],
+.data-table td[data-field="contrato"] {
+  color: rgb(255, 0, 0);
+  font-weight: 900;
+}
+
 .placa-content {
   display: flex;
   align-items: center;
@@ -2007,6 +2023,55 @@ button, input, select {
   min-width: 92px;
   height: 38px;
   border-radius: 7px;
+}
+
+.meta-goal-modal {
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  align-items: center;
+  gap: 12px;
+  padding: 26px 24px 22px;
+  text-align: center;
+  border: 1px solid rgba(15, 118, 110, .22);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, .28);
+}
+
+.meta-goal-icon {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: var(--green);
+  font-size: 28px;
+  font-weight: 900;
+  border: 1px solid rgba(22, 128, 63, .24);
+}
+
+.meta-goal-title {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.meta-goal-detail {
+  min-height: 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.meta-goal-footer {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.meta-goal-footer .btn-primary {
+  min-width: 100px;
 }
 
 .search-box {

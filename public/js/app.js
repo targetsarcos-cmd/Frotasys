@@ -18,6 +18,9 @@ const state = {
   tableSort: { field: '', direction: 'asc' },
   freteConsultas: {},
   listaEspera: [],
+  metaGoalAlertsShown: new Set(),
+  metaGoalQueue: [],
+  metaGoalDialogOpen: false,
   userProfile: null,
   undoAction: null,
   ws: null
@@ -342,6 +345,10 @@ function initUI() {
   document.getElementById('event-warning-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('event-warning-overlay')) closeEventWarning();
   });
+  document.getElementById('meta-goal-ok').addEventListener('click', closeMetaGoalDialog);
+  document.getElementById('meta-goal-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('meta-goal-overlay')) closeMetaGoalDialog();
+  });
 
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
@@ -441,6 +448,7 @@ function initUI() {
       closeFreteConsultModal();
       closeListaEsperaModal();
       closeEventWarning();
+      closeMetaGoalDialog();
       closeSettingsModal();
       closeUsersModal();
       hideCtxMenu();
@@ -969,6 +977,33 @@ function showEventWarning(eventText = '') {
 
 function closeEventWarning() {
   document.getElementById('event-warning-overlay').classList.add('hidden');
+}
+
+function scheduleMetaGoalAlert({ origem, destino, meta, realizado }) {
+  if (meta <= 0 || realizado < meta) return;
+  const key = `${state.currentDate}|${normalizeOption(origem)}|${normalizeOption(destino)}|${meta}`;
+  if (state.metaGoalAlertsShown.has(key)) return;
+  state.metaGoalAlertsShown.add(key);
+  state.metaGoalQueue.push({ origem, destino, meta, realizado });
+  setTimeout(showNextMetaGoalDialog, 0);
+}
+
+function showNextMetaGoalDialog() {
+  if (state.metaGoalDialogOpen || state.metaGoalQueue.length === 0) return;
+  const item = state.metaGoalQueue.shift();
+  state.metaGoalDialogOpen = true;
+  document.getElementById('meta-goal-detail').textContent =
+    `${item.origem} - ${item.destino}: ${formatKg(item.realizado)} de ${formatKg(item.meta)}`;
+  document.getElementById('meta-goal-overlay').classList.remove('hidden');
+  document.getElementById('meta-goal-ok').focus();
+}
+
+function closeMetaGoalDialog() {
+  const overlay = document.getElementById('meta-goal-overlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  state.metaGoalDialogOpen = false;
+  showNextMetaGoalDialog();
 }
 
 async function searchCarregamento() {
@@ -1617,6 +1652,7 @@ function renderOriginSummaryCard(operacao) {
     const agencVal = sumPeso(agenciadoRows.filter(v => v.destino === dest));
     const totalVal = fatVal + agencVal;
     const faltaVal = metaVal - totalVal;
+    scheduleMetaGoalAlert({ origem, destino: dest, meta: metaVal, realizado: totalVal });
 
     totals.meta += metaVal;
     totals.fat += fatVal;
@@ -1636,7 +1672,8 @@ function renderOriginSummaryCard(operacao) {
   const totalCollapsed = state.collapsedTotalProducts[operationKey] !== false;
   const metaProductRows = produtos.map(produto => renderMetaProductRowsForCard(produto, operacao, metaCollapsed, destinos)).join('');
   const totalProductRows = produtos.map(produto => renderTotalProductRowsForCard(produto, faturadoRows, agenciadoRows, totalCollapsed, destinos)).join('');
-  const percent = totals.meta > 0 ? Math.max(0, Math.min(100, Math.round((totals.total / totals.meta) * 100))) : 0;
+  const percent = totals.meta > 0 ? Math.max(0, Math.round((totals.total / totals.meta) * 100)) : 0;
+  const percentFill = Math.min(100, percent);
   const accentClass = cardAccentClass(origem);
   const metaTitle = metaCollapsed ? 'Mostrar meta por tipo de cimento' : 'Ocultar meta por tipo de cimento';
   const totalTitle = totalCollapsed ? 'Mostrar carregado por produto' : 'Ocultar carregado por produto';
@@ -1675,7 +1712,7 @@ function renderOriginSummaryCard(operacao) {
       </div>
       <div class="summary-card-actions">
         <button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualização do card">⚙</button>
-        <div class="summary-percent" style="--percent:${percent}">
+        <div class="summary-percent" style="--percent:${percentFill}">
           <span>${percent}%</span>
         </div>
         <small>% da Meta</small>
@@ -1861,7 +1898,8 @@ function renderMetaChart(faturadoRows, agenciadoRows) {
     const faturado = sumPeso(faturadoRows.filter(v => v.destino === dest));
     const agenciado = sumPeso(agenciadoRows.filter(v => v.destino === dest));
     const realizado = faturado + agenciado;
-    const percent = metaVal > 0 ? Math.min(100, Math.round((realizado / metaVal) * 100)) : 0;
+    const percent = metaVal > 0 ? Math.round((realizado / metaVal) * 100) : 0;
+    const percentFill = Math.min(100, Math.max(0, percent));
     const falta = Math.max(metaVal - realizado, 0);
 
     return `<div class="meta-chart-item">
@@ -1870,7 +1908,7 @@ function renderMetaChart(faturadoRows, agenciadoRows) {
         <strong>${formatKg(realizado)} / ${formatKg(metaVal)}</strong>
       </div>
       <div class="meta-chart-track">
-        <div class="meta-chart-fill" style="width:${percent}%"></div>
+        <div class="meta-chart-fill" style="width:${percentFill}%"></div>
       </div>
       <div class="meta-chart-foot">
         <span>${percent}% da meta</span>
@@ -1897,7 +1935,8 @@ function renderTransportChart(faturadoRows) {
 
   chart.innerHTML = types.map(type => {
     const peso = sumPeso(faturadoRows.filter(v => normalizeTipo(v.tipo) === type.key));
-    const percent = metaTotal > 0 ? Math.min(100, Math.round((peso / metaTotal) * 100)) : 0;
+    const percent = metaTotal > 0 ? Math.round((peso / metaTotal) * 100) : 0;
+    const percentFill = Math.min(100, Math.max(0, percent));
 
     return `<div class="transport-chart-item">
       <div class="transport-chart-head">
@@ -1906,7 +1945,7 @@ function renderTransportChart(faturadoRows) {
         <em>${percent}%</em>
       </div>
       <div class="transport-chart-track">
-        <div class="transport-chart-fill ${type.className}" style="width:${percent}%"></div>
+        <div class="transport-chart-fill ${type.className}" style="width:${percentFill}%"></div>
       </div>
       <div class="transport-chart-value">${formatKg(peso)} carregado</div>
     </div>`;
