@@ -392,6 +392,7 @@ function initUI() {
   });
   document.getElementById('contrato-adiantamento').addEventListener('click', () => concluirContrato('ADIANTAMENTO EFETUADO'));
   document.getElementById('contrato-sem-contrato').addEventListener('click', () => concluirContrato('NAO FAZ CONTRATO'));
+  document.getElementById('contrato-desfazer').addEventListener('click', desfazerConclusaoContrato);
 
   document.addEventListener('dblclick', e => {
     const td = e.target.closest('td[data-field]:not(.cell-select)');
@@ -423,7 +424,7 @@ function canEditViagens() {
 }
 
 function isViagemConcluida(viagem) {
-  return Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
+  return hasDocumentosCompletos(viagem) && Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
 }
 
 function canEditViagem(viagem) {
@@ -2094,11 +2095,18 @@ function hideAgendamentoMenu() {
 function showContratoMenu(e, cell) {
   e.preventDefault();
   const viagem = state.viagens.find(item => item._id === cell.dataset.id);
-  if (!canEditViagem(viagem)) return;
+  if (!viagem) return;
+  const concluida = isViagemConcluida(viagem);
+  if (concluida && !isAdmin()) return;
+  if (!concluida && !canEditViagem(viagem)) return;
 
   hideCtxMenu();
   hideAgendamentoMenu();
   state.contratoTargetId = cell.dataset.id;
+
+  document.getElementById('contrato-adiantamento').style.display = concluida ? 'none' : '';
+  document.getElementById('contrato-sem-contrato').style.display = concluida ? 'none' : '';
+  document.getElementById('contrato-desfazer').style.display = concluida && isAdmin() ? '' : 'none';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
@@ -2115,7 +2123,19 @@ async function concluirContrato(tipo) {
   const id = state.contratoTargetId;
   hideContratoMenu();
   if (!id) return;
+  const viagem = state.viagens.find(item => item._id === id);
+  if (!hasDocumentosCompletos(viagem)) {
+    alert('Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.');
+    return;
+  }
   await updateViagemField(id, 'conclusaoContrato', tipo);
+}
+
+async function desfazerConclusaoContrato() {
+  const id = state.contratoTargetId;
+  hideContratoMenu();
+  if (!id || !isAdmin()) return;
+  await updateViagemField(id, 'conclusaoContrato', '');
 }
 
 async function toggleAgendamentoVerde() {

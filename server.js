@@ -349,7 +349,11 @@ function normalizeContratoConclusao(value) {
 }
 
 function isViagemBloqueada(data = {}) {
-  return Boolean(normalizeContratoConclusao(data.conclusaoContrato));
+  return hasDocumentosCompletos(data) && Boolean(normalizeContratoConclusao(data.conclusaoContrato));
+}
+
+function hasDocumentosCompletos(data = {}) {
+  return ['cte', 'manifesto', 'contrato', 'nota'].every(field => String(data[field] || '').trim() !== '');
 }
 
 async function profileForUser(userId) {
@@ -550,6 +554,9 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     delete payload.usuario;
     if (payload.conclusaoContrato !== undefined) {
       payload.conclusaoContrato = normalizeContratoConclusao(payload.conclusaoContrato);
+      if (payload.conclusaoContrato && !hasDocumentosCompletos(payload)) {
+        return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
+      }
     }
 
     if (isViagemBloqueada(payload)) {
@@ -586,6 +593,22 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const patch = { ...req.body };
     delete patch.usuario;
     if (patch.conclusaoContrato !== undefined) {
+      if (isViagemBloqueada(current) && req.userProfile?.role === 'admin' && !normalizeContratoConclusao(patch.conclusaoContrato)) {
+        patch.conclusaoContrato = '';
+        patch.status = '';
+        patch.usuario = '';
+        const nextData = { ...current, ...patch };
+        const duplicate = await findDuplicateViagemFields(nextData, req.params.id);
+        if (duplicate) {
+          return res.status(409).json({
+            error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
+            field: duplicate.key
+          });
+        }
+        const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+        broadcast({ type: 'viagem_atualizada', payload: updated });
+        return res.json(updated);
+      }
       patch.conclusaoContrato = normalizeContratoConclusao(patch.conclusaoContrato);
       if (!patch.conclusaoContrato) delete patch.conclusaoContrato;
     }
@@ -593,6 +616,9 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
 
     const nextData = { ...current, ...patch };
+    if (patch.conclusaoContrato && !hasDocumentosCompletos(nextData)) {
+      return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
+    }
     if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
       patch.usuario = '';
