@@ -377,6 +377,35 @@
       <button class="modal-close" id="users-modal-close" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
+      <form class="user-create-form" id="user-create-form">
+        <div class="user-create-title">Novo usuário</div>
+        <label>
+          <span>Nome</span>
+          <input type="text" id="user-create-nome" placeholder="Nome do usuário" required>
+        </label>
+        <label>
+          <span>E-mail</span>
+          <input type="email" id="user-create-email" placeholder="email@empresa.com" required>
+        </label>
+        <label>
+          <span>Senha</span>
+          <input type="password" id="user-create-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+        </label>
+        <label>
+          <span>Perfil</span>
+          <select id="user-create-role">
+            <option value="operador">operador</option>
+            <option value="visualizador">visualizador</option>
+            <option value="admin">admin</option>
+          </select>
+        </label>
+        <label class="user-create-active">
+          <input type="checkbox" id="user-create-ativo" checked>
+          <span>Ativo</span>
+        </label>
+        <button type="submit" class="btn-primary" id="user-create-submit">Criar usuário</button>
+        <div class="user-create-message" id="user-create-message"></div>
+      </form>
       <div class="users-table-wrap">
         <table class="users-table">
           <thead>

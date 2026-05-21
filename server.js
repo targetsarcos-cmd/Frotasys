@@ -334,6 +334,54 @@ app.get('/api/users', requireAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/users', requireAdmin, async (req, res) => {
+  try {
+    const nome = String(req.body.nome || '').trim();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    const role = String(req.body.role || 'operador').trim();
+    const ativo = req.body.ativo !== false;
+
+    if (!nome || !email || !password) {
+      return res.status(400).json({ error: 'Informe nome, e-mail e senha.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
+    }
+    if (!['admin', 'operador', 'visualizador'].includes(role)) {
+      return res.status(400).json({ error: 'Perfil inválido.' });
+    }
+
+    const created = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nome }
+    });
+    if (created.error) throw created.error;
+
+    const userId = created.data.user.id;
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .insert({ user_id: userId, nome, email, role, ativo })
+      .select('id,user_id,nome,email,role,ativo,created_at')
+      .single();
+
+    if (error) {
+      await supabase.auth.admin.deleteUser(userId);
+      throw error;
+    }
+
+    res.status(201).json(publicProfile(data));
+  } catch (e) {
+    const message = String(e.message || '');
+    if (message.toLowerCase().includes('already')) {
+      return res.status(409).json({ error: 'Já existe um usuário com este e-mail.' });
+    }
+    res.status(500).json({ error: message || 'Não foi possível criar usuário.' });
+  }
+});
+
 app.put('/api/users/:id', requireAdmin, async (req, res) => {
   try {
     const patch = {};

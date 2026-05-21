@@ -278,6 +278,7 @@ function initUI() {
   document.getElementById('btn-users-admin').addEventListener('click', openUsersModal);
   document.getElementById('users-modal-close').addEventListener('click', closeUsersModal);
   document.getElementById('users-btn-close').addEventListener('click', closeUsersModal);
+  document.getElementById('user-create-form').addEventListener('submit', createUserProfile);
   document.getElementById('users-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('users-modal-overlay')) closeUsersModal();
   });
@@ -441,6 +442,42 @@ async function loadUsers() {
       </td>
     </tr>
   `).join('');
+}
+
+async function createUserProfile(event) {
+  event.preventDefault();
+  if (!isAdmin()) return;
+
+  const form = document.getElementById('user-create-form');
+  const button = document.getElementById('user-create-submit');
+  const message = document.getElementById('user-create-message');
+  const payload = {
+    nome: document.getElementById('user-create-nome').value.trim(),
+    email: document.getElementById('user-create-email').value.trim(),
+    password: document.getElementById('user-create-password').value,
+    role: document.getElementById('user-create-role').value,
+    ativo: document.getElementById('user-create-ativo').checked
+  };
+
+  message.textContent = '';
+  message.className = 'user-create-message';
+  button.disabled = true;
+  button.textContent = 'Criando...';
+
+  const created = await apiFetch('/api/users', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+  button.disabled = false;
+  button.textContent = 'Criar usuário';
+
+  if (!created) return;
+  form.reset();
+  document.getElementById('user-create-ativo').checked = true;
+  message.textContent = 'Usuário criado com sucesso.';
+  message.classList.add('success');
+  await loadUsers();
 }
 
 async function updateUserProfile(id, patch) {
