@@ -48,6 +48,7 @@ const UNIQUE_VIAGEM_FIELDS = [
   { key: 'cte', label: 'CT-E' },
   { key: 'num_pedagio', label: 'Nº DO PEDÁGIO' }
 ];
+const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
 
 app.use(cors());
@@ -351,13 +352,36 @@ function normalizeUniqueValue(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+function isDocumentNumberField(field) {
+  return DOCUMENT_NUMBER_FIELDS.includes(field);
+}
+
+function formatDocumentNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function normalizeViagemDocumentNumbers(data = {}) {
+  DOCUMENT_NUMBER_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      data[field] = formatDocumentNumber(data[field]);
+    }
+  });
+  return data;
+}
+
+function comparableUniqueValue(field, value) {
+  return isDocumentNumberField(field) ? String(value || '').replace(/\D/g, '') : normalizeUniqueValue(value);
+}
+
 function isHexColor(color) {
   return /^#[0-9a-f]{6}$/i.test(String(color || ''));
 }
 
 async function findDuplicateViagemFields(data, currentId = null) {
   const filledFields = UNIQUE_VIAGEM_FIELDS
-    .map(field => ({ ...field, value: normalizeUniqueValue(data[field.key]) }))
+    .map(field => ({ ...field, value: comparableUniqueValue(field.key, data[field.key]) }))
     .filter(field => field.value);
 
   if (filledFields.length === 0) return null;
@@ -366,7 +390,7 @@ async function findDuplicateViagemFields(data, currentId = null) {
   for (const field of filledFields) {
     const duplicate = docs.find(doc => {
       if (currentId && doc._id === currentId) return false;
-      return normalizeUniqueValue(doc[field.key]) === field.value;
+      return comparableUniqueValue(field.key, doc[field.key]) === field.value;
     });
 
     if (duplicate) return field;
@@ -680,16 +704,16 @@ app.get('/api/viagens', async (req, res) => {
 
 app.get('/api/viagens/search', async (req, res) => {
   try {
-    const term = normalizeUniqueValue(req.query.q);
-    const notaTerm = normalizeUniqueValue(req.query.nota);
-    const cteTerm = normalizeUniqueValue(req.query.cte);
+    const term = String(req.query.q || '').replace(/\D/g, '') || normalizeUniqueValue(req.query.q);
+    const notaTerm = comparableUniqueValue('nota', req.query.nota);
+    const cteTerm = comparableUniqueValue('cte', req.query.cte);
     if (!term && !notaTerm && !cteTerm) return res.json([]);
 
     const docs = await selectDocs(TABLES.viagens);
     const matches = docs
       .filter(doc => {
-        const nota = normalizeUniqueValue(doc.nota);
-        const cte = normalizeUniqueValue(doc.cte);
+        const nota = comparableUniqueValue('nota', doc.nota);
+        const cte = comparableUniqueValue('cte', doc.cte);
         if (notaTerm && !nota.includes(notaTerm)) return false;
         if (cteTerm && !cte.includes(cteTerm)) return false;
         if (term) return nota.includes(term) || cte.includes(term);
@@ -706,6 +730,7 @@ app.get('/api/viagens/search', async (req, res) => {
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
+    normalizeViagemDocumentNumbers(payload);
     delete payload.usuario;
     if (payload.conclusaoContrato !== undefined) {
       payload.conclusaoContrato = normalizeContratoConclusao(payload.conclusaoContrato);
@@ -746,6 +771,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
 
     const patch = { ...req.body };
+    normalizeViagemDocumentNumbers(patch);
     delete patch.usuario;
     if (patch.conclusaoContrato !== undefined) {
       if (isViagemBloqueada(current) && req.userProfile?.role === 'admin' && !normalizeContratoConclusao(patch.conclusaoContrato)) {

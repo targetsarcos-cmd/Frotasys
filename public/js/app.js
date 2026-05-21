@@ -19,8 +19,10 @@ const state = {
   freteConsultas: {},
   listaEspera: [],
   metaGoalAlertsShown: new Set(),
+  metaGoalDismissed: new Set(),
   metaGoalQueue: [],
   metaGoalDialogOpen: false,
+  metaGoalCurrent: null,
   userProfile: null,
   undoAction: null,
   ws: null
@@ -78,6 +80,7 @@ const DEFAULT_CONFIG_COLORS = {
 const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f766e', '#4f46e5', '#c05621', '#0891b2'];
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
+const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
   cte: 'CT-E',
@@ -171,6 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
+  state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
   initWS();
   initUI();
@@ -981,16 +985,40 @@ function closeEventWarning() {
 
 function scheduleMetaGoalAlert({ origem, destino, meta, realizado }) {
   if (meta <= 0 || realizado < meta) return;
-  const key = `${state.currentDate}|${normalizeOption(origem)}|${normalizeOption(destino)}|${meta}`;
-  if (state.metaGoalAlertsShown.has(key)) return;
+  const key = metaGoalAlertKey(origem, destino);
+  if (state.metaGoalDismissed.has(key) || state.metaGoalAlertsShown.has(key)) return;
   state.metaGoalAlertsShown.add(key);
-  state.metaGoalQueue.push({ origem, destino, meta, realizado });
+  state.metaGoalQueue.push({ key, origem, destino, meta, realizado });
   setTimeout(showNextMetaGoalDialog, 0);
+}
+
+function metaGoalAlertKey(origem, destino) {
+  return `${state.currentDate}|${normalizeOption(origem)}|${normalizeOption(destino)}`;
+}
+
+function metaGoalStorageKey() {
+  const userKey = state.userProfile?.user_id || state.userProfile?.id || state.userProfile?.email || 'anonimo';
+  return `frotasys-meta-goal-ok:${userKey}`;
+}
+
+function loadMetaGoalDismissed() {
+  try {
+    const values = JSON.parse(localStorage.getItem(metaGoalStorageKey()) || '[]');
+    return new Set(Array.isArray(values) ? values : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function saveMetaGoalDismissed() {
+  localStorage.setItem(metaGoalStorageKey(), JSON.stringify([...state.metaGoalDismissed]));
 }
 
 function showNextMetaGoalDialog() {
   if (state.metaGoalDialogOpen || state.metaGoalQueue.length === 0) return;
   const item = state.metaGoalQueue.shift();
+  if (state.metaGoalDismissed.has(item.key)) return showNextMetaGoalDialog();
+  state.metaGoalCurrent = item;
   state.metaGoalDialogOpen = true;
   document.getElementById('meta-goal-detail').textContent =
     `${item.origem} - ${item.destino}: ${formatKg(item.realizado)} de ${formatKg(item.meta)}`;
@@ -1002,6 +1030,11 @@ function closeMetaGoalDialog() {
   const overlay = document.getElementById('meta-goal-overlay');
   if (!overlay) return;
   overlay.classList.add('hidden');
+  if (state.metaGoalCurrent?.key) {
+    state.metaGoalDismissed.add(state.metaGoalCurrent.key);
+    saveMetaGoalDismissed();
+  }
+  state.metaGoalCurrent = null;
   state.metaGoalDialogOpen = false;
   showNextMetaGoalDialog();
 }
@@ -1065,11 +1098,13 @@ async function fetchCarregamentosByNotaOrCte({ cte, nota }) {
 }
 
 function normalizeSearchTerm(value) {
-  return String(value || '')
+  const text = String(value || '')
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase();
+  const digits = text.replace(/\D/g, '');
+  return digits || text;
 }
 
 function renderSearchResult(viagem) {
@@ -1985,7 +2020,7 @@ function startInlineEdit(td) {
   const id = td.dataset.id;
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
-  const cur = td.dataset.raw ?? td.textContent.trim();
+  const cur = normalizeFieldValue(field, td.dataset.raw ?? td.textContent.trim());
   activeInlineCell = td;
 
   const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : 'text';
@@ -2000,6 +2035,9 @@ function startInlineEdit(td) {
   }
   if (field === 'horas' || field === 'agendamento') {
     inp.oninput = () => { inp.value = maskHourInput(inp.value); };
+  }
+  if (isDocumentNumberField(field)) {
+    inp.oninput = () => { inp.value = formatDocumentNumber(inp.value); };
   }
   inp.onkeydown = e => {
     if (e.key === 'Enter') commitInlineEdit(td, id, field, inp.value);
@@ -2069,11 +2107,13 @@ function normalizeFieldValue(field, value) {
   if (field === 'telefone') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
+  if (isDocumentNumberField(field)) return formatDocumentNumber(value);
   if (field === 'data') return String(value || '').trim();
   return String(value || '').trim();
 }
 
 function formatCellValue(field, value) {
+  if (isDocumentNumberField(field) && value !== '') return formatDocumentNumber(value);
   if (field === 'vlr_pedagio' && value !== '') return formatMoney(value);
   if (field === 'peso' && value !== '') return formatPeso(value);
   if ((field === 'horas' || field === 'agendamento') && value !== '') return normalizeHours(value);
@@ -2085,7 +2125,18 @@ function formatCellValue(field, value) {
 function inputPlaceholder(field) {
   if (field === 'telefone') return '(00) 00000-0000 / (00) 00000-0000';
   if (field === 'horas' || field === 'agendamento') return '00:00';
+  if (isDocumentNumberField(field)) return '000.000';
   return '';
+}
+
+function isDocumentNumberField(field) {
+  return DOCUMENT_NUMBER_FIELDS.includes(field);
+}
+
+function formatDocumentNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
 function mergeConfigColors(saved = {}) {
