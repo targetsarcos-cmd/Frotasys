@@ -9,6 +9,7 @@ const state = {
   ctxTargetId: null,
   agendamentoTargetId: null,
   contratoTargetId: null,
+  contratoTargetField: '',
   productSummaryOpen: true,
   collapsedMetaProducts: {},
   collapsedTotalProducts: {},
@@ -401,10 +402,10 @@ function initUI() {
   });
 
   document.addEventListener('contextmenu', e => {
-    const contratoCell = e.target.closest('td[data-field="contrato"]:not(.cell-select)');
-    if (contratoCell) {
+    const documentCell = e.target.closest('td[data-field="cte"]:not(.cell-select), td[data-field="manifesto"]:not(.cell-select), td[data-field="contrato"]:not(.cell-select), td[data-field="nota"]:not(.cell-select)');
+    if (documentCell) {
       e.stopPropagation();
-      showContratoMenu(e, contratoCell);
+      showContratoMenu(e, documentCell);
       return;
     }
 
@@ -428,6 +429,7 @@ function initUI() {
     const cell = document.querySelector(`td[data-field="agendamento"][data-id="${CSS.escape(id)}"]`);
     if (cell) startInlineEdit(cell);
   });
+  document.getElementById('contrato-copy').addEventListener('click', event => copyContratoMenuValue(event));
   document.getElementById('contrato-adiantamento').addEventListener('click', () => concluirContrato('ADIANTAMENTO EFETUADO'));
   document.getElementById('contrato-sem-contrato').addEventListener('click', () => concluirContrato('NAO FAZ CONTRATO'));
   document.getElementById('contrato-desfazer').addEventListener('click', desfazerConclusaoContrato);
@@ -2037,7 +2039,7 @@ function startInlineEdit(td) {
     inp.oninput = () => { inp.value = maskHourInput(inp.value); };
   }
   if (isDocumentNumberField(field)) {
-    inp.oninput = () => { inp.value = formatDocumentNumber(inp.value); };
+    inp.oninput = () => { inp.value = formatDocumentNumber(inp.value, field); };
   }
   inp.onkeydown = e => {
     if (e.key === 'Enter') commitInlineEdit(td, id, field, inp.value);
@@ -2107,13 +2109,13 @@ function normalizeFieldValue(field, value) {
   if (field === 'telefone') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
-  if (isDocumentNumberField(field)) return formatDocumentNumber(value);
+  if (isDocumentNumberField(field)) return formatDocumentNumber(value, field);
   if (field === 'data') return String(value || '').trim();
   return String(value || '').trim();
 }
 
 function formatCellValue(field, value) {
-  if (isDocumentNumberField(field) && value !== '') return formatDocumentNumber(value);
+  if (isDocumentNumberField(field) && value !== '') return formatDocumentNumber(value, field);
   if (field === 'vlr_pedagio' && value !== '') return formatMoney(value);
   if (field === 'peso' && value !== '') return formatPeso(value);
   if ((field === 'horas' || field === 'agendamento') && value !== '') return normalizeHours(value);
@@ -2125,7 +2127,7 @@ function formatCellValue(field, value) {
 function inputPlaceholder(field) {
   if (field === 'telefone') return '(00) 00000-0000 / (00) 00000-0000';
   if (field === 'horas' || field === 'agendamento') return '00:00';
-  if (isDocumentNumberField(field)) return '000.000';
+  if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';
   return '';
 }
 
@@ -2133,10 +2135,16 @@ function isDocumentNumberField(field) {
   return DOCUMENT_NUMBER_FIELDS.includes(field);
 }
 
-function formatDocumentNumber(value) {
-  const digits = String(value || '').replace(/\D/g, '');
+function formatDocumentNumber(value, field = '') {
+  const raw = String(value || '').trim();
+  if (field === 'contrato' && raw === '-') return '-';
+  const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function copyDocumentValue(value) {
+  return String(value || '').replace(/\./g, '');
 }
 
 function mergeConfigColors(saved = {}) {
@@ -2455,6 +2463,21 @@ function showCopyBubble(button) {
   }, 1200);
 }
 
+function showFloatingCopyBubble(x, y) {
+  const bubble = document.createElement('span');
+  bubble.className = 'copy-bubble copy-bubble-floating';
+  bubble.textContent = 'Copiado';
+  bubble.style.left = `${x || window.innerWidth / 2}px`;
+  bubble.style.top = `${y || window.innerHeight / 2}px`;
+  document.body.appendChild(bubble);
+
+  setTimeout(() => bubble.classList.add('is-visible'), 10);
+  setTimeout(() => {
+    bubble.classList.remove('is-visible');
+    setTimeout(() => bubble.remove(), 180);
+  }, 1200);
+}
+
 async function deleteViagem(id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!canDeleteViagem(viagem)) return;
@@ -2507,17 +2530,18 @@ function showContratoMenu(e, cell) {
   e.preventDefault();
   const viagem = state.viagens.find(item => item._id === cell.dataset.id);
   if (!viagem) return;
+  const field = cell.dataset.field;
+  const isContratoField = field === 'contrato';
   const concluida = isViagemConcluida(viagem);
-  if (concluida && !isAdmin()) return;
-  if (!concluida && !canEditViagem(viagem)) return;
 
   hideCtxMenu();
   hideAgendamentoMenu();
   state.contratoTargetId = cell.dataset.id;
+  state.contratoTargetField = field;
 
-  document.getElementById('contrato-adiantamento').style.display = concluida ? 'none' : '';
-  document.getElementById('contrato-sem-contrato').style.display = concluida ? 'none' : '';
-  document.getElementById('contrato-desfazer').style.display = concluida && isAdmin() ? '' : 'none';
+  document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
+  document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
+  document.getElementById('contrato-desfazer').style.display = isContratoField && concluida && isAdmin() ? '' : 'none';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
@@ -2528,6 +2552,31 @@ function showContratoMenu(e, cell) {
 function hideContratoMenu() {
   document.getElementById('contrato-menu').classList.add('hidden');
   state.contratoTargetId = null;
+  state.contratoTargetField = '';
+}
+
+async function copyContratoMenuValue(event) {
+  const id = state.contratoTargetId;
+  const field = state.contratoTargetField;
+  const x = event?.clientX;
+  const y = event?.clientY;
+  hideContratoMenu();
+  if (!id || !field) return;
+  const viagem = state.viagens.find(item => item._id === id);
+  const text = copyDocumentValue(viagem?.[field] || '');
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+  showFloatingCopyBubble(x, y);
 }
 
 async function concluirContrato(tipo) {

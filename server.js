@@ -356,8 +356,10 @@ function isDocumentNumberField(field) {
   return DOCUMENT_NUMBER_FIELDS.includes(field);
 }
 
-function formatDocumentNumber(value) {
-  const digits = String(value || '').replace(/\D/g, '');
+function formatDocumentNumber(value, field = '') {
+  const raw = String(value || '').trim();
+  if (field === 'contrato' && raw === '-') return '-';
+  const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
@@ -365,7 +367,7 @@ function formatDocumentNumber(value) {
 function normalizeViagemDocumentNumbers(data = {}) {
   DOCUMENT_NUMBER_FIELDS.forEach(field => {
     if (Object.prototype.hasOwnProperty.call(data, field)) {
-      data[field] = formatDocumentNumber(data[field]);
+      data[field] = formatDocumentNumber(data[field], field);
     }
   });
   return data;
