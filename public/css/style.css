@@ -161,11 +161,17 @@ button, input, select {
 }
 
 /* WS STATUS */
-.ws-status {
+.session-status {
   position: fixed;
   top: 14px;
   right: 18px;
   z-index: 1000;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.ws-status {
   font-size: 11px;
   font-weight: 700;
   padding: 6px 10px;
@@ -177,6 +183,22 @@ button, input, select {
 
 .ws-status.online { color: var(--green); border-color: rgba(22, 128, 63, .22); }
 .ws-status.offline { color: var(--red); border-color: rgba(201, 52, 52, .24); }
+
+.logged-user-name {
+  max-width: 180px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .95);
+  color: #000;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, .06);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* HEADER */
 .header {

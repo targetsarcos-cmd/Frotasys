@@ -424,9 +424,15 @@ function canDeleteViagem(viagem) {
 
 function applyPermissions() {
   document.body.dataset.role = state.userProfile?.role || 'visualizador';
+  const loggedUser = document.getElementById('logged-user-name');
+  if (loggedUser) loggedUser.textContent = loggedUserDisplayName();
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-settings').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
+}
+
+function loggedUserDisplayName() {
+  return String(state.userProfile?.nome || state.userProfile?.email || '').trim();
 }
 
 async function openUsersModal() {
