@@ -772,15 +772,17 @@ async function updateUserProfile(id, patch) {
   if (updated) await loadUsers();
 }
 
-function submitHeaderSearch(event) {
+async function submitHeaderSearch(event) {
   event?.preventDefault();
+  const input = document.getElementById('header-search-input');
   const term = v('header-search-input');
   if (!term) {
-    document.getElementById('header-search-input')?.focus();
+    input?.focus();
     return;
   }
   openSearchModal();
-  searchCarregamento(term);
+  await searchCarregamento(term);
+  if (input) input.value = '';
 }
 
 function openSearchModal() {
