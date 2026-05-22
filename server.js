@@ -458,9 +458,10 @@ function normalizeLembreteDate(value) {
 }
 
 function lembreteDocToFrontend(doc = {}, date = '') {
+  const safeDoc = doc || {};
   return {
-    data: doc.data || date,
-    texto: String(doc.texto || '')
+    data: safeDoc.data || date,
+    texto: String(safeDoc.texto || '')
   };
 }
 
@@ -853,7 +854,8 @@ app.get('/api/lembretes', async (req, res) => {
 
 app.put('/api/lembretes', async (req, res) => {
   try {
-    const saved = await saveLembrete(req.body.data, req.body.texto);
+    const body = req.body || {};
+    const saved = await saveLembrete(body.data, body.texto);
     broadcast({ type: 'lembrete_atualizado', payload: saved });
     res.json(saved);
   } catch (e) {

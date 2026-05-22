@@ -298,7 +298,7 @@ async function loadAll() {
     apiFetch('/api/config-options'),
     apiFetch('/api/config-colors'),
     apiFetch('/api/lista-espera'),
-    apiFetch(`/api/lembretes?data=${state.currentDate}`)
+    apiFetch(`/api/lembretes?data=${state.currentDate}`).catch(() => null)
   ]);
   state.viagens = viagens || [];
   state.metas = metas || [];
@@ -549,9 +549,10 @@ function loggedUserDisplayName() {
 }
 
 function normalizeLembrete(lembrete = {}) {
+  const safeLembrete = lembrete || {};
   return {
-    data: lembrete.data || state.currentDate,
-    texto: String(lembrete.texto || '')
+    data: safeLembrete.data || state.currentDate,
+    texto: String(safeLembrete.texto || '')
   };
 }
 
