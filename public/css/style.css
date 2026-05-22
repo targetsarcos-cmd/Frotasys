@@ -478,45 +478,47 @@ button, input, select {
 /* TABLE */
 .table-wrapper {
   position: relative;
-  overflow-x: auto;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 14px;
+  align-items: stretch;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
 
+.table-scroll-area {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 .table-scroll-jump {
-  position: sticky;
-  top: 50%;
+  position: relative;
   z-index: 20;
-  width: 26px;
-  height: 92px;
-  margin-top: -46px;
-  border: 1px solid rgba(37, 99, 235, .22);
-  background: rgba(255, 255, 255, .88);
+  width: 14px;
+  min-height: 100%;
+  height: auto;
+  border: 0;
+  background: rgba(255, 255, 255, .94);
   color: var(--accent);
   cursor: pointer;
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 950;
   line-height: 1;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, .10);
-  backdrop-filter: blur(8px);
+  box-shadow: inset -1px 0 0 var(--border);
 }
 
 .table-scroll-jump.left {
-  left: 0;
-  float: left;
-  border-radius: 0 8px 8px 0;
-}
-
-.table-scroll-jump.right {
-  left: calc(100% - 26px);
-  float: right;
   border-radius: 8px 0 0 8px;
 }
 
+.table-scroll-jump.right {
+  border-radius: 0 8px 8px 0;
+  box-shadow: inset 1px 0 0 var(--border);
+}
+
 .table-scroll-jump:hover {
-  border-color: var(--accent);
   background: #eff6ff;
 }
 
@@ -1899,12 +1901,30 @@ button, input, select {
   font-weight: 950;
 }
 
+.frete-result-terceiros {
+  border-color: rgba(239, 65, 54, .28);
+  background: #fff1f1;
+}
+
+.frete-result-terceiros span {
+  color: #9f1d1d;
+}
+
+.frete-result-terceiros strong {
+  color: #dc2626;
+}
+
 .frete-result-agregados {
-  background: #ecfdf3;
+  border-color: rgba(183, 121, 31, .30);
+  background: #fff8d6;
+}
+
+.frete-result-agregados span {
+  color: #8a5a0a;
 }
 
 .frete-result-agregados strong {
-  color: var(--green);
+  color: #b7791f;
 }
 
 .frete-admin-grid {
@@ -2000,7 +2020,24 @@ button, input, select {
 }
 
 .frete-row-actions {
-  width: 86px;
+  min-width: 118px;
+}
+
+.frete-drag-handle {
+  margin-right: 6px;
+  width: 30px;
+  height: 28px;
+  border: 1px solid rgba(37, 99, 235, .22);
+  border-radius: 7px;
+  background: #eff6ff;
+  color: var(--accent);
+  cursor: grab;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.frete-drag-handle:active {
+  cursor: grabbing;
 }
 
 .frete-row-delete {
@@ -2017,6 +2054,14 @@ button, input, select {
 
 .frete-row-delete:hover {
   border-color: var(--red);
+}
+
+.frete-row-dragging {
+  opacity: .45;
+}
+
+.frete-row-drop-target td {
+  box-shadow: inset 0 2px 0 var(--accent);
 }
 
 .frete-origin-arcos td {

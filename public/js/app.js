@@ -959,7 +959,8 @@ function renderFreteConsultTable(key, table) {
     const cells = row.map((value, colIndex) => `
       <td contenteditable="true" spellcheck="false" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-value="${escapeAttr(value)}">${escapeHtml(value)}</td>
     `).join('');
-    return `<tr class="${rowTone}">${cells}<td class="frete-row-actions">
+    return `<tr class="${rowTone}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" ondragover="handleFreteRowDragOver(event)" ondragleave="handleFreteRowDragLeave(event)" ondrop="dropFreteRow(event,'${escapeAttr(key)}',${rowIndex})">${cells}<td class="frete-row-actions">
+      <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">↕</button>
       <button type="button" class="frete-row-delete" onclick="deleteFreteConsultRow('${escapeAttr(key)}', ${rowIndex})" title="Excluir linha">Excluir</button>
     </td></tr>`;
   }).join('');
@@ -1069,6 +1070,52 @@ async function deleteFreteConsultRow(tableKey, rowIndex) {
   table.rows.splice(rowIndex, 1);
   renderFreteConsultas();
   await saveFreteConsultas();
+}
+
+let freteDragState = null;
+
+function startFreteRowDrag(event, tableKey, rowIndex) {
+  if (!isAdmin()) return;
+  freteDragState = { tableKey, rowIndex };
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', `${tableKey}:${rowIndex}`);
+  event.target.closest('tr')?.classList.add('frete-row-dragging');
+}
+
+function handleFreteRowDragOver(event) {
+  if (!freteDragState) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('frete-row-drop-target');
+}
+
+function handleFreteRowDragLeave(event) {
+  event.currentTarget.classList.remove('frete-row-drop-target');
+}
+
+async function dropFreteRow(event, tableKey, targetIndex) {
+  if (!freteDragState || freteDragState.tableKey !== tableKey) return;
+  event.preventDefault();
+  document.querySelectorAll('.frete-row-drop-target').forEach(row => row.classList.remove('frete-row-drop-target'));
+
+  const table = state.freteConsultas[tableKey];
+  const sourceIndex = freteDragState.rowIndex;
+  freteDragState = null;
+  if (!table?.rows?.[sourceIndex] || sourceIndex === targetIndex) {
+    renderFreteConsultas();
+    return;
+  }
+
+  const [row] = table.rows.splice(sourceIndex, 1);
+  table.rows.splice(targetIndex, 0, row);
+  renderFreteConsultas();
+  await saveFreteConsultas();
+}
+
+function endFreteRowDrag(event) {
+  freteDragState = null;
+  event.target.closest('tr')?.classList.remove('frete-row-dragging');
+  document.querySelectorAll('.frete-row-drop-target').forEach(row => row.classList.remove('frete-row-drop-target'));
 }
 
 document.addEventListener('focusin', e => {
@@ -1415,19 +1462,14 @@ function updateTableScrollControls(secao) {
   const table = document.getElementById(`table-${secao}`);
   const wrapper = table?.closest('.table-wrapper');
   if (!wrapper) return;
-  if (!wrapper.querySelector('.table-scroll-jump.left')) {
-    wrapper.insertAdjacentHTML('beforeend', `
-      <button type="button" class="table-scroll-jump left" onclick="scrollTableToEdge('${escapeAttr(secao)}','left')" aria-label="Ir para o início da tabela">‹</button>
-      <button type="button" class="table-scroll-jump right" onclick="scrollTableToEdge('${escapeAttr(secao)}','right')" aria-label="Ir para o fim da tabela">›</button>
-    `);
-  }
+  wrapper.classList.toggle('has-horizontal-scroll', table.scrollWidth > wrapper.clientWidth);
 }
 
 function scrollTableToEdge(secao, direction) {
-  const wrapper = document.getElementById(`table-${secao}`)?.closest('.table-wrapper');
-  if (!wrapper) return;
-  wrapper.scrollTo({
-    left: direction === 'right' ? wrapper.scrollWidth : 0,
+  const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
+  if (!scrollArea) return;
+  scrollArea.scrollTo({
+    left: direction === 'right' ? scrollArea.scrollWidth : 0,
     behavior: 'smooth'
   });
 }
