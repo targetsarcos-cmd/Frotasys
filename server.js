@@ -32,6 +32,53 @@ const CONFIG_SEED_MARKERS = {
   statusSemCadastro: 'CONFIG_STATUS_SEM_CADASTRO_V1'
 };
 const WAITLIST_FIELD = '__lista_espera';
+const FRETE_CONSULT_FIELD = '__frete_consultas';
+const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
+const DEFAULT_FRETE_CONSULTAS = {
+  terceiros: {
+    title: 'TERCEIROS',
+    tone: 'terceiros',
+    rows: [
+      ['ARCOS', 'SOROCABA', 'R$ 4.650,00', 'R$ 5.082,00', 'R$ 6.250,00', 'R$ 6.400,00'],
+      ['ARCOS', 'AMERICANA', 'R$ 3.650,00', 'R$ 4.000,00', 'R$ 4.600,00', 'R$ 5.800,00'],
+      ['ARCOS', 'OSASCO', 'R$ 4.040,00', 'R$ 4.400,00', 'R$ 5.000,00', 'R$ 6.200,00'],
+      ['ARCOS', 'RIBEIRÃO P.', 'R$ 2.696,00', 'R$ 3.200,00', 'R$ 3.600,00', 'R$ 4.200,00'],
+      ['ARCOS', 'SJRP', 'R$ 3.800,00', 'R$ 4.480,00', 'R$ 5.320,00', 'R$ 6.720,00'],
+      ['BARROSO', 'PINDA', 'R$ 3.730,00', 'R$ 4.066,07', 'R$ 4.548,94', 'R$ 5.135,12'],
+      ['BARROSO', 'SJRP', 'R$ 5.167,00', 'R$ 5.667,14', 'R$ 6.303,98', 'R$ 7.132,39'],
+      ['BARROSO', 'AMERICANA', 'R$ 4.240,00', '', '', ''],
+      ['BARROSO', 'SOROCABA', 'R$ 4.475,00', 'R$ 4.890,00', 'R$ 5.451,00', 'R$ 6.165,00'],
+      ['PEDRO L', 'AMERICANA', '--', 'R$ 5.555,96', 'R$ 6.182,10', 'R$ 6.993,69'],
+      ['PEDRO L', 'SJRP', 'R$ 5.380,00', 'R$ 5.890,00', 'R$ 6.548,00', 'R$ 7.410,00'],
+      ['PEDRO L', 'SOROCABA', 'R$ 5.536,00', 'R$ 6.061,00', 'R$ 6.735,00', 'R$ 7.623,00']
+    ]
+  },
+  agregados: {
+    title: 'AGREGADOS',
+    tone: 'agregados',
+    rows: [
+      ['ARCOS', 'SOROCABA', '--', '4.518,00', 'R$ 4.848,00', 'R$ 6.022,00'],
+      ['ARCOS', 'AMERICANA', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
+      ['ARCOS', 'OSASCO', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
+      ['ARCOS', 'RIBEIRÃO P.', '--', '3.300,00', 'R$ 3.600,00', 'R$ 4.500,00'],
+      ['ARCOS', 'SJRP', '--', '4.350,00', 'R$ 5.000,00', 'R$ 6.000,00'],
+      ['BARROSO', 'PINDA', '--', '--', '--', '--'],
+      ['BARROSO', 'SJRP', '--', '--', '--', '--'],
+      ['BARROSO', 'AMERICANA', '--', '--', '--', '--'],
+      ['BARROSO', 'SOROCABA', '--', 'R$ 4.719,00', 'R$ 5.064,00', 'R$ 6.291,00'],
+      ['PEDRO L', 'AMERICANA', '--', '--', 'R$ 5.545,00', 'R$ 6.883,00'],
+      ['PEDRO L', 'SJRP', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
+      ['PEDRO L', 'SOROCABA', '', '', 'R$ 5.884,00', 'R$ 6.974,00'],
+      ['PEDRO L', 'OSASCO', '', '', 'R$ 5.517,00', 'R$ 6.852,00'],
+      ['PEDRO L', 'MAUÁ', '', '', 'R$ 5.515,00', 'R$ 6.850,00'],
+      ['PEDRO L', 'SÃO J. DOS CAMPOS', '', '', 'R$ 5.541,00', 'R$ 6.879,00'],
+      ['PEDRO L', 'MOGI DAS CRUZES', '', '', 'R$ 5.545,00', 'R$ 6.883,00'],
+      ['PEDRO L', 'PINDA', '', '', 'R$ 5.333,00', 'R$ 6.619,00'],
+      ['PEDRO L', 'SÃO JOSÉ DO RIO PRETO', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
+      ['PEDRO L', 'SANTO ANDRÉ', '', '', 'R$ 5.514,00', 'R$ 6.848,00']
+    ]
+  }
+};
 const DEFAULT_CONFIG_OPTIONS = {
   tipo: ['AGREGADO', 'CARRETEIRO', 'DEDICADO', 'FROTA'],
   produto: ['CPII-F', 'CPIII', 'CPV'],
@@ -370,6 +417,39 @@ async function configColorsGrouped() {
       });
     return acc;
   }, {});
+}
+
+function normalizeFreteConsultas(saved = {}) {
+  return Object.fromEntries(Object.entries(DEFAULT_FRETE_CONSULTAS).map(([key, table]) => {
+    const savedTable = saved?.[key];
+    const rows = Array.isArray(savedTable?.rows) && savedTable.rows.length
+      ? savedTable.rows.map(row => FRETE_COLUMNS.map((_, index) => String(row?.[index] || '').trim()))
+      : table.rows.map(row => [...row]);
+    return [key, {
+      title: table.title,
+      tone: table.tone,
+      rows
+    }];
+  }));
+}
+
+async function freteConsultasConfig() {
+  const doc = await findOne(TABLES.configOptions, item => item.field === FRETE_CONSULT_FIELD);
+  return normalizeFreteConsultas(doc?.tables || doc?.freteConsultas || {});
+}
+
+async function saveFreteConsultasConfig(tables) {
+  const normalized = normalizeFreteConsultas(tables);
+  const existing = await findOne(TABLES.configOptions, item => item.field === FRETE_CONSULT_FIELD);
+  const payload = {
+    field: FRETE_CONSULT_FIELD,
+    value: 'Consulta frete',
+    normalized: FRETE_CONSULT_FIELD,
+    tables: normalized,
+    ordem: existing?.ordem || 1
+  };
+  if (existing) return updateDoc(TABLES.configOptions, existing._id, payload);
+  return insertDoc(TABLES.configOptions, payload);
 }
 
 function normalizeUniqueValue(value) {
@@ -1207,6 +1287,27 @@ app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
     broadcast({ type: 'operacao_removida', payload: { _id: req.params.id, id: req.params.id } });
     broadcast({ type: 'config_atualizada', payload: await configOptionsGrouped() });
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── CONSULTA FRETE API ──────────────────────────────────────────────────────
+
+app.get('/api/frete-consultas', async (req, res) => {
+  try {
+    res.json(await freteConsultasConfig());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/frete-consultas', requireAdmin, async (req, res) => {
+  try {
+    const saved = await saveFreteConsultasConfig(req.body?.tables || req.body || {});
+    const payload = saved.tables || await freteConsultasConfig();
+    broadcast({ type: 'frete_consultas_atualizada', payload });
+    res.json(payload);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

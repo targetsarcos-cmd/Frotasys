@@ -253,6 +253,9 @@ function handleWsMessage(msg) {
   } else if (type === 'lista_espera_atualizada') {
     state.listaEspera = normalizeListaEspera(payload);
     renderListaEspera();
+  } else if (type === 'frete_consultas_atualizada') {
+    state.freteConsultas = mergeFreteConsultas(payload);
+    if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
   }
 }
 
@@ -642,8 +645,9 @@ function closeSearchModal() {
   document.getElementById('search-modal-overlay').classList.add('hidden');
 }
 
-function openFreteConsultModal() {
-  state.freteConsultas = loadFreteConsultas();
+async function openFreteConsultModal() {
+  const saved = await apiFetch('/api/frete-consultas');
+  state.freteConsultas = saved ? mergeFreteConsultas(saved) : loadFreteConsultas();
   renderFreteConsultas();
   document.getElementById('frete-consult-overlay').classList.remove('hidden');
 }
@@ -897,29 +901,74 @@ function mergeFreteConsultas(saved = {}) {
   }));
 }
 
-function saveFreteConsultas() {
+async function saveFreteConsultas() {
   localStorage.setItem(FRETE_CONSULT_KEY, JSON.stringify(state.freteConsultas));
+  const saved = await apiFetch('/api/frete-consultas', {
+    method: 'PUT',
+    body: JSON.stringify({ tables: state.freteConsultas })
+  });
+  if (saved) state.freteConsultas = mergeFreteConsultas(saved);
 }
 
 function renderFreteConsultas() {
   const grid = document.getElementById('frete-consult-grid');
-  grid.innerHTML = Object.entries(state.freteConsultas)
-    .map(([key, table]) => renderFreteConsultTable(key, table))
-    .join('');
+  grid.innerHTML = `
+    ${renderFreteQueryPanel()}
+    ${isAdmin() ? `<div class="frete-admin-grid">${Object.entries(state.freteConsultas)
+      .map(([key, table]) => renderFreteConsultTable(key, table))
+      .join('')}</div>` : ''}
+  `;
+  updateFreteQueryDestinations();
+}
+
+function renderFreteQueryPanel() {
+  return `<section class="frete-query-card">
+    <div class="frete-query-head">
+      <div>
+        <strong>Consulta rápida</strong>
+        <span>Selecione origem, destino e eixo para localizar o valor cadastrado.</span>
+      </div>
+    </div>
+    <div class="frete-query-form">
+      <label>
+        <span>ORIGEM</span>
+        <select id="frete-query-origem" onchange="updateFreteQueryDestinations()">
+          ${renderOptions(['', ...freteOriginOptions()], '')}
+        </select>
+      </label>
+      <label>
+        <span>DESTINO</span>
+        <select id="frete-query-destino"></select>
+      </label>
+      <label>
+        <span>EIXOS</span>
+        <select id="frete-query-eixo">
+          ${renderOptions(['', ...FRETE_COLUMNS.slice(2)], '')}
+        </select>
+      </label>
+      <button type="button" class="btn-primary" onclick="consultarFreteValor()">Consultar</button>
+    </div>
+    <div class="frete-query-result" id="frete-query-result"></div>
+  </section>`;
 }
 
 function renderFreteConsultTable(key, table) {
-  const header = FRETE_COLUMNS.map(col => `<th>${escapeHtml(col)}</th>`).join('');
+  const header = `${FRETE_COLUMNS.map(col => `<th>${escapeHtml(col)}</th>`).join('')}<th>AÇÕES</th>`;
   const rows = table.rows.map((row, rowIndex) => {
     const rowTone = freteOriginTone(row[0]);
     const cells = row.map((value, colIndex) => `
       <td contenteditable="true" spellcheck="false" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-value="${escapeAttr(value)}">${escapeHtml(value)}</td>
     `).join('');
-    return `<tr class="${rowTone}">${cells}</tr>`;
+    return `<tr class="${rowTone}">${cells}<td class="frete-row-actions">
+      <button type="button" class="frete-row-delete" onclick="deleteFreteConsultRow('${escapeAttr(key)}', ${rowIndex})" title="Excluir linha">Excluir</button>
+    </td></tr>`;
   }).join('');
 
   return `<section class="frete-consult-card frete-consult-${escapeAttr(table.tone)}">
-    <div class="frete-consult-title">${escapeHtml(table.title)}</div>
+    <div class="frete-consult-title">
+      <span>${escapeHtml(table.title)}</span>
+      <button type="button" onclick="addFreteConsultRow('${escapeAttr(key)}')">Adicionar linha</button>
+    </div>
     <div class="frete-consult-table-wrap">
       <table class="frete-consult-table">
         <thead><tr>${header}</tr></thead>
@@ -935,6 +984,91 @@ function freteOriginTone(origin) {
   if (normalized.includes('BARROSO')) return 'frete-origin-barroso';
   if (normalized.includes('PEDRO')) return 'frete-origin-pedro';
   return '';
+}
+
+function freteOriginOptions() {
+  return uniqueFreteValues(0);
+}
+
+function freteDestinationOptions(origin = '') {
+  const normalizedOrigin = normalizeOption(origin);
+  const rows = freteAllRows().filter(row => !normalizedOrigin || normalizeOption(row[0]) === normalizedOrigin);
+  return [...new Set(rows.map(row => String(row[1] || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function uniqueFreteValues(index) {
+  return [...new Set(freteAllRows().map(row => String(row[index] || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function freteAllRows() {
+  return Object.values(state.freteConsultas || {}).flatMap(table => table.rows || []);
+}
+
+function updateFreteQueryDestinations() {
+  const origin = document.getElementById('frete-query-origem')?.value || '';
+  const destino = document.getElementById('frete-query-destino');
+  if (!destino) return;
+  const current = destino.value;
+  const options = ['', ...freteDestinationOptions(origin)];
+  setSelectOptions(destino, options);
+  if (options.includes(current)) destino.value = current;
+}
+
+function consultarFreteValor() {
+  const origem = document.getElementById('frete-query-origem')?.value || '';
+  const destino = document.getElementById('frete-query-destino')?.value || '';
+  const eixo = document.getElementById('frete-query-eixo')?.value || '';
+  const result = document.getElementById('frete-query-result');
+  if (!result) return;
+
+  if (!origem || !destino || !eixo) {
+    result.innerHTML = '<span class="is-error">Informe origem, destino e eixos.</span>';
+    return;
+  }
+
+  const colIndex = FRETE_COLUMNS.indexOf(eixo);
+  const matches = Object.values(state.freteConsultas || {}).map(table => {
+    const row = (table.rows || []).find(item =>
+      normalizeOption(item[0]) === normalizeOption(origem) &&
+      normalizeOption(item[1]) === normalizeOption(destino)
+    );
+    return {
+      title: table.title,
+      tone: table.tone,
+      value: row ? String(row[colIndex] || '').trim() : ''
+    };
+  }).filter(item => item.value && item.value !== '--');
+
+  if (!matches.length) {
+    result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combinação.</span>';
+    return;
+  }
+
+  result.innerHTML = matches.map(item => `<div class="frete-result-pill frete-result-${escapeAttr(item.tone)}">
+    <span>${escapeHtml(item.title)}</span>
+    <strong>${escapeHtml(item.value)}</strong>
+  </div>`).join('');
+}
+
+async function addFreteConsultRow(tableKey) {
+  if (!isAdmin()) return;
+  const table = state.freteConsultas[tableKey];
+  if (!table) return;
+  table.rows.push(['', '', '', '', '', '']);
+  renderFreteConsultas();
+  await saveFreteConsultas();
+}
+
+async function deleteFreteConsultRow(tableKey, rowIndex) {
+  if (!isAdmin()) return;
+  const table = state.freteConsultas[tableKey];
+  if (!table?.rows?.[rowIndex]) return;
+  if (!confirm('Excluir esta linha da tabela de frete?')) return;
+  table.rows.splice(rowIndex, 1);
+  renderFreteConsultas();
+  await saveFreteConsultas();
 }
 
 document.addEventListener('focusin', e => {
@@ -963,15 +1097,11 @@ document.addEventListener('focusout', e => {
   commitFreteConsultEdit(cell);
 });
 
-function commitFreteConsultEdit(cell) {
+async function commitFreteConsultEdit(cell) {
+  if (!isAdmin()) return;
   const previous = cell.dataset.value || '';
   const next = cell.textContent.trim();
   if (next === previous) return;
-
-  if (!confirm('Deseja realmente editar este valor?')) {
-    cell.textContent = previous;
-    return;
-  }
 
   const table = cell.dataset.table;
   const row = Number(cell.dataset.row);
@@ -979,9 +1109,10 @@ function commitFreteConsultEdit(cell) {
   if (!state.freteConsultas[table]?.rows?.[row]) return;
 
   state.freteConsultas[table].rows[row][col] = next;
-  saveFreteConsultas();
+  await saveFreteConsultas();
   cell.dataset.value = next;
   cell.closest('tr').className = freteOriginTone(state.freteConsultas[table].rows[row][0]);
+  updateFreteQueryDestinations();
 }
 
 function showEventWarning(eventText = '') {
@@ -1255,6 +1386,7 @@ function renderTable(secao) {
   if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="${FIELDS.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
     updateStickyColumnWidths(document.getElementById(`table-${secao}`));
+    updateTableScrollControls(secao);
     return;
   }
 
@@ -1276,6 +1408,28 @@ function renderTable(secao) {
     </tr>`;
   }).join('');
   updateStickyColumnWidths(document.getElementById(`table-${secao}`));
+  updateTableScrollControls(secao);
+}
+
+function updateTableScrollControls(secao) {
+  const table = document.getElementById(`table-${secao}`);
+  const wrapper = table?.closest('.table-wrapper');
+  if (!wrapper) return;
+  if (!wrapper.querySelector('.table-scroll-jump.left')) {
+    wrapper.insertAdjacentHTML('beforeend', `
+      <button type="button" class="table-scroll-jump left" onclick="scrollTableToEdge('${escapeAttr(secao)}','left')" aria-label="Ir para o início da tabela">‹</button>
+      <button type="button" class="table-scroll-jump right" onclick="scrollTableToEdge('${escapeAttr(secao)}','right')" aria-label="Ir para o fim da tabela">›</button>
+    `);
+  }
+}
+
+function scrollTableToEdge(secao, direction) {
+  const wrapper = document.getElementById(`table-${secao}`)?.closest('.table-wrapper');
+  if (!wrapper) return;
+  wrapper.scrollTo({
+    left: direction === 'right' ? wrapper.scrollWidth : 0,
+    behavior: 'smooth'
+  });
 }
 
 function updateStickyColumnWidths(table) {
