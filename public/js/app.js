@@ -344,7 +344,7 @@ function initUI() {
   });
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
-  document.getElementById('btn-lembretes').addEventListener('click', toggleReminderNote);
+  document.getElementById('btn-lembretes').addEventListener('click', event => toggleReminderNote(event));
   document.getElementById('reminder-text').addEventListener('input', handleReminderInput);
   document.getElementById('btn-undo-last')?.addEventListener('click', undoLastAction);
 
@@ -556,7 +556,9 @@ function normalizeLembrete(lembrete = {}) {
   };
 }
 
-function toggleReminderNote() {
+function toggleReminderNote(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
   state.lembreteOpen = !state.lembreteOpen;
   renderReminderNote();
   if (state.lembreteOpen) {
