@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-nova-viagem-data-focus">
+<link rel="stylesheet" href="css/style.css?v=20260522-dia-semana">
 </head>
 <body>
 
@@ -36,10 +36,18 @@
   <section class="toolbar">
     <div class="origin-filters" id="origin-filters" aria-label="Filtros de origem">
     </div>
-    <div class="date-nav">
-      <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
-      <input type="date" id="date-picker" class="date-picker">
-      <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
+    <div class="date-tools">
+      <div class="date-nav">
+        <span id="date-weekday" class="date-weekday">Hoje</span>
+        <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
+        <input type="date" id="date-picker" class="date-picker">
+        <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
+      </div>
+      <button type="button" id="btn-lembretes" class="btn-reminders">LEMBRETES</button>
+      <div id="reminder-note" class="reminder-note hidden">
+        <textarea id="reminder-text" maxlength="2000" placeholder="Escreva aqui..."></textarea>
+        <div id="reminder-status" class="reminder-status">Salvo</div>
+      </div>
     </div>
   </section>
 

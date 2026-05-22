@@ -33,6 +33,7 @@ const CONFIG_SEED_MARKERS = {
 };
 const WAITLIST_FIELD = '__lista_espera';
 const FRETE_CONSULT_FIELD = '__frete_consultas';
+const LEMBRETE_FIELD = '__lembrete_diario';
 const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
 const DEFAULT_FRETE_CONSULTAS = {
   terceiros: {
@@ -452,6 +453,41 @@ async function saveFreteConsultasConfig(tables) {
   return insertDoc(TABLES.configOptions, payload);
 }
 
+function normalizeLembreteDate(value) {
+  return isIsoDate(value) ? value : new Date().toISOString().slice(0, 10);
+}
+
+function lembreteDocToFrontend(doc = {}, date = '') {
+  return {
+    data: doc.data || date,
+    texto: String(doc.texto || '')
+  };
+}
+
+async function lembreteByDate(date) {
+  const data = normalizeLembreteDate(date);
+  const doc = await findOne(TABLES.configOptions, item => item.field === LEMBRETE_FIELD && item.data === data);
+  return lembreteDocToFrontend(doc, data);
+}
+
+async function saveLembrete(date, texto) {
+  const data = normalizeLembreteDate(date);
+  const normalizedText = String(texto || '').slice(0, 2000);
+  const existing = await findOne(TABLES.configOptions, item => item.field === LEMBRETE_FIELD && item.data === data);
+  const payload = {
+    field: LEMBRETE_FIELD,
+    value: data,
+    normalized: data,
+    data,
+    texto: normalizedText,
+    ordem: existing?.ordem || 1
+  };
+  const saved = existing
+    ? await updateDoc(TABLES.configOptions, existing._id, payload)
+    : await insertDoc(TABLES.configOptions, payload);
+  return lembreteDocToFrontend(saved, data);
+}
+
 function normalizeUniqueValue(value) {
   return String(value || '').trim().toUpperCase();
 }
@@ -803,6 +839,26 @@ app.get('/api/auth/me', (req, res) => {
     },
     profile: req.userProfile
   });
+});
+
+// ─── LEMBRETES API ────────────────────────────────────────────────────────────
+
+app.get('/api/lembretes', async (req, res) => {
+  try {
+    res.json(await lembreteByDate(req.query.data));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/lembretes', async (req, res) => {
+  try {
+    const saved = await saveLembrete(req.body.data, req.body.texto);
+    broadcast({ type: 'lembrete_atualizado', payload: saved });
+    res.json(saved);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── LISTA DE ESPERA API ─────────────────────────────────────────────────────

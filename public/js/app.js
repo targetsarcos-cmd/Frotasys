@@ -19,6 +19,9 @@ const state = {
   tableSort: { field: '', direction: 'asc' },
   freteConsultas: {},
   listaEspera: [],
+  lembrete: { data: '', texto: '' },
+  lembreteOpen: false,
+  lembreteSaveTimer: null,
   metaGoalAlertsShown: new Set(),
   metaGoalDismissed: new Set(),
   metaGoalQueue: [],
@@ -169,12 +172,34 @@ const SEARCH_RESULT_FIELDS = [
 ];
 
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  return localDateStr();
+}
+
+function localDateStr(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function weekdayLabel(dateValue) {
+  if (dateValue === localDateStr()) return 'Hoje';
+  const [year, month, day] = String(dateValue || '').split('-').map(Number);
+  if (!year || !month || !day) return '';
+  const date = new Date(year, month - 1, day, 12);
+  return date.toLocaleDateString('pt-BR', { weekday: 'long' })
+    .replace(/^\p{L}/u, char => char.toUpperCase());
+}
+
+function renderDateWeekday() {
+  const label = document.getElementById('date-weekday');
+  if (label) label.textContent = weekdayLabel(state.currentDate);
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('date-picker').value = state.currentDate;
+  renderDateWeekday();
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
@@ -253,6 +278,11 @@ function handleWsMessage(msg) {
   } else if (type === 'lista_espera_atualizada') {
     state.listaEspera = normalizeListaEspera(payload);
     renderListaEspera();
+  } else if (type === 'lembrete_atualizado') {
+    if (payload?.data === state.currentDate) {
+      state.lembrete = normalizeLembrete(payload);
+      renderReminderNote();
+    }
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
@@ -261,13 +291,14 @@ function handleWsMessage(msg) {
 
 // ─── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadAll() {
-  const [viagens, metas, operacoes, configOptions, configColors, listaEspera] = await Promise.all([
+  const [viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete] = await Promise.all([
     apiFetch(`/api/viagens?data=${state.currentDate}`),
     apiFetch(`/api/metas?data=${state.currentDate}`),
     apiFetch('/api/operacoes'),
     apiFetch('/api/config-options'),
     apiFetch('/api/config-colors'),
-    apiFetch('/api/lista-espera')
+    apiFetch('/api/lista-espera'),
+    apiFetch(`/api/lembretes?data=${state.currentDate}`)
   ]);
   state.viagens = viagens || [];
   state.metas = metas || [];
@@ -275,6 +306,8 @@ async function loadAll() {
   state.configColors = mergeConfigColors(configColors);
   state.operacoes = normalizeOperacoes(operacoes);
   state.listaEspera = normalizeListaEspera(listaEspera);
+  state.lembrete = normalizeLembrete(lembrete);
+  clearReminderStatus();
   renderAll();
 }
 
@@ -311,6 +344,8 @@ function initUI() {
   });
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
+  document.getElementById('btn-lembretes').addEventListener('click', toggleReminderNote);
+  document.getElementById('reminder-text').addEventListener('input', handleReminderInput);
   document.getElementById('btn-undo-last')?.addEventListener('click', undoLastAction);
 
   document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
@@ -399,6 +434,7 @@ function initUI() {
     renderAll();
   });
   document.addEventListener('click', e => {
+    if (state.lembreteOpen && !e.target.closest('.date-tools')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (!e.target.closest('#contrato-menu')) hideContratoMenu();
@@ -463,6 +499,7 @@ function initUI() {
       closeMetaGoalDialog();
       closeSettingsModal();
       closeUsersModal();
+      closeReminderNote();
       hideCtxMenu();
       hideAgendamentoMenu();
       hideContratoMenu();
@@ -509,6 +546,84 @@ function applyPermissions() {
 
 function loggedUserDisplayName() {
   return String(state.userProfile?.nome || state.userProfile?.email || '').trim();
+}
+
+function normalizeLembrete(lembrete = {}) {
+  return {
+    data: lembrete.data || state.currentDate,
+    texto: String(lembrete.texto || '')
+  };
+}
+
+function toggleReminderNote() {
+  state.lembreteOpen = !state.lembreteOpen;
+  renderReminderNote();
+  if (state.lembreteOpen) {
+    setTimeout(() => document.getElementById('reminder-text')?.focus(), 0);
+  }
+}
+
+function closeReminderNote() {
+  state.lembreteOpen = false;
+  renderReminderNote();
+}
+
+function renderReminderNote() {
+  const panel = document.getElementById('reminder-note');
+  const button = document.getElementById('btn-lembretes');
+  const textarea = document.getElementById('reminder-text');
+  const status = document.getElementById('reminder-status');
+  if (!panel || !button || !textarea || !status) return;
+
+  panel.classList.toggle('hidden', !state.lembreteOpen);
+  button.classList.toggle('is-open', state.lembreteOpen);
+  button.classList.toggle('has-text', Boolean(state.lembrete.texto.trim()));
+
+  if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '';
+  if (!status.dataset.state) status.textContent = state.lembrete.texto.trim() ? 'Salvo' : 'Sem lembrete';
+}
+
+function handleReminderInput(event) {
+  const data = state.currentDate;
+  const texto = event.target.value;
+  state.lembrete = { data, texto };
+  document.getElementById('btn-lembretes')?.classList.toggle('has-text', Boolean(texto.trim()));
+  setReminderStatus('Salvando...');
+  clearTimeout(state.lembreteSaveTimer);
+  state.lembreteSaveTimer = setTimeout(() => saveReminder(data, texto), 450);
+}
+
+function setReminderStatus(text) {
+  const status = document.getElementById('reminder-status');
+  if (!status) return;
+  status.dataset.state = text;
+  status.textContent = text;
+}
+
+function clearReminderStatus() {
+  const status = document.getElementById('reminder-status');
+  if (status) delete status.dataset.state;
+}
+
+async function saveReminder(data, texto) {
+  const saved = await apiFetch('/api/lembretes', {
+    method: 'PUT',
+    body: JSON.stringify({ data, texto })
+  });
+  if (!saved) {
+    setReminderStatus('Erro ao salvar');
+    return;
+  }
+  if (saved.data === state.currentDate) {
+    state.lembrete = normalizeLembrete(saved);
+    setReminderStatus(saved.texto.trim() ? 'Salvo' : 'Sem lembrete');
+  }
+  setTimeout(() => {
+    const status = document.getElementById('reminder-status');
+    if (status?.dataset.state === 'Salvo' || status?.dataset.state === 'Sem lembrete') {
+      delete status.dataset.state;
+    }
+  }, 1000);
 }
 
 function shouldHandleUndoShortcut(event) {
@@ -1372,6 +1487,8 @@ function changeDate(delta) {
 function renderAll() {
   syncDynamicSelects();
   renderOriginFilters();
+  renderDateWeekday();
+  renderReminderNote();
   renderTable('arcos');
   renderTable('agenciando');
   renderSummary();
