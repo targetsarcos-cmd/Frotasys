@@ -343,9 +343,11 @@ function initUI() {
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
   document.getElementById('btn-lembretes').addEventListener('click', event => toggleReminderNote(event));
+  document.getElementById('reminder-note-close').addEventListener('click', closeReminderNote);
   document.getElementById('reminder-text').addEventListener('input', handleReminderInput);
   document.getElementById('reminder-text').addEventListener('keydown', handleReminderKeydown);
   document.getElementById('btn-undo-last')?.addEventListener('click', undoLastAction);
+  document.getElementById('header-search-form').addEventListener('submit', submitHeaderSearch);
 
   document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
   document.getElementById('btn-users-admin').addEventListener('click', openUsersModal);
@@ -373,14 +375,13 @@ function initUI() {
   document.getElementById('waitlist-body-rows').addEventListener('focusin', handleListaEsperaFocus);
   document.getElementById('waitlist-body-rows').addEventListener('focusout', handleListaEsperaBlur);
   document.getElementById('waitlist-body-rows').addEventListener('keydown', handleListaEsperaKeydown);
-  document.getElementById('btn-search-load').addEventListener('click', openSearchModal);
   document.getElementById('search-modal-close').addEventListener('click', closeSearchModal);
   document.getElementById('search-btn-close').addEventListener('click', closeSearchModal);
-  document.getElementById('search-btn').addEventListener('click', searchCarregamento);
-  document.getElementById('search-cte').addEventListener('keydown', e => {
+  document.getElementById('search-btn')?.addEventListener('click', () => searchCarregamento());
+  document.getElementById('search-cte')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') searchCarregamento();
   });
-  document.getElementById('search-nota').addEventListener('keydown', e => {
+  document.getElementById('search-nota')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') searchCarregamento();
   });
   document.getElementById('search-modal-overlay').addEventListener('click', e => {
@@ -433,7 +434,7 @@ function initUI() {
     renderAll();
   });
   document.addEventListener('click', e => {
-    if (state.lembreteOpen && !e.target.closest('.date-tools')) closeReminderNote();
+    if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (!e.target.closest('#contrato-menu')) hideContratoMenu();
@@ -551,7 +552,7 @@ function normalizeLembrete(lembrete = {}) {
   const safeLembrete = lembrete || {};
   return {
     data: '',
-    texto: numberReminderText(safeLembrete.texto || '')
+    texto: cleanReminderText(safeLembrete.texto || '')
   };
 }
 
@@ -559,18 +560,16 @@ function stripReminderNumber(line) {
   return String(line || '').replace(/^\s*\d+°\s*/, '');
 }
 
+function cleanReminderText(text) {
+  return String(text || '').split('\n').map(stripReminderNumber).join('\n');
+}
+
 function reminderContent(text) {
-  return String(text || '').split('\n').map(stripReminderNumber).join('\n').trim();
+  return cleanReminderText(text).trim();
 }
 
 function hasReminderContent(text) {
   return reminderContent(text).length > 0;
-}
-
-function numberReminderText(text) {
-  const raw = String(text || '');
-  const lines = raw ? raw.split('\n') : [''];
-  return lines.map((line, index) => `${index + 1}° ${stripReminderNumber(line)}`).join('\n');
 }
 
 function toggleReminderNote(event) {
@@ -599,13 +598,14 @@ function renderReminderNote() {
   button.classList.toggle('is-open', state.lembreteOpen);
   button.classList.toggle('has-text', hasReminderContent(state.lembrete.texto));
 
-  if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '1° ';
+  if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '';
   if (!status.dataset.state) status.textContent = hasReminderContent(state.lembrete.texto) ? 'Salvo' : 'Sem lembrete';
 }
 
 function handleReminderInput(event) {
   const textarea = event.target;
-  const texto = renumberReminderTextarea(textarea);
+  const texto = cleanReminderText(textarea.value);
+  if (textarea.value !== texto) textarea.value = texto;
   state.lembrete = { data: '', texto };
   document.getElementById('btn-lembretes')?.classList.toggle('has-text', hasReminderContent(texto));
   setReminderStatus('Salvando...');
@@ -614,29 +614,7 @@ function handleReminderInput(event) {
 }
 
 function handleReminderKeydown(event) {
-  if (event.key !== 'Enter') return;
-  event.preventDefault();
-
-  const textarea = event.target;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const lineNumber = textarea.value.slice(0, start).split('\n').length + 1;
-  const insertion = `\n${lineNumber}° `;
-  textarea.value = textarea.value.slice(0, start) + insertion + textarea.value.slice(end);
-  const nextCursor = start + insertion.length;
-  textarea.setSelectionRange(nextCursor, nextCursor);
-  handleReminderInput({ target: textarea });
-}
-
-function renumberReminderTextarea(textarea) {
-  const numbered = numberReminderText(textarea.value);
-  if (textarea.value !== numbered) {
-    const cursor = textarea.selectionStart;
-    textarea.value = numbered;
-    const nextCursor = Math.min(numbered.length, cursor);
-    textarea.setSelectionRange(nextCursor, nextCursor);
-  }
-  return textarea.value;
+  if (event.key === 'Escape') closeReminderNote();
 }
 
 function setReminderStatus(text) {
@@ -794,9 +772,19 @@ async function updateUserProfile(id, patch) {
   if (updated) await loadUsers();
 }
 
+function submitHeaderSearch(event) {
+  event?.preventDefault();
+  const term = v('header-search-input');
+  if (!term) {
+    document.getElementById('header-search-input')?.focus();
+    return;
+  }
+  openSearchModal();
+  searchCarregamento(term);
+}
+
 function openSearchModal() {
   document.getElementById('search-modal-overlay').classList.remove('hidden');
-  document.getElementById('search-cte').focus();
 }
 
 function closeSearchModal() {
@@ -1387,26 +1375,31 @@ function closeMetaGoalDialog() {
   showNextMetaGoalDialog();
 }
 
-async function searchCarregamento() {
+async function searchCarregamento(termOverride = '') {
+  const term = String(termOverride || v('header-search-input')).trim();
   const cteTerm = v('search-cte');
   const notaTerm = v('search-nota');
   const status = document.getElementById('search-status');
   const results = document.getElementById('search-results');
-  if (!cteTerm && !notaTerm) {
+  if (!term && !cteTerm && !notaTerm) {
     status.textContent = 'Informe um CT-E ou uma NOTA para buscar.';
     results.innerHTML = '';
     return;
   }
 
   const btn = document.getElementById('search-btn');
-  btn.textContent = 'Buscando...';
-  btn.disabled = true;
+  if (btn) {
+    btn.textContent = 'Buscando...';
+    btn.disabled = true;
+  }
   status.textContent = '';
   results.innerHTML = '';
 
-  const found = await fetchCarregamentosByNotaOrCte({ cte: cteTerm, nota: notaTerm });
-  btn.textContent = 'Buscar';
-  btn.disabled = false;
+  const found = await fetchCarregamentosByNotaOrCte({ term, cte: cteTerm, nota: notaTerm });
+  if (btn) {
+    btn.textContent = 'Buscar';
+    btn.disabled = false;
+  }
 
   if (!found || found.length === 0) {
     status.textContent = 'Nenhum carregamento encontrado para esse CT-E ou NOTA.';
@@ -1417,10 +1410,12 @@ async function searchCarregamento() {
   results.innerHTML = found.map(renderSearchResult).join('');
 }
 
-async function fetchCarregamentosByNotaOrCte({ cte, nota }) {
+async function fetchCarregamentosByNotaOrCte({ term = '', cte = '', nota = '' }) {
+  const normalizedTerm = normalizeSearchTerm(term);
   const normalizedCte = normalizeSearchTerm(cte);
   const normalizedNota = normalizeSearchTerm(nota);
   const params = new URLSearchParams();
+  if (term) params.set('q', term);
   if (cte) params.set('cte', cte);
   if (nota) params.set('nota', nota);
   const searchUrl = `/api/viagens/search?${params.toString()}`;
@@ -1438,6 +1433,7 @@ async function fetchCarregamentosByNotaOrCte({ cte, nota }) {
     .filter(viagem => {
       const nota = normalizeSearchTerm(viagem.nota);
       const cte = normalizeSearchTerm(viagem.cte);
+      if (normalizedTerm && !nota.includes(normalizedTerm) && !cte.includes(normalizedTerm)) return false;
       if (normalizedCte && !cte.includes(normalizedCte)) return false;
       if (normalizedNota && !nota.includes(normalizedNota)) return false;
       return true;

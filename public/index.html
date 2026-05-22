@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-dia-semana">
+<link rel="stylesheet" href="css/style.css?v=20260522-header-busca-lembrete">
 </head>
 <body>
 
@@ -21,10 +21,31 @@
     <img class="brand-logo" src="img/frotasys-logo.png" alt="FrotaSys">
   </div>
 
+  <form class="header-search" id="header-search-form" role="search" autocomplete="off">
+    <input type="search" id="header-search-input" placeholder="Digite o CT-E ou Nota" aria-label="Digite o CT-E ou Nota">
+  </form>
+
   <div class="header-actions">
+    <div class="header-reminder">
+      <button type="button" id="btn-lembretes" class="btn-reminders">Lembretes</button>
+      <div id="reminder-note" class="reminder-note hidden">
+        <div class="reminder-note-top">
+          <button type="button" class="reminder-note-tool" aria-label="Novo lembrete">+</button>
+          <span class="reminder-note-spacer"></span>
+          <button type="button" class="reminder-note-tool" aria-label="Mais opções">...</button>
+          <button type="button" class="reminder-note-tool" id="reminder-note-close" aria-label="Fechar lembrete">×</button>
+        </div>
+        <textarea id="reminder-text" maxlength="2000" placeholder="Escrever uma anotação..."></textarea>
+        <div class="reminder-note-bottom">
+          <span class="reminder-format-tools" aria-hidden="true">
+            <b>B</b><i>I</i><u>U</u><span>ab</span><span>≡</span><span>▧</span>
+          </span>
+          <div id="reminder-status" class="reminder-status">Salvo</div>
+        </div>
+      </div>
+    </div>
     <button class="btn-frete-consult" id="btn-frete-consult">Consulta Frete</button>
     <button class="btn-waitlist" id="btn-lista-espera">Lista de Espera</button>
-    <button class="btn-search-load" id="btn-search-load">Buscar</button>
     <button class="btn-users is-hidden" id="btn-users-admin">Usuários</button>
     <button class="btn-settings" id="btn-settings" title="Configurações" aria-label="Configurações">⚙</button>
     <button class="btn-add" id="btn-nova-viagem">Nova Viagem</button>
@@ -42,11 +63,6 @@
         <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
         <input type="date" id="date-picker" class="date-picker">
         <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
-      </div>
-      <button type="button" id="btn-lembretes" class="btn-reminders">LEMBRETES</button>
-      <div id="reminder-note" class="reminder-note hidden">
-        <textarea id="reminder-text" maxlength="2000" placeholder="Escreva aqui..."></textarea>
-        <div id="reminder-status" class="reminder-status">Salvo</div>
       </div>
     </div>
   </section>
@@ -360,21 +376,10 @@
 <div id="search-modal-overlay" class="modal-overlay hidden">
   <div class="modal search-modal">
     <div class="modal-header">
-      <span>Buscar carregamento</span>
+      <span>Resultado da busca</span>
       <button class="modal-close" id="search-modal-close" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
-      <div class="search-box">
-        <div class="form-group">
-          <label>CT-E</label>
-          <input type="text" id="search-cte" placeholder="Digite o CT-E">
-        </div>
-        <div class="form-group">
-          <label>NOTA</label>
-          <input type="text" id="search-nota" placeholder="Digite a nota">
-        </div>
-        <button class="btn-save" id="search-btn">Buscar</button>
-      </div>
       <div class="search-status" id="search-status"></div>
       <div class="search-results" id="search-results"></div>
     </div>
@@ -592,6 +597,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260522-lembrete-numerado"></script>
+<script src="js/app.js?v=20260522-header-busca-lembrete"></script>
 </body>
 </html>
