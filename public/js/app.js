@@ -803,7 +803,7 @@ function handleListaEsperaFocus(event) {
 function handleListaEsperaBlur(event) {
   const cell = event.target.closest?.('.waitlist-table td[contenteditable="true"]');
   if (!cell) return;
-  commitListaEsperaCell(cell);
+  runBlurCommit(event, cell, () => commitListaEsperaCell(cell));
 }
 
 function handleListaEsperaKeydown(event) {
@@ -1140,7 +1140,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('focusout', e => {
   const cell = e.target.closest?.('.frete-consult-table td[contenteditable="true"]');
   if (!cell) return;
-  commitFreteConsultEdit(cell);
+  runBlurCommit(e, cell, () => commitFreteConsultEdit(cell));
 });
 
 async function commitFreteConsultEdit(cell) {
@@ -2353,6 +2353,96 @@ function renderTransportChart(faturadoRows) {
 
 // ─── INLINE EDIT ──────────────────────────────────────────────────────────────
 let activeInlineCell = null;
+let activeInlineEdit = null;
+let windowLostFocus = false;
+let deferredFocusElement = null;
+
+window.addEventListener('blur', () => {
+  windowLostFocus = true;
+});
+
+window.addEventListener('focus', () => {
+  windowLostFocus = false;
+  restoreDeferredEditingFocus();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) restoreDeferredEditingFocus();
+});
+
+function shouldDeferBlurCommit(event, element) {
+  const nextTarget = event?.relatedTarget;
+  if (nextTarget && document.contains(nextTarget)) return false;
+  if (!windowLostFocus && document.visibilityState !== 'hidden' && document.hasFocus()) return false;
+  deferredFocusElement = element;
+  if (activeInlineEdit?.input === element) {
+    updateActiveInlineEditSnapshot(element);
+    activeInlineEdit.shouldRefocus = true;
+  }
+  return true;
+}
+
+function runBlurCommit(event, element, commit) {
+  if (shouldDeferBlurCommit(event, element)) return;
+  if (!event?.relatedTarget) {
+    setTimeout(() => {
+      if (shouldDeferBlurCommit(null, element)) return;
+      commit();
+    }, 0);
+    return;
+  }
+  commit();
+}
+
+function restoreDeferredEditingFocus() {
+  setTimeout(() => {
+    if (activeInlineEdit?.shouldRefocus) {
+      restoreActiveInlineEditFocus();
+      return;
+    }
+    if (deferredFocusElement?.isConnected) {
+      deferredFocusElement.focus();
+      if (deferredFocusElement.isContentEditable) placeCaretAtEnd(deferredFocusElement);
+    }
+    deferredFocusElement = null;
+  }, 0);
+}
+
+function updateActiveInlineEditSnapshot(input) {
+  if (!activeInlineEdit || activeInlineEdit.input !== input) return;
+  activeInlineEdit.value = input.value;
+  try {
+    activeInlineEdit.selectionStart = input.selectionStart;
+    activeInlineEdit.selectionEnd = input.selectionEnd;
+  } catch (e) {
+    activeInlineEdit.selectionStart = null;
+    activeInlineEdit.selectionEnd = null;
+  }
+}
+
+function restoreActiveInlineEditFocus() {
+  const edit = activeInlineEdit;
+  if (!edit?.input?.isConnected) return;
+  edit.shouldRefocus = false;
+  edit.input.focus();
+  try {
+    if (edit.selectionStart !== null && edit.selectionEnd !== null) {
+      edit.input.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    }
+  } catch (e) {
+    edit.input.select();
+  }
+  deferredFocusElement = null;
+}
+
+function placeCaretAtEnd(element) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
 
 async function updateInlineSelect(select) {
   if (!canEditViagens()) return;
@@ -2378,6 +2468,10 @@ async function promoteToFaturado(event, id) {
 
 function startInlineEdit(td) {
   if (!canEditViagens()) return;
+  if (activeInlineCell === td && activeInlineEdit?.input?.isConnected) {
+    activeInlineEdit.input.focus();
+    return;
+  }
   if (activeInlineCell) cancelInlineEdit();
   const field = td.dataset.field;
   if (field === 'usuario') return;
@@ -2393,6 +2487,16 @@ function startInlineEdit(td) {
   const placeholder = inputPlaceholder(field);
   td.innerHTML = `<input type="${inputType}" value="${escapeAttr(inputValue)}" ${step ? `step="${step}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
   const inp = td.querySelector('input');
+  activeInlineEdit = {
+    td,
+    input: inp,
+    id,
+    field,
+    value: inputValue,
+    selectionStart: null,
+    selectionEnd: null,
+    shouldRefocus: false
+  };
   inp.focus();
   inp.select();
   if (field === 'telefone') {
@@ -2404,20 +2508,32 @@ function startInlineEdit(td) {
   if (isDocumentNumberField(field)) {
     inp.oninput = () => { inp.value = formatDocumentNumber(inp.value, field); };
   }
+  inp.addEventListener('input', () => updateActiveInlineEditSnapshot(inp));
+  inp.addEventListener('keyup', () => updateActiveInlineEditSnapshot(inp));
+  inp.addEventListener('click', () => updateActiveInlineEditSnapshot(inp));
   inp.onkeydown = e => {
-    if (e.key === 'Enter') commitInlineEdit(td, id, field, inp.value);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitInlineEdit(td, id, field, inp.value);
+    }
     if (e.key === 'Escape') {
+      e.preventDefault();
       td.textContent = formatCellValue(field, cur);
       activeInlineCell = null;
+      activeInlineEdit = null;
     }
   };
-  inp.onblur = () => {
-    if (activeInlineCell === td) commitInlineEdit(td, id, field, inp.value);
+  inp.onblur = event => {
+    updateActiveInlineEditSnapshot(inp);
+    runBlurCommit(event, inp, () => {
+      if (activeInlineCell === td) commitInlineEdit(td, id, field, inp.value);
+    });
   };
 }
 
 async function commitInlineEdit(td, id, field, value) {
   activeInlineCell = null;
+  activeInlineEdit = null;
   const normalized = normalizeFieldValue(field, value);
   const viagem = state.viagens.find(item => item._id === id);
   const previous = viagem ? (viagem[field] || '') : (td.dataset.raw || '');
@@ -2465,6 +2581,7 @@ function cancelInlineEdit() {
   const v = state.viagens.find(item => item._id === activeInlineCell.dataset.id);
   if (v) activeInlineCell.textContent = formatCellValue(activeInlineCell.dataset.field, v[activeInlineCell.dataset.field] || '');
   activeInlineCell = null;
+  activeInlineEdit = null;
 }
 
 function normalizeFieldValue(field, value) {
@@ -2733,14 +2850,9 @@ async function saveViagem() {
   };
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
 
-  if (quantidade === 1 && !data.placa && !data.nome) {
-    alert('Informe ao menos PLACA ou NOME');
-    return;
-  }
-
-  if (!data.origem || !data.destino || !data.peso) {
-    alert('Informe ORIGEM, DESTINO e PESO para salvar a viagem.');
-    document.getElementById(!data.origem ? 'f-origem' : !data.destino ? 'f-destino' : 'f-peso')?.focus();
+  if (!data.origem) {
+    alert('Informe ORIGEM para salvar a viagem.');
+    document.getElementById('f-origem')?.focus();
     return;
   }
 

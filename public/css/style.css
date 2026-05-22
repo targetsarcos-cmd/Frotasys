@@ -272,7 +272,8 @@ button, input, select {
   border: none;
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
   padding: 5px 8px;
   border-radius: 6px;
   outline: none;
@@ -421,6 +422,10 @@ button, input, select {
   flex-wrap: wrap;
   justify-content: flex-start;
   order: -1;
+}
+
+.toolbar .date-nav {
+  margin-left: auto;
 }
 
 .btn-add-operation {
@@ -3064,6 +3069,10 @@ td.has-agendamento {
 
   .origin-filters {
     justify-content: flex-start;
+  }
+
+  .toolbar .date-nav {
+    margin-left: 0;
   }
 
   .summary-layout {

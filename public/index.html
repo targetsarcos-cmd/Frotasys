@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-scroll-fix3">
+<link rel="stylesheet" href="css/style.css?v=20260522-nova-viagem-data-focus">
 </head>
 <body>
 
@@ -25,11 +25,6 @@
     <button class="btn-frete-consult" id="btn-frete-consult">Consulta Frete</button>
     <button class="btn-waitlist" id="btn-lista-espera">Lista de Espera</button>
     <button class="btn-search-load" id="btn-search-load">Buscar</button>
-    <div class="date-nav">
-      <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
-      <input type="date" id="date-picker" class="date-picker">
-      <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
-    </div>
     <button class="btn-users is-hidden" id="btn-users-admin">Usuários</button>
     <button class="btn-settings" id="btn-settings" title="Configurações" aria-label="Configurações">⚙</button>
     <button class="btn-add" id="btn-nova-viagem">Nova Viagem</button>
@@ -40,6 +35,11 @@
 <main class="main">
   <section class="toolbar">
     <div class="origin-filters" id="origin-filters" aria-label="Filtros de origem">
+    </div>
+    <div class="date-nav">
+      <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
+      <input type="date" id="date-picker" class="date-picker">
+      <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
     </div>
   </section>
 
@@ -240,11 +240,11 @@
           <label>USUÁRIO</label>
           <input type="text" id="f-usuario" placeholder="Atualizado automaticamente pelo status" readonly>
         </div>
-        <div class="form-group">
+        <div class="form-group hidden-on-new">
           <label>AGENDAMENTO</label>
           <input type="text" id="f-agendamento" placeholder="00:00">
         </div>
-        <div class="form-group">
+        <div class="form-group hidden-on-new">
           <label>DESCARGA</label>
           <input type="datetime-local" id="f-descarga">
         </div>
