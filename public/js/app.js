@@ -147,8 +147,8 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'pamcard', label: 'PAMCARD' },
   { key: 'status', label: 'STATUS' },
   { key: 'usuario', label: 'USUÁRIO' },
-  { key: 'descarga', label: 'DESCARGA' },
   { key: 'agendamento', label: 'AGENDAMENTO' },
+  { key: 'descarga', label: 'DESCARGA' },
   { key: 'telefone', label: 'TELEFONE' },
   { key: 'frete', label: 'EVENTO' },
   { key: 'origem', label: 'ORIGEM' },
@@ -1221,8 +1221,8 @@ const FIELDS = [
   { key: 'pamcard', label: 'PAMCARD', select: true },
   { key: 'status', label: 'STATUS', select: true },
   { key: 'usuario', label: 'USUÁRIO' },
-  { key: 'descarga', label: 'DESCARGA', quick: true, time: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
+  { key: 'descarga', label: 'DESCARGA', quick: true, time: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
   { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'origem', label: 'ORIGEM', select: true },
@@ -2306,7 +2306,7 @@ function openModal(viagem = null) {
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
   document.querySelectorAll('#modal-overlay .hidden-on-new').forEach(el => el.classList.toggle('is-hidden', !viagem));
   document.querySelectorAll('#modal-overlay .bulk-only').forEach(el => el.classList.toggle('is-hidden', !!viagem));
-  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','descarga','agendamento','telefone','frete','origem','destino','peso','obs'];
+  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','descarga','telefone','frete','origem','destino','peso','obs'];
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
     if (!el) return;
