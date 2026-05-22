@@ -440,6 +440,13 @@ function initUI() {
   });
 
   document.addEventListener('contextmenu', e => {
+    const placaCell = e.target.closest('td[data-field="placa"]');
+    if (placaCell) {
+      e.stopPropagation();
+      showCtxMenu(e, placaCell.dataset.id, 'placa');
+      return;
+    }
+
     const documentCell = e.target.closest('td[data-field="dt"]:not(.cell-select), td[data-field="cte"]:not(.cell-select), td[data-field="manifesto"]:not(.cell-select), td[data-field="contrato"]:not(.cell-select), td[data-field="nota"]:not(.cell-select), td[data-field="num_pedagio"]:not(.cell-select)');
     if (documentCell) {
       e.stopPropagation();
@@ -453,11 +460,11 @@ function initUI() {
     showAgendamentoMenu(e, td);
   }, true);
 
+  document.getElementById('ctx-copy').addEventListener('click', event => {
+    if (state.ctxTargetId) copyPlacaMenuValue(event, state.ctxTargetId);
+  });
   document.getElementById('ctx-edit').addEventListener('click', () => {
     if (state.ctxTargetId) editViagem(state.ctxTargetId);
-  });
-  document.getElementById('ctx-delete').addEventListener('click', () => {
-    if (state.ctxTargetId) deleteViagem(state.ctxTargetId);
   });
   document.getElementById('agendamento-mark').addEventListener('click', toggleAgendamentoVerde);
   document.getElementById('agendamento-edit').addEventListener('click', () => {
@@ -792,6 +799,7 @@ function openSearchModal() {
 
 function closeSearchModal() {
   document.getElementById('search-modal-overlay').classList.add('hidden');
+  clearAdvancedSearch({ focus: false });
 }
 
 async function submitAdvancedSearch(event) {
@@ -816,7 +824,7 @@ function hasSearchFilters(filters = {}) {
   return Object.values(filters).some(value => String(value || '').trim());
 }
 
-function clearAdvancedSearch() {
+function clearAdvancedSearch({ focus = true } = {}) {
   ['search-dt', 'search-nota', 'search-contrato', 'search-cte', 'search-nome', 'search-placa', 'search-data-inicio', 'search-data-fim']
     .forEach(id => {
       const input = document.getElementById(id);
@@ -824,7 +832,7 @@ function clearAdvancedSearch() {
     });
   document.getElementById('search-status').textContent = '';
   document.getElementById('search-results').innerHTML = '';
-  document.getElementById('search-dt')?.focus();
+  if (focus) document.getElementById('search-dt')?.focus();
 }
 
 async function openFreteConsultModal() {
@@ -1626,7 +1634,6 @@ const FIELDS = [
   { key: 'placa', label: 'PLACA', quick: true },
   { key: 'nome', label: 'NOME', quick: true },
   { key: 'tipo', label: 'TIPO', select: true },
-  { key: 'produto', label: 'PRODUTO', select: true },
   { key: 'carroceria', label: 'CARROCERIA', select: true },
   { key: 'kanguru', label: 'KANGURU', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
@@ -1637,6 +1644,7 @@ const FIELDS = [
   { key: 'telefone', label: 'TELEFONE', quick: true },
   { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'origem', label: 'ORIGEM', select: true },
+  { key: 'produto', label: 'PRODUTO', select: true },
   { key: 'destino', label: 'DESTINO', select: true },
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'dt', label: 'DT', quick: true },
@@ -3199,15 +3207,15 @@ async function deleteViagem(id) {
 }
 
 // ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
-function showCtxMenu(e, id) {
+function showCtxMenu(e, id, mode = 'row') {
   e.preventDefault();
   state.ctxTargetId = id;
   const viagem = state.viagens.find(v => v._id === id);
+  const copyItem = document.getElementById('ctx-copy');
   const editItem = document.getElementById('ctx-edit');
-  const deleteItem = document.getElementById('ctx-delete');
-  editItem.style.display = canEditViagem(viagem) ? '' : 'none';
-  deleteItem.style.display = canDeleteViagem(viagem) ? '' : 'none';
-  if (editItem.style.display === 'none' && deleteItem.style.display === 'none') return;
+  copyItem.style.display = mode === 'placa' ? '' : 'none';
+  editItem.style.display = mode === 'placa' ? 'none' : canEditViagem(viagem) ? '' : 'none';
+  if (copyItem.style.display === 'none' && editItem.style.display === 'none') return;
   const menu = document.getElementById('ctx-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 160)}px`;
   menu.style.top = `${Math.min(e.clientY, window.innerHeight - 90)}px`;
@@ -3216,6 +3224,27 @@ function showCtxMenu(e, id) {
 
 function hideCtxMenu() {
   document.getElementById('ctx-menu').classList.add('hidden');
+}
+
+async function copyPlacaMenuValue(event, id) {
+  const viagem = state.viagens.find(v => v._id === id);
+  hideCtxMenu();
+  if (!viagem) return;
+  const text = String(viagem.placa || '').trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+  showFloatingCopyBubble(event?.clientX, event?.clientY);
 }
 
 function showAgendamentoMenu(e, cell) {
