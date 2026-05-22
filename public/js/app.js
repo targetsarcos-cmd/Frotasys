@@ -83,6 +83,7 @@ const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['descarga', 'agendamento', 'horas'];
+const LOCKED_EDITABLE_FIELDS = ['descarga'];
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
   cte: 'CT-E',
@@ -484,7 +485,13 @@ function isViagemConcluida(viagem) {
 }
 
 function canEditViagem(viagem) {
-  return canEditViagens() && (isAdmin() || !isViagemConcluida(viagem));
+  return canEditViagens() && !isViagemConcluida(viagem);
+}
+
+function canEditViagemField(viagem, field) {
+  if (!canEditViagens()) return false;
+  if (!isViagemConcluida(viagem)) return true;
+  return LOCKED_EDITABLE_FIELDS.includes(field);
 }
 
 function canDeleteViagem(viagem) {
@@ -1330,7 +1337,7 @@ function renderCell(v, field) {
     const cls = field.key === 'origem' ? originSlug(raw) : field.key === 'status' ? statusSlug(raw) : field.key === 'tipo' ? tipoSlug(raw) : '';
     const style = selectColorStyle(field.key, raw);
     return `<td class="cell-select cell-${field.key}" data-field="${field.key}" data-id="${escapeAttr(v._id)}">
-      <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)" ${canEditViagem(v) ? '' : 'disabled'}>
+      <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)" ${canEditViagemField(v, field.key) ? '' : 'disabled'}>
         ${renderOptions(getSelectOptions(field.key), raw)}
       </select>
     </td>`;
@@ -1353,7 +1360,7 @@ function renderCell(v, field) {
     </td>`;
   }
 
-  let cls = field.quick ? 'quick-edit' : '';
+  let cls = field.quick && canEditViagemField(v, field.key) ? 'quick-edit' : '';
   if (field.key === 'agendamento' && v.agendamentoVerde) cls += ' has-agendamento';
   const title = field.key === 'telefone' && phoneList(raw).length > 1 ? ` title="${escapeAttr(raw)}"` : '';
   return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${cls.trim()}"${title}>${escapeHtml(display)}</td>`;
@@ -2095,8 +2102,8 @@ async function updateInlineSelect(select) {
   if (!canEditViagens()) return;
   const id = select.dataset.id;
   const viagem = state.viagens.find(v => v._id === id);
-  if (!canEditViagem(viagem)) return renderAll();
   const field = select.dataset.field;
+  if (!canEditViagemField(viagem, field)) return renderAll();
   const value = normalizeFieldValue(field, select.value);
   select.disabled = true;
   const updated = await updateViagemField(id, field, value);
@@ -2120,7 +2127,7 @@ function startInlineEdit(td) {
   if (field === 'usuario') return;
   const id = td.dataset.id;
   const viagem = state.viagens.find(v => v._id === id);
-  if (!canEditViagem(viagem)) return;
+  if (!canEditViagemField(viagem, field)) return;
   const cur = normalizeFieldValue(field, td.dataset.raw ?? td.textContent.trim());
   activeInlineCell = td;
 
@@ -2166,7 +2173,7 @@ async function commitInlineEdit(td, id, field, value) {
 
 async function updateViagemField(id, field, value, options = {}) {
   const viagem = state.viagens.find(v => v._id === id);
-  if (!canEditViagem(viagem)) {
+  if (!canEditViagemField(viagem, field)) {
     renderAll();
     return null;
   }
@@ -2641,7 +2648,7 @@ function showContratoMenu(e, cell) {
 
   document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
-  document.getElementById('contrato-desfazer').style.display = isContratoField && concluida && isAdmin() ? '' : 'none';
+  document.getElementById('contrato-desfazer').style.display = 'none';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;

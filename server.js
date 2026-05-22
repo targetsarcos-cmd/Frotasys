@@ -51,6 +51,7 @@ const UNIQUE_VIAGEM_FIELDS = [
 ];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
+const LOCKED_EDITABLE_FIELDS = ['descarga'];
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -1005,30 +1006,22 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
-    if (isViagemBloqueada(current) && req.userProfile?.role !== 'admin') {
-      return res.status(403).json({ error: 'Viagem concluída. Somente administrador pode editar.' });
-    }
 
     const patch = { ...req.body };
     normalizeViagemDocumentNumbers(patch);
     delete patch.usuario;
-    if (patch.conclusaoContrato !== undefined) {
-      if (isViagemBloqueada(current) && req.userProfile?.role === 'admin' && !normalizeContratoConclusao(patch.conclusaoContrato)) {
-        patch.conclusaoContrato = '';
-        patch.status = '';
-        patch.usuario = '';
-        const nextData = { ...current, ...patch };
-        const duplicate = await findDuplicateViagemFields(nextData, req.params.id);
-        if (duplicate) {
-          return res.status(409).json({
-            error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
-            field: duplicate.key
-          });
-        }
-        const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
-        broadcast({ type: 'viagem_atualizada', payload: updated });
-        return res.json(updated);
+    if (patch.descarga !== undefined) patch.descarga = normalizeHours(patch.descarga);
+    if (isViagemBloqueada(current)) {
+      const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
+      if (invalidFields.length) {
+        return res.status(403).json({ error: 'Viagem concluída. Somente DESCARGA pode ser editada.' });
       }
+      const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+      broadcast({ type: 'viagem_atualizada', payload: updated });
+      return res.json(updated);
+    }
+
+    if (patch.conclusaoContrato !== undefined) {
       patch.conclusaoContrato = normalizeContratoConclusao(patch.conclusaoContrato);
       if (!patch.conclusaoContrato) delete patch.conclusaoContrato;
     }
