@@ -340,6 +340,10 @@ button, input, select {
   transform: rotate(-.8deg);
 }
 
+.reminder-note.hidden {
+  display: none;
+}
+
 .reminder-note::before {
   content: '';
   position: absolute;
