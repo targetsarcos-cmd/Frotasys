@@ -398,6 +398,7 @@ function initUI() {
     btn.classList.add('active');
     renderAll();
   });
+  initTableScrollButtons();
 
   document.addEventListener('click', e => {
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
@@ -1477,6 +1478,15 @@ function updateTableScrollControls(secao) {
     scrollArea.dataset.scrollSyncReady = 'true';
     scrollArea.addEventListener('scroll', () => syncTableScrollFromBottom(secao));
   }
+}
+
+function initTableScrollButtons() {
+  document.querySelectorAll('[data-table-scroll-jump]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      scrollTableToEdge(button.dataset.tableScrollJump, button.dataset.scrollDirection);
+    });
+  });
 }
 
 function scrollTableToEdge(secao, direction) {
