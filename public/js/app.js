@@ -279,10 +279,8 @@ function handleWsMessage(msg) {
     state.listaEspera = normalizeListaEspera(payload);
     renderListaEspera();
   } else if (type === 'lembrete_atualizado') {
-    if (payload?.data === state.currentDate) {
-      state.lembrete = normalizeLembrete(payload);
-      renderReminderNote();
-    }
+    state.lembrete = normalizeLembrete(payload);
+    renderReminderNote();
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
@@ -298,7 +296,7 @@ async function loadAll() {
     apiFetch('/api/config-options'),
     apiFetch('/api/config-colors'),
     apiFetch('/api/lista-espera'),
-    apiFetch(`/api/lembretes?data=${state.currentDate}`).catch(() => null)
+    apiFetch('/api/lembretes').catch(() => null)
   ]);
   state.viagens = viagens || [];
   state.metas = metas || [];
@@ -346,6 +344,7 @@ function initUI() {
   document.getElementById('btn-next-date').addEventListener('click', () => changeDate(1));
   document.getElementById('btn-lembretes').addEventListener('click', event => toggleReminderNote(event));
   document.getElementById('reminder-text').addEventListener('input', handleReminderInput);
+  document.getElementById('reminder-text').addEventListener('keydown', handleReminderKeydown);
   document.getElementById('btn-undo-last')?.addEventListener('click', undoLastAction);
 
   document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
@@ -551,9 +550,27 @@ function loggedUserDisplayName() {
 function normalizeLembrete(lembrete = {}) {
   const safeLembrete = lembrete || {};
   return {
-    data: safeLembrete.data || state.currentDate,
-    texto: String(safeLembrete.texto || '')
+    data: '',
+    texto: numberReminderText(safeLembrete.texto || '')
   };
+}
+
+function stripReminderNumber(line) {
+  return String(line || '').replace(/^\s*\d+°\s*/, '');
+}
+
+function reminderContent(text) {
+  return String(text || '').split('\n').map(stripReminderNumber).join('\n').trim();
+}
+
+function hasReminderContent(text) {
+  return reminderContent(text).length > 0;
+}
+
+function numberReminderText(text) {
+  const raw = String(text || '');
+  const lines = raw ? raw.split('\n') : [''];
+  return lines.map((line, index) => `${index + 1}° ${stripReminderNumber(line)}`).join('\n');
 }
 
 function toggleReminderNote(event) {
@@ -580,20 +597,46 @@ function renderReminderNote() {
 
   panel.classList.toggle('hidden', !state.lembreteOpen);
   button.classList.toggle('is-open', state.lembreteOpen);
-  button.classList.toggle('has-text', Boolean(state.lembrete.texto.trim()));
+  button.classList.toggle('has-text', hasReminderContent(state.lembrete.texto));
 
-  if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '';
-  if (!status.dataset.state) status.textContent = state.lembrete.texto.trim() ? 'Salvo' : 'Sem lembrete';
+  if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '1° ';
+  if (!status.dataset.state) status.textContent = hasReminderContent(state.lembrete.texto) ? 'Salvo' : 'Sem lembrete';
 }
 
 function handleReminderInput(event) {
-  const data = state.currentDate;
-  const texto = event.target.value;
-  state.lembrete = { data, texto };
-  document.getElementById('btn-lembretes')?.classList.toggle('has-text', Boolean(texto.trim()));
+  const textarea = event.target;
+  const texto = renumberReminderTextarea(textarea);
+  state.lembrete = { data: '', texto };
+  document.getElementById('btn-lembretes')?.classList.toggle('has-text', hasReminderContent(texto));
   setReminderStatus('Salvando...');
   clearTimeout(state.lembreteSaveTimer);
-  state.lembreteSaveTimer = setTimeout(() => saveReminder(data, texto), 450);
+  state.lembreteSaveTimer = setTimeout(() => saveReminder(texto), 450);
+}
+
+function handleReminderKeydown(event) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+
+  const textarea = event.target;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const lineNumber = textarea.value.slice(0, start).split('\n').length + 1;
+  const insertion = `\n${lineNumber}° `;
+  textarea.value = textarea.value.slice(0, start) + insertion + textarea.value.slice(end);
+  const nextCursor = start + insertion.length;
+  textarea.setSelectionRange(nextCursor, nextCursor);
+  handleReminderInput({ target: textarea });
+}
+
+function renumberReminderTextarea(textarea) {
+  const numbered = numberReminderText(textarea.value);
+  if (textarea.value !== numbered) {
+    const cursor = textarea.selectionStart;
+    textarea.value = numbered;
+    const nextCursor = Math.min(numbered.length, cursor);
+    textarea.setSelectionRange(nextCursor, nextCursor);
+  }
+  return textarea.value;
 }
 
 function setReminderStatus(text) {
@@ -608,19 +651,17 @@ function clearReminderStatus() {
   if (status) delete status.dataset.state;
 }
 
-async function saveReminder(data, texto) {
+async function saveReminder(texto) {
   const saved = await apiFetch('/api/lembretes', {
     method: 'PUT',
-    body: JSON.stringify({ data, texto })
+    body: JSON.stringify({ texto })
   });
   if (!saved) {
     setReminderStatus('Erro ao salvar');
     return;
   }
-  if (saved.data === state.currentDate) {
-    state.lembrete = normalizeLembrete(saved);
-    setReminderStatus(saved.texto.trim() ? 'Salvo' : 'Sem lembrete');
-  }
+  state.lembrete = normalizeLembrete(saved);
+  setReminderStatus(hasReminderContent(saved.texto) ? 'Salvo' : 'Sem lembrete');
   setTimeout(() => {
     const status = document.getElementById('reminder-status');
     if (status?.dataset.state === 'Salvo' || status?.dataset.state === 'Sem lembrete') {

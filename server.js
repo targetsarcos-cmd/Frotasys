@@ -453,40 +453,40 @@ async function saveFreteConsultasConfig(tables) {
   return insertDoc(TABLES.configOptions, payload);
 }
 
-function normalizeLembreteDate(value) {
-  return isIsoDate(value) ? value : new Date().toISOString().slice(0, 10);
-}
-
-function lembreteDocToFrontend(doc = {}, date = '') {
+function lembreteDocToFrontend(doc = {}) {
   const safeDoc = doc || {};
   return {
-    data: safeDoc.data || date,
+    data: '',
     texto: String(safeDoc.texto || '')
   };
 }
 
-async function lembreteByDate(date) {
-  const data = normalizeLembreteDate(date);
-  const doc = await findOne(TABLES.configOptions, item => item.field === LEMBRETE_FIELD && item.data === data);
-  return lembreteDocToFrontend(doc, data);
+async function lembreteGlobal() {
+  const docs = (await selectDocs(TABLES.configOptions))
+    .filter(item => item.field === LEMBRETE_FIELD)
+    .sort((a, b) => {
+      const aGlobal = a.normalized === LEMBRETE_FIELD ? 1 : 0;
+      const bGlobal = b.normalized === LEMBRETE_FIELD ? 1 : 0;
+      return bGlobal - aGlobal || String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''));
+    });
+  return lembreteDocToFrontend(docs[0]);
 }
 
-async function saveLembrete(date, texto) {
-  const data = normalizeLembreteDate(date);
+async function saveLembrete(texto) {
   const normalizedText = String(texto || '').slice(0, 2000);
-  const existing = await findOne(TABLES.configOptions, item => item.field === LEMBRETE_FIELD && item.data === data);
+  const existing = await findOne(TABLES.configOptions, item => item.field === LEMBRETE_FIELD && item.normalized === LEMBRETE_FIELD);
   const payload = {
     field: LEMBRETE_FIELD,
-    value: data,
-    normalized: data,
-    data,
+    value: 'Lembrete',
+    normalized: LEMBRETE_FIELD,
+    data: '',
     texto: normalizedText,
     ordem: existing?.ordem || 1
   };
   const saved = existing
     ? await updateDoc(TABLES.configOptions, existing._id, payload)
     : await insertDoc(TABLES.configOptions, payload);
-  return lembreteDocToFrontend(saved, data);
+  return lembreteDocToFrontend(saved);
 }
 
 function normalizeUniqueValue(value) {
@@ -846,7 +846,7 @@ app.get('/api/auth/me', (req, res) => {
 
 app.get('/api/lembretes', async (req, res) => {
   try {
-    res.json(await lembreteByDate(req.query.data));
+    res.json(await lembreteGlobal());
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -855,7 +855,7 @@ app.get('/api/lembretes', async (req, res) => {
 app.put('/api/lembretes', async (req, res) => {
   try {
     const body = req.body || {};
-    const saved = await saveLembrete(body.data, body.texto);
+    const saved = await saveLembrete(body.texto);
     broadcast({ type: 'lembrete_atualizado', payload: saved });
     res.json(saved);
   } catch (e) {
