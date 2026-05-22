@@ -493,6 +493,40 @@ button, input, select {
   overflow-x: auto;
 }
 
+.table-scroll-main {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  border-bottom: 1px solid var(--border);
+  background: #f8fafc;
+}
+
+.table-scroll-top div {
+  height: 1px;
+}
+
+.table-scroll-top::-webkit-scrollbar,
+.table-scroll-area::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll-top::-webkit-scrollbar-track,
+.table-scroll-area::-webkit-scrollbar-track {
+  background: #edf1f6;
+}
+
+.table-scroll-top::-webkit-scrollbar-thumb,
+.table-scroll-area::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #b9c6d6;
+}
+
 .table-scroll-jump {
   position: relative;
   z-index: 20;
@@ -817,8 +851,8 @@ button, input, select {
 
 .table-select {
   width: max-content;
-  min-width: 132px;
-  height: 28px;
+  min-width: 122px;
+  height: 26px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
@@ -826,13 +860,24 @@ button, input, select {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
-  padding: 0 26px 0 10px;
+  padding: 0 22px 0 9px;
   outline: none;
   cursor: pointer;
 }
 
 .cell-tipo .table-select {
-  min-width: 116px;
+  min-width: 108px;
+}
+
+.cell-produto .table-select {
+  min-width: 112px;
+}
+
+.cell-carroceria .table-select,
+.cell-kanguru .table-select,
+.cell-pamcard .table-select,
+.cell-status .table-select {
+  min-width: 118px;
 }
 
 .table-select:focus {

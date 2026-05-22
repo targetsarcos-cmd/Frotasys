@@ -1458,11 +1458,25 @@ function renderTable(secao) {
   updateTableScrollControls(secao);
 }
 
+const tableScrollSyncing = {};
+
 function updateTableScrollControls(secao) {
   const table = document.getElementById(`table-${secao}`);
   const wrapper = table?.closest('.table-wrapper');
+  const scrollArea = table?.closest('.table-scroll-area');
+  const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   if (!wrapper) return;
-  wrapper.classList.toggle('has-horizontal-scroll', table.scrollWidth > wrapper.clientWidth);
+  const hasHorizontalScroll = table.scrollWidth > (scrollArea?.clientWidth || wrapper.clientWidth);
+  wrapper.classList.toggle('has-horizontal-scroll', hasHorizontalScroll);
+  if (topScroll) {
+    const spacer = topScroll.firstElementChild;
+    if (spacer) spacer.style.width = `${table.scrollWidth}px`;
+    topScroll.scrollLeft = scrollArea?.scrollLeft || 0;
+  }
+  if (scrollArea && !scrollArea.dataset.scrollSyncReady) {
+    scrollArea.dataset.scrollSyncReady = 'true';
+    scrollArea.addEventListener('scroll', () => syncTableScrollFromBottom(secao));
+  }
 }
 
 function scrollTableToEdge(secao, direction) {
@@ -1472,6 +1486,26 @@ function scrollTableToEdge(secao, direction) {
     left: direction === 'right' ? scrollArea.scrollWidth : 0,
     behavior: 'smooth'
   });
+}
+
+function syncTableScrollFromTop(secao) {
+  if (tableScrollSyncing[secao]) return;
+  const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
+  const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
+  if (!topScroll || !scrollArea) return;
+  tableScrollSyncing[secao] = true;
+  scrollArea.scrollLeft = topScroll.scrollLeft;
+  tableScrollSyncing[secao] = false;
+}
+
+function syncTableScrollFromBottom(secao) {
+  if (tableScrollSyncing[secao]) return;
+  const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
+  const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
+  if (!topScroll || !scrollArea) return;
+  tableScrollSyncing[secao] = true;
+  topScroll.scrollLeft = scrollArea.scrollLeft;
+  tableScrollSyncing[secao] = false;
 }
 
 function updateStickyColumnWidths(table) {

@@ -52,7 +52,9 @@
     </div>
     <div class="table-wrapper" id="table-faturado-wrap">
       <button type="button" class="table-scroll-jump left" onclick="scrollTableToEdge('arcos','left')" aria-label="Ir para o início da tabela">‹</button>
-      <div class="table-scroll-area">
+      <div class="table-scroll-main">
+        <div class="table-scroll-top" data-table-scroll-top="arcos" onscroll="syncTableScrollFromTop('arcos')"><div></div></div>
+        <div class="table-scroll-area">
         <table class="data-table" id="table-arcos">
           <thead>
             <tr>
@@ -87,6 +89,7 @@
           </thead>
           <tbody id="tbody-arcos"></tbody>
         </table>
+        </div>
       </div>
       <button type="button" class="table-scroll-jump right" onclick="scrollTableToEdge('arcos','right')" aria-label="Ir para o fim da tabela">›</button>
     </div>
@@ -108,7 +111,9 @@
     </div>
     <div class="table-wrapper" id="table-agenciado-wrap">
       <button type="button" class="table-scroll-jump left" onclick="scrollTableToEdge('agenciando','left')" aria-label="Ir para o início da tabela">‹</button>
-      <div class="table-scroll-area">
+      <div class="table-scroll-main">
+        <div class="table-scroll-top" data-table-scroll-top="agenciando" onscroll="syncTableScrollFromTop('agenciando')"><div></div></div>
+        <div class="table-scroll-area">
         <table class="data-table" id="table-agenciando">
           <thead>
             <tr>
@@ -143,6 +148,7 @@
           </thead>
           <tbody id="tbody-agenciando"></tbody>
         </table>
+        </div>
       </div>
       <button type="button" class="table-scroll-jump right" onclick="scrollTableToEdge('agenciando','right')" aria-label="Ir para o fim da tabela">›</button>
     </div>
