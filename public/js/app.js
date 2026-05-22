@@ -82,7 +82,7 @@ const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
-const TIME_FIELDS = ['descarga', 'agendamento', 'horas'];
+const TIME_FIELDS = ['agendamento', 'horas'];
 const LOCKED_EDITABLE_FIELDS = ['descarga'];
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
@@ -370,9 +370,6 @@ function initUI() {
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
   document.getElementById('btn-save').addEventListener('click', saveViagem);
-  document.getElementById('f-descarga').addEventListener('input', e => {
-    e.target.value = maskHourInput(e.target.value);
-  });
   document.getElementById('f-agendamento').addEventListener('input', e => {
     e.target.value = maskHourInput(e.target.value);
   });
@@ -1229,7 +1226,7 @@ const FIELDS = [
   { key: 'status', label: 'STATUS', select: true },
   { key: 'usuario', label: 'USUÁRIO' },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
-  { key: 'descarga', label: 'DESCARGA', quick: true, time: true },
+  { key: 'descarga', label: 'DESCARGA', quick: true, dateTime: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
   { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'origem', label: 'ORIGEM', select: true },
@@ -1347,6 +1344,7 @@ function renderCell(v, field) {
   if (field.money && raw !== '') display = formatMoney(raw);
   if (field.number && raw !== '') display = formatPeso(raw);
   if (field.time && raw !== '') display = normalizeHours(raw);
+  if (field.dateTime && raw !== '') display = formatDescargaDateTime(raw);
   if (field.date && raw !== '') display = formatDateBR(raw);
   if (field.key === 'telefone') display = firstPhone(raw);
 
@@ -2131,10 +2129,11 @@ function startInlineEdit(td) {
   const cur = normalizeFieldValue(field, td.dataset.raw ?? td.textContent.trim());
   activeInlineCell = td;
 
-  const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : 'text';
+  const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : field === 'descarga' ? 'datetime-local' : 'text';
+  const inputValue = field === 'descarga' ? descargaToInputValue(cur) : cur;
   const step = field === 'peso' ? '0.001' : field === 'vlr_pedagio' ? '0.01' : '';
   const placeholder = inputPlaceholder(field);
-  td.innerHTML = `<input type="${inputType}" value="${escapeAttr(cur)}" ${step ? `step="${step}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
+  td.innerHTML = `<input type="${inputType}" value="${escapeAttr(inputValue)}" ${step ? `step="${step}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
   const inp = td.querySelector('input');
   inp.focus();
   inp.select();
@@ -2211,6 +2210,7 @@ function cancelInlineEdit() {
 }
 
 function normalizeFieldValue(field, value) {
+  if (field === 'descarga') return normalizeDescargaDateTime(value);
   if (TIME_FIELDS.includes(field)) return normalizeHours(value);
   if (field === 'telefone') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
@@ -2224,6 +2224,7 @@ function formatCellValue(field, value) {
   if (isDocumentNumberField(field) && value !== '') return formatDocumentNumber(value, field);
   if (field === 'vlr_pedagio' && value !== '') return formatMoney(value);
   if (field === 'peso' && value !== '') return formatPeso(value);
+  if (field === 'descarga' && value !== '') return formatDescargaDateTime(value);
   if (TIME_FIELDS.includes(field) && value !== '') return normalizeHours(value);
   if (field === 'telefone' && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
@@ -2232,6 +2233,7 @@ function formatCellValue(field, value) {
 
 function inputPlaceholder(field) {
   if (field === 'telefone') return '(00) 00000-0000 / (00) 00000-0000';
+  if (field === 'descarga') return '00:00 00/00/0000';
   if (TIME_FIELDS.includes(field)) return '00:00';
   if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';
   return '';
@@ -2317,7 +2319,9 @@ function openModal(viagem = null) {
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
     if (!el) return;
-    el.value = viagem ? (f === 'tipo' ? normalizeTipo(viagem[f]) : (viagem[f] || '')) : (f === 'secao' ? 'agenciando' : '');
+    el.value = viagem
+      ? (f === 'tipo' ? normalizeTipo(viagem[f]) : f === 'descarga' ? descargaToInputValue(viagem[f]) : (viagem[f] || ''))
+      : (f === 'secao' ? 'agenciando' : '');
   });
   const usuarioInput = document.getElementById('f-usuario');
   if (usuarioInput && !viagem) usuarioInput.value = '';
@@ -2459,7 +2463,7 @@ async function saveViagem() {
     kanguru: v('f-kanguru'),
     pamcard: v('f-pamcard'),
     status: v('f-status'),
-    descarga: normalizeHours(v('f-descarga')),
+    descarga: normalizeDescargaDateTime(v('f-descarga')),
     agendamento: normalizeHours(v('f-agendamento')),
     telefone: normalizePhoneList(v('f-telefone')),
     frete: v('f-frete'),
@@ -2785,6 +2789,42 @@ function normalizeHours(value) {
   const hh = digits.slice(0, -2).padStart(2, '0').slice(-2);
   const mm = digits.slice(-2).padStart(2, '0');
   return `${hh}:${mm}`;
+}
+
+function normalizeDescargaDateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (isoMatch) return `${isoMatch[4]}:${isoMatch[5]} ${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+  const brMatch = raw.match(/^(\d{1,2}):(\d{2})\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+  if (brMatch) {
+    const hour = brMatch[1].padStart(2, '0').slice(-2);
+    const minute = brMatch[2].padStart(2, '0').slice(0, 2);
+    const day = brMatch[3].padStart(2, '0').slice(-2);
+    const month = brMatch[4].padStart(2, '0').slice(-2);
+    const year = brMatch[5].length === 2 ? `20${brMatch[5]}` : brMatch[5];
+    return `${hour}:${minute} ${day}/${month}/${year}`;
+  }
+
+  return raw;
+}
+
+function formatDescargaDateTime(value) {
+  return normalizeDescargaDateTime(value);
+}
+
+function descargaToInputValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
+
+  const brMatch = normalizeDescargaDateTime(raw).match(/^(\d{2}):(\d{2})\s+(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!brMatch) return '';
+  return `${brMatch[5]}-${brMatch[4]}-${brMatch[3]}T${brMatch[1]}:${brMatch[2]}`;
 }
 
 function maskHourInput(value) {

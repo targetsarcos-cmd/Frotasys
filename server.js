@@ -61,7 +61,7 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'status', header: 'STATUS', width: 14 },
   { key: 'usuario', header: 'USUÁRIO', width: 14 },
   { key: 'agendamento', header: 'AGENDAMENTO', width: 14 },
-  { key: 'descarga', header: 'DESCARGA', width: 12 },
+  { key: 'descarga', header: 'DESCARGA', width: 18 },
   { key: 'telefone', header: 'TELEFONE', width: 18 },
   { key: 'frete', header: 'FRETE', width: 18 },
   { key: 'origem', header: 'ORIGEM', width: 14 },
@@ -446,6 +446,26 @@ function normalizeHours(value) {
   return `${hh}:${mm}`;
 }
 
+function normalizeDescargaDateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (isoMatch) return `${isoMatch[4]}:${isoMatch[5]} ${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+  const brMatch = raw.match(/^(\d{1,2}):(\d{2})\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
+  if (brMatch) {
+    const hour = brMatch[1].padStart(2, '0').slice(-2);
+    const minute = brMatch[2].padStart(2, '0').slice(0, 2);
+    const day = brMatch[3].padStart(2, '0').slice(-2);
+    const month = brMatch[4].padStart(2, '0').slice(-2);
+    const year = brMatch[5].length === 2 ? `20${brMatch[5]}` : brMatch[5];
+    return `${hour}:${minute} ${day}/${month}/${year}`;
+  }
+
+  return raw;
+}
+
 function isIsoDate(value) {
   const text = String(value || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
@@ -468,7 +488,8 @@ function exportCellValue(viagem, key) {
   if (key === 'tipo') return normalizeTipo(viagem[key]);
   if (key === 'peso') return formatPeso(viagem[key]);
   if (key === 'vlr_pedagio') return formatMoney(viagem[key]);
-  if (['descarga', 'agendamento', 'horas'].includes(key)) return normalizeHours(viagem[key]);
+  if (key === 'descarga') return normalizeDescargaDateTime(viagem[key]);
+  if (['agendamento', 'horas'].includes(key)) return normalizeHours(viagem[key]);
   if (key === 'data') return formatDateBR(viagem[key]);
   if (key === 'usuario' && isViagemBloqueada(viagem)) return '';
   return String(viagem[key] ?? '').trim();
@@ -1010,7 +1031,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const patch = { ...req.body };
     normalizeViagemDocumentNumbers(patch);
     delete patch.usuario;
-    if (patch.descarga !== undefined) patch.descarga = normalizeHours(patch.descarga);
+    if (patch.descarga !== undefined) patch.descarga = normalizeDescargaDateTime(patch.descarga);
     if (isViagemBloqueada(current)) {
       const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
       if (invalidFields.length) {
