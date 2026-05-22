@@ -398,8 +398,6 @@ function initUI() {
     btn.classList.add('active');
     renderAll();
   });
-  initTableScrollButtons();
-
   document.addEventListener('click', e => {
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
@@ -1480,22 +1478,46 @@ function updateTableScrollControls(secao) {
   }
 }
 
-function initTableScrollButtons() {
-  document.querySelectorAll('[data-table-scroll-jump]').forEach(button => {
-    button.addEventListener('click', event => {
-      event.preventDefault();
-      scrollTableToEdge(button.dataset.tableScrollJump, button.dataset.scrollDirection);
-    });
-  });
+function scrollTableToEdge(secao, direction) {
+  const table = document.getElementById(`table-${secao}`);
+  const wrapper = table?.closest('.table-wrapper');
+  const scrollArea = table?.closest('.table-scroll-area');
+  const scrollMain = table?.closest('.table-scroll-main');
+  const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
+  if (!table || !wrapper) return;
+
+  updateTableScrollControls(secao);
+
+  const maxLeft = Math.max(
+    getMaxScrollLeft(scrollArea),
+    getMaxScrollLeft(scrollMain),
+    getMaxScrollLeft(wrapper),
+    getMaxScrollLeft(topScroll),
+    getMaxScrollLeft(document.scrollingElement),
+    Math.max(0, table.scrollWidth - (scrollArea?.clientWidth || wrapper.clientWidth))
+  );
+  const left = direction === 'right' ? maxLeft : 0;
+  setTableScrollLeft(secao, left);
 }
 
-function scrollTableToEdge(secao, direction) {
-  const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
-  if (!scrollArea) return;
-  scrollArea.scrollTo({
-    left: direction === 'right' ? scrollArea.scrollWidth : 0,
-    behavior: 'smooth'
-  });
+function getMaxScrollLeft(element) {
+  if (!element) return 0;
+  return Math.max(0, element.scrollWidth - element.clientWidth);
+}
+
+function setTableScrollLeft(secao, left) {
+  const table = document.getElementById(`table-${secao}`);
+  const scrollArea = table?.closest('.table-scroll-area');
+  const scrollMain = table?.closest('.table-scroll-main');
+  const wrapper = table?.closest('.table-wrapper');
+  const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
+  tableScrollSyncing[secao] = true;
+  if (scrollArea) scrollArea.scrollLeft = left;
+  if (scrollMain) scrollMain.scrollLeft = left;
+  if (wrapper) wrapper.scrollLeft = left;
+  if (topScroll) topScroll.scrollLeft = left;
+  if (document.scrollingElement) document.scrollingElement.scrollLeft = left;
+  tableScrollSyncing[secao] = false;
 }
 
 function syncTableScrollFromTop(secao) {
@@ -1503,9 +1525,7 @@ function syncTableScrollFromTop(secao) {
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
   if (!topScroll || !scrollArea) return;
-  tableScrollSyncing[secao] = true;
-  scrollArea.scrollLeft = topScroll.scrollLeft;
-  tableScrollSyncing[secao] = false;
+  setTableScrollLeft(secao, topScroll.scrollLeft);
 }
 
 function syncTableScrollFromBottom(secao) {
@@ -1513,9 +1533,7 @@ function syncTableScrollFromBottom(secao) {
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
   if (!topScroll || !scrollArea) return;
-  tableScrollSyncing[secao] = true;
-  topScroll.scrollLeft = scrollArea.scrollLeft;
-  tableScrollSyncing[secao] = false;
+  setTableScrollLeft(secao, scrollArea.scrollLeft);
 }
 
 function updateStickyColumnWidths(table) {

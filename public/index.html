@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-scroll-sync">
+<link rel="stylesheet" href="css/style.css?v=20260522-scroll-fix3">
 </head>
 <body>
 
@@ -51,7 +51,7 @@
       </div>
     </div>
     <div class="table-wrapper" id="table-faturado-wrap">
-      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="arcos" data-scroll-direction="left" aria-label="Ir para o início da tabela">‹</button>
+      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="arcos" data-scroll-direction="left" onclick="scrollTableToEdge('arcos','left')" aria-label="Ir para o início da tabela">‹</button>
       <div class="table-scroll-main">
         <div class="table-scroll-top" data-table-scroll-top="arcos" onscroll="syncTableScrollFromTop('arcos')"><div></div></div>
         <div class="table-scroll-area">
@@ -91,7 +91,7 @@
         </table>
         </div>
       </div>
-      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="arcos" data-scroll-direction="right" aria-label="Ir para o fim da tabela">›</button>
+      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="arcos" data-scroll-direction="right" onclick="scrollTableToEdge('arcos','right')" aria-label="Ir para o fim da tabela">›</button>
     </div>
   </section>
 
@@ -110,7 +110,7 @@
       </div>
     </div>
     <div class="table-wrapper" id="table-agenciado-wrap">
-      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="agenciando" data-scroll-direction="left" aria-label="Ir para o início da tabela">‹</button>
+      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="agenciando" data-scroll-direction="left" onclick="scrollTableToEdge('agenciando','left')" aria-label="Ir para o início da tabela">‹</button>
       <div class="table-scroll-main">
         <div class="table-scroll-top" data-table-scroll-top="agenciando" onscroll="syncTableScrollFromTop('agenciando')"><div></div></div>
         <div class="table-scroll-area">
@@ -150,7 +150,7 @@
         </table>
         </div>
       </div>
-      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="agenciando" data-scroll-direction="right" aria-label="Ir para o fim da tabela">›</button>
+      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="agenciando" data-scroll-direction="right" onclick="scrollTableToEdge('agenciando','right')" aria-label="Ir para o fim da tabela">›</button>
     </div>
   </section>
 </main>
@@ -584,6 +584,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260522-scroll-sync"></script>
+<script src="js/app.js?v=20260522-scroll-fix3"></script>
 </body>
 </html>
