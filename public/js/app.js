@@ -348,6 +348,7 @@ function initUI() {
   document.getElementById('reminder-text').addEventListener('keydown', handleReminderKeydown);
   document.getElementById('btn-undo-last')?.addEventListener('click', undoLastAction);
   document.getElementById('header-search-form').addEventListener('submit', submitHeaderSearch);
+  document.getElementById('btn-advanced-search').addEventListener('click', openAdvancedSearchModal);
 
   document.getElementById('btn-logout').addEventListener('click', () => FrotasysAuth.signOut());
   document.getElementById('btn-users-admin').addEventListener('click', openUsersModal);
@@ -377,13 +378,8 @@ function initUI() {
   document.getElementById('waitlist-body-rows').addEventListener('keydown', handleListaEsperaKeydown);
   document.getElementById('search-modal-close').addEventListener('click', closeSearchModal);
   document.getElementById('search-btn-close').addEventListener('click', closeSearchModal);
-  document.getElementById('search-btn')?.addEventListener('click', () => searchCarregamento());
-  document.getElementById('search-cte')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') searchCarregamento();
-  });
-  document.getElementById('search-nota')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') searchCarregamento();
-  });
+  document.getElementById('advanced-search-form').addEventListener('submit', submitAdvancedSearch);
+  document.getElementById('search-clear').addEventListener('click', clearAdvancedSearch);
   document.getElementById('search-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('search-modal-overlay')) closeSearchModal();
   });
@@ -785,12 +781,50 @@ async function submitHeaderSearch(event) {
   if (input) input.value = '';
 }
 
+function openAdvancedSearchModal() {
+  openSearchModal();
+  document.getElementById('search-dt')?.focus();
+}
+
 function openSearchModal() {
   document.getElementById('search-modal-overlay').classList.remove('hidden');
 }
 
 function closeSearchModal() {
   document.getElementById('search-modal-overlay').classList.add('hidden');
+}
+
+async function submitAdvancedSearch(event) {
+  event?.preventDefault();
+  await searchCarregamento('', collectAdvancedSearchFilters());
+}
+
+function collectAdvancedSearchFilters() {
+  return {
+    dt: v('search-dt'),
+    nota: v('search-nota'),
+    contrato: v('search-contrato'),
+    cte: v('search-cte'),
+    nome: v('search-nome'),
+    placa: v('search-placa'),
+    dataInicio: v('search-data-inicio'),
+    dataFim: v('search-data-fim')
+  };
+}
+
+function hasSearchFilters(filters = {}) {
+  return Object.values(filters).some(value => String(value || '').trim());
+}
+
+function clearAdvancedSearch() {
+  ['search-dt', 'search-nota', 'search-contrato', 'search-cte', 'search-nome', 'search-placa', 'search-data-inicio', 'search-data-fim']
+    .forEach(id => {
+      const input = document.getElementById(id);
+      if (input) input.value = '';
+    });
+  document.getElementById('search-status').textContent = '';
+  document.getElementById('search-results').innerHTML = '';
+  document.getElementById('search-dt')?.focus();
 }
 
 async function openFreteConsultModal() {
@@ -1377,14 +1411,12 @@ function closeMetaGoalDialog() {
   showNextMetaGoalDialog();
 }
 
-async function searchCarregamento(termOverride = '') {
+async function searchCarregamento(termOverride = '', filters = {}) {
   const term = String(termOverride || v('header-search-input')).trim();
-  const cteTerm = v('search-cte');
-  const notaTerm = v('search-nota');
   const status = document.getElementById('search-status');
   const results = document.getElementById('search-results');
-  if (!term && !cteTerm && !notaTerm) {
-    status.textContent = 'Informe um CT-E ou uma NOTA para buscar.';
+  if (!term && !hasSearchFilters(filters)) {
+    status.textContent = 'Informe ao menos um filtro para buscar.';
     results.innerHTML = '';
     return;
   }
@@ -1397,14 +1429,14 @@ async function searchCarregamento(termOverride = '') {
   status.textContent = '';
   results.innerHTML = '';
 
-  const found = await fetchCarregamentosByNotaOrCte({ term, cte: cteTerm, nota: notaTerm });
+  const found = await fetchCarregamentosSearch({ term, ...filters });
   if (btn) {
     btn.textContent = 'Buscar';
     btn.disabled = false;
   }
 
   if (!found || found.length === 0) {
-    status.textContent = 'Nenhum carregamento encontrado para esse CT-E ou NOTA.';
+    status.textContent = 'Nenhum carregamento encontrado para essa busca.';
     return;
   }
 
@@ -1412,14 +1444,35 @@ async function searchCarregamento(termOverride = '') {
   results.innerHTML = found.map(renderSearchResult).join('');
 }
 
-async function fetchCarregamentosByNotaOrCte({ term = '', cte = '', nota = '' }) {
+async function fetchCarregamentosSearch(filters = {}) {
+  const {
+    term = '',
+    dt = '',
+    nota = '',
+    contrato = '',
+    cte = '',
+    nome = '',
+    placa = '',
+    dataInicio = '',
+    dataFim = ''
+  } = filters;
   const normalizedTerm = normalizeSearchTerm(term);
+  const normalizedDt = normalizeSearchTerm(dt);
   const normalizedCte = normalizeSearchTerm(cte);
   const normalizedNota = normalizeSearchTerm(nota);
+  const normalizedContrato = normalizeSearchTerm(contrato);
+  const normalizedNome = normalizeNameSearchTerm(nome);
+  const normalizedPlaca = normalizeNameSearchTerm(placa);
   const params = new URLSearchParams();
   if (term) params.set('q', term);
+  if (dt) params.set('dt', dt);
   if (cte) params.set('cte', cte);
   if (nota) params.set('nota', nota);
+  if (contrato) params.set('contrato', contrato);
+  if (nome) params.set('nome', nome);
+  if (placa) params.set('placa', placa);
+  if (dataInicio) params.set('dataInicio', dataInicio);
+  if (dataFim) params.set('dataFim', dataFim);
   const searchUrl = `/api/viagens/search?${params.toString()}`;
 
   try {
@@ -1433,11 +1486,21 @@ async function fetchCarregamentosByNotaOrCte({ term = '', cte = '', nota = '' })
   if (!Array.isArray(allViagens)) return [];
   return allViagens
     .filter(viagem => {
+      if (dataInicio && String(viagem.data || '') < dataInicio) return false;
+      if (dataFim && String(viagem.data || '') > dataFim) return false;
+      const dtValue = normalizeSearchTerm(viagem.dt);
       const nota = normalizeSearchTerm(viagem.nota);
+      const contratoValue = normalizeSearchTerm(viagem.contrato);
       const cte = normalizeSearchTerm(viagem.cte);
+      const nomeValue = normalizeNameSearchTerm(viagem.nome);
+      const placaValue = normalizeNameSearchTerm(viagem.placa);
       if (normalizedTerm && nota !== normalizedTerm && cte !== normalizedTerm) return false;
+      if (normalizedDt && dtValue !== normalizedDt) return false;
       if (normalizedCte && cte !== normalizedCte) return false;
       if (normalizedNota && nota !== normalizedNota) return false;
+      if (normalizedContrato && contratoValue !== normalizedContrato) return false;
+      if (normalizedNome && !nomeValue.includes(normalizedNome)) return false;
+      if (normalizedPlaca && !placaValue.includes(normalizedPlaca)) return false;
       return true;
     })
     .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
@@ -1451,6 +1514,14 @@ function normalizeSearchTerm(value) {
     .toUpperCase();
   const digits = text.replace(/\D/g, '');
   return digits || text;
+}
+
+function normalizeNameSearchTerm(value) {
+  return String(value || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
 }
 
 function renderSearchResult(viagem) {
@@ -2245,8 +2316,8 @@ function renderOriginSummaryCard(operacao) {
         <tbody>
           <tr class="card-row-meta"><td><button type="button" class="card-row-toggle card-meta-toggle" onclick="toggleCardMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '▶' : '▼'}</span><span>META</span></button></td>${metaCells.join('')}<td>${formatKg(totals.meta)}</td></tr>
           ${metaProductRows}
-          <tr class="card-row-fat"><td><span class="row-icon">▣</span>FATURADO</td>${fatCells.join('')}<td>${formatKg(totals.fat)}</td></tr>
-          <tr class="card-row-agenc"><td><span class="row-icon">●</span>AGENCIADO</td>${agencCells.join('')}<td>${formatKg(totals.agenc)}</td></tr>
+          <tr class="card-row-fat"><td>FATURADO</td>${fatCells.join('')}<td>${formatKg(totals.fat)}</td></tr>
+          <tr class="card-row-agenc"><td>AGENCIADO</td>${agencCells.join('')}<td>${formatKg(totals.agenc)}</td></tr>
           <tr class="card-row-total"><td><button type="button" class="card-row-toggle card-total-toggle" onclick="toggleCardTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? '▶' : '▼'}</span><span>TOTAL</span></button></td>${totalCells.join('')}<td>${formatKg(totals.total)}</td></tr>
           ${totalProductRows}
           <tr class="card-row-falta"><td><span class="row-icon">⊖</span>FALTA</td>${faltaCells.join('')}<td>${formatKg(totals.falta)}</td></tr>

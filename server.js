@@ -721,6 +721,11 @@ function comparableUniqueValue(field, value) {
   return isDocumentNumberField(field) ? String(value || '').replace(/\D/g, '') : normalizeUniqueValue(value);
 }
 
+function comparableSearchValue(field, value) {
+  if (isDocumentNumberField(field) || field === 'dt') return String(value || '').replace(/\D/g, '') || normalizeUniqueValue(value);
+  return normalizeUniqueValue(value);
+}
+
 function isHexColor(color) {
   return /^#[0-9a-f]{6}$/i.test(String(color || ''));
 }
@@ -1071,18 +1076,36 @@ app.get('/api/viagens', async (req, res) => {
 
 app.get('/api/viagens/search', async (req, res) => {
   try {
-    const term = String(req.query.q || '').replace(/\D/g, '') || normalizeUniqueValue(req.query.q);
-    const notaTerm = comparableUniqueValue('nota', req.query.nota);
-    const cteTerm = comparableUniqueValue('cte', req.query.cte);
-    if (!term && !notaTerm && !cteTerm) return res.json([]);
+    const term = comparableSearchValue('cte', req.query.q);
+    const dtTerm = comparableSearchValue('dt', req.query.dt);
+    const notaTerm = comparableSearchValue('nota', req.query.nota);
+    const contratoTerm = comparableSearchValue('contrato', req.query.contrato);
+    const cteTerm = comparableSearchValue('cte', req.query.cte);
+    const nomeTerm = comparableSearchValue('nome', req.query.nome);
+    const placaTerm = comparableSearchValue('placa', req.query.placa);
+    const dataInicio = String(req.query.dataInicio || '').trim();
+    const dataFim = String(req.query.dataFim || '').trim();
+    if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !dataInicio && !dataFim) return res.json([]);
 
     const docs = await selectDocs(TABLES.viagens);
     const matches = docs
       .filter(doc => {
-        const nota = comparableUniqueValue('nota', doc.nota);
-        const cte = comparableUniqueValue('cte', doc.cte);
+        const data = String(doc.data || '').trim();
+        if (dataInicio && data < dataInicio) return false;
+        if (dataFim && data > dataFim) return false;
+
+        const dt = comparableSearchValue('dt', doc.dt);
+        const nota = comparableSearchValue('nota', doc.nota);
+        const contrato = comparableSearchValue('contrato', doc.contrato);
+        const cte = comparableSearchValue('cte', doc.cte);
+        const nome = comparableSearchValue('nome', doc.nome);
+        const placa = comparableSearchValue('placa', doc.placa);
+        if (dtTerm && dt !== dtTerm) return false;
         if (notaTerm && nota !== notaTerm) return false;
+        if (contratoTerm && contrato !== contratoTerm) return false;
         if (cteTerm && cte !== cteTerm) return false;
+        if (nomeTerm && !nome.includes(nomeTerm)) return false;
+        if (placaTerm && !placa.includes(placaTerm)) return false;
         if (term) return nota === term || cte === term;
         return true;
       })

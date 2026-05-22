@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-resumo-fontes">
+<link rel="stylesheet" href="css/style.css?v=20260522-busca-avancada">
 </head>
 <body>
 
@@ -23,6 +23,7 @@
 
   <form class="header-search" id="header-search-form" role="search" autocomplete="off">
     <input type="search" id="header-search-input" placeholder="Digite o CT-E ou Nota" aria-label="Digite o CT-E ou Nota">
+    <button type="button" id="btn-advanced-search" class="header-search-advanced">Avançada</button>
   </form>
 
   <div class="header-actions">
@@ -376,10 +377,48 @@
 <div id="search-modal-overlay" class="modal-overlay hidden">
   <div class="modal search-modal">
     <div class="modal-header">
-      <span>Resultado da busca</span>
+      <span>Busca avançada</span>
       <button class="modal-close" id="search-modal-close" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
+      <form class="advanced-search-form" id="advanced-search-form" autocomplete="off">
+        <div class="form-group">
+          <label>DT</label>
+          <input type="text" id="search-dt" placeholder="DT">
+        </div>
+        <div class="form-group">
+          <label>NOTA</label>
+          <input type="text" id="search-nota" placeholder="Nota">
+        </div>
+        <div class="form-group">
+          <label>CONTRATO</label>
+          <input type="text" id="search-contrato" placeholder="Contrato">
+        </div>
+        <div class="form-group">
+          <label>CT-E</label>
+          <input type="text" id="search-cte" placeholder="CT-E">
+        </div>
+        <div class="form-group">
+          <label>NOME</label>
+          <input type="text" id="search-nome" placeholder="Nome">
+        </div>
+        <div class="form-group">
+          <label>PLACA</label>
+          <input type="text" id="search-placa" placeholder="Placa">
+        </div>
+        <div class="form-group">
+          <label>INÍCIO</label>
+          <input type="date" id="search-data-inicio">
+        </div>
+        <div class="form-group">
+          <label>FIM</label>
+          <input type="date" id="search-data-fim">
+        </div>
+        <div class="advanced-search-actions">
+          <button type="submit" class="btn-save" id="search-btn">Buscar</button>
+          <button type="button" class="btn-cancel" id="search-clear">Limpar</button>
+        </div>
+      </form>
       <div class="search-status" id="search-status"></div>
       <div class="search-results" id="search-results"></div>
     </div>
@@ -597,6 +636,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260522-header-busca-lembrete"></script>
+<script src="js/app.js?v=20260522-busca-avancada"></script>
 </body>
 </html>
