@@ -62,6 +62,7 @@
             <th>PAMCARD</th>
             <th>STATUS</th>
             <th>USUÁRIO</th>
+            <th>DESCARGA</th>
             <th>AGENDAMENTO</th>
             <th>TELEFONE</th>
             <th>EVENTO</th>
@@ -113,6 +114,7 @@
             <th>PAMCARD</th>
             <th>STATUS</th>
             <th>USUÁRIO</th>
+            <th>DESCARGA</th>
             <th>AGENDAMENTO</th>
             <th>TELEFONE</th>
             <th>EVENTO</th>
@@ -222,6 +224,10 @@
         <div class="form-group hidden-on-new">
           <label>USUÁRIO</label>
           <input type="text" id="f-usuario" placeholder="Atualizado automaticamente pelo status" readonly>
+        </div>
+        <div class="form-group">
+          <label>DESCARGA</label>
+          <input type="text" id="f-descarga" placeholder="00:00">
         </div>
         <div class="form-group">
           <label>AGENDAMENTO</label>
@@ -461,6 +467,24 @@
       <button class="modal-close" id="settings-modal-close" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
+      <section class="settings-section settings-export-section">
+        <div class="settings-section-head">
+          <strong>EXPORTAR VIAGENS</strong>
+          <span>Excel por período</span>
+        </div>
+        <div class="settings-export-form">
+          <label>
+            <span>DATA INÍCIO</span>
+            <input type="date" id="export-start-date">
+          </label>
+          <label>
+            <span>DATA FIM</span>
+            <input type="date" id="export-end-date">
+          </label>
+          <button type="button" class="settings-export-btn" id="settings-export-btn">Exportar Excel</button>
+        </div>
+        <div class="settings-export-status" id="settings-export-status"></div>
+      </section>
       <div class="settings-operations" id="settings-operations"></div>
       <div class="settings-grid" id="settings-grid"></div>
     </div>

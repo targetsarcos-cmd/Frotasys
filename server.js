@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const path = require('path');
+const ExcelJS = require('exceljs');
 const supabase = require('./supabaseClient');
 
 const app = express();
@@ -50,6 +51,28 @@ const UNIQUE_VIAGEM_FIELDS = [
 ];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
+const VIAGENS_EXPORT_COLUMNS = [
+  { key: 'placa', header: 'PLACA', width: 12 },
+  { key: 'nome', header: 'NOME', width: 20 },
+  { key: 'tipo', header: 'Tipo', width: 12 },
+  { key: 'carroceria', header: 'Carroceria', width: 16 },
+  { key: 'pamcard', header: 'PANCARD', width: 14 },
+  { key: 'status', header: 'STATUS', width: 14 },
+  { key: 'usuario', header: 'USUÁRIO', width: 14 },
+  { key: 'descarga', header: 'DESCARGA', width: 12 },
+  { key: 'agendamento', header: 'AGENDAMENTO', width: 14 },
+  { key: 'telefone', header: 'TELEFONE', width: 18 },
+  { key: 'frete', header: 'FRETE', width: 18 },
+  { key: 'origem', header: 'ORIGEM', width: 14 },
+  { key: 'destino', header: 'DESTINO', width: 14 },
+  { key: 'peso', header: 'PESO', width: 10 },
+  { key: 'dt', header: 'DT', width: 12 },
+  { key: 'cte', header: 'CT-E', width: 12 },
+  { key: 'nota', header: 'NOTA', width: 12 },
+  { key: 'num_pedagio', header: 'NUMERO PEDÁGIO', width: 16 },
+  { key: 'vlr_pedagio', header: 'VALOR PEDÁGIO', width: 16 },
+  { key: 'horas', header: 'HORAS', width: 10 }
+];
 
 app.use(cors());
 app.use(express.json());
@@ -362,6 +385,188 @@ function formatDocumentNumber(value, field = '') {
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function parseNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const text = String(value).toLowerCase().replace('kg', '').trim();
+  const normalized = text.includes(',')
+    ? text.replace(/\./g, '').replace(',', '.')
+    : /^(\d{1,3}\.)+\d{3}$/.test(text)
+      ? text.replace(/\./g, '')
+      : text;
+  const parsed = parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatPeso(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const num = typeof value === 'number' ? value : parseNumber(value);
+  if (!num) return raw;
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
+function formatMoney(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const num = parseNumber(value);
+  if (!num) return raw;
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatDateBR(date) {
+  const value = String(date || '').trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+}
+
+function formatDateSheetName(date) {
+  return formatDateBR(date).replace(/\//g, '-');
+}
+
+function normalizeHours(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const cleaned = raw.toLowerCase().replace(/[h.]/g, ':').replace(/\s/g, '');
+  const parts = cleaned.split(':').filter(Boolean);
+
+  if (parts.length >= 2) {
+    const hh = parts[0].padStart(2, '0').slice(-2);
+    const mm = parts[1].padStart(2, '0').slice(0, 2);
+    return `${hh}:${mm}`;
+  }
+
+  const digits = cleaned.replace(/\D/g, '');
+  if (!digits) return raw;
+  if (digits.length <= 2) return `${digits.padStart(2, '0')}:00`;
+  const hh = digits.slice(0, -2).padStart(2, '0').slice(-2);
+  const mm = digits.slice(-2).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function isIsoDate(value) {
+  const text = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const date = new Date(`${text}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === text;
+}
+
+function datesBetween(start, end) {
+  const dates = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function exportCellValue(viagem, key) {
+  if (key === 'tipo') return normalizeTipo(viagem[key]);
+  if (key === 'peso') return formatPeso(viagem[key]);
+  if (key === 'vlr_pedagio') return formatMoney(viagem[key]);
+  if (['descarga', 'agendamento', 'horas'].includes(key)) return normalizeHours(viagem[key]);
+  if (key === 'data') return formatDateBR(viagem[key]);
+  if (key === 'usuario' && isViagemBloqueada(viagem)) return '';
+  return String(viagem[key] ?? '').trim();
+}
+
+function argb(hex) {
+  return `FF${String(hex || '#ffffff').replace('#', '').toUpperCase()}`;
+}
+
+function exportFillFor(columnKey, value) {
+  const normalized = normalizeUniqueValue(value);
+  if (columnKey === 'status' && normalized === 'CONCLUIDO') return '16803f';
+  if (columnKey === 'status' && normalized) return '2563eb';
+  if (columnKey === 'origem' && normalized) return '16803f';
+  if (columnKey === 'destino' && normalized) return '8ab4f8';
+  if (columnKey === 'tipo' && normalized === 'FROTA') return '16803f';
+  if (columnKey === 'tipo' && normalized === 'CARRETEIRO') return 'c93434';
+  if (columnKey === 'tipo' && normalized) return 'b7791f';
+  if (columnKey === 'pamcard' && normalized) return 'f4b400';
+  if (columnKey === 'frete' && normalized) return 'fff200';
+  return '';
+}
+
+function styleExportWorksheet(worksheet) {
+  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  worksheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: VIAGENS_EXPORT_COLUMNS.length }
+  };
+
+  worksheet.columns = VIAGENS_EXPORT_COLUMNS.map(column => ({
+    key: column.key,
+    width: column.width,
+    style: {
+      font: { name: 'Arial', size: 9, bold: true },
+      alignment: { vertical: 'middle', horizontal: 'center' }
+    }
+  }));
+
+  const header = worksheet.getRow(1);
+  header.height = 22;
+  header.eachCell(cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+    cell.font = { name: 'Arial', size: 9, bold: true, italic: true, underline: true, color: { argb: 'FF000000' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'thin', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } }
+    };
+  });
+
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    row.height = 18;
+    row.eachCell((cell, colNumber) => {
+      const column = VIAGENS_EXPORT_COLUMNS[colNumber - 1];
+      const fill = exportFillFor(column.key, cell.value);
+      cell.font = { name: 'Arial', size: 8, bold: true, color: { argb: fill && ['status', 'origem'].includes(column.key) ? 'FFFFFFFF' : 'FF000000' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+      if (fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(fill) } };
+    });
+  });
+}
+
+function buildViagensWorkbook(viagens, dates) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'FrotaSys';
+  workbook.created = new Date();
+
+  const grouped = viagens.reduce((acc, viagem) => {
+    const data = String(viagem.data || '').trim();
+    if (!acc[data]) acc[data] = [];
+    acc[data].push(viagem);
+    return acc;
+  }, {});
+
+  dates.forEach(date => {
+    const worksheet = workbook.addWorksheet(formatDateSheetName(date), {
+      pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    });
+    worksheet.addRow(VIAGENS_EXPORT_COLUMNS.map(column => column.header));
+
+    const rows = sortDocs(grouped[date] || [], { createdAt: 1, placa: 1, nome: 1 });
+    rows.forEach(viagem => {
+      worksheet.addRow(VIAGENS_EXPORT_COLUMNS.map(column => exportCellValue(viagem, column.key)));
+    });
+
+    styleExportWorksheet(worksheet);
+  });
+
+  return workbook;
 }
 
 function normalizeViagemDocumentNumbers(data = {}) {
@@ -724,6 +929,38 @@ app.get('/api/viagens/search', async (req, res) => {
       .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
     res.json(matches);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/viagens/export', requireAdmin, async (req, res) => {
+  try {
+    const inicio = String(req.query.inicio || req.query.start || '').trim();
+    const fim = String(req.query.fim || req.query.end || '').trim();
+
+    if (!isIsoDate(inicio) || !isIsoDate(fim)) {
+      return res.status(400).json({ error: 'Informe data inicial e data final válidas.' });
+    }
+    if (inicio > fim) {
+      return res.status(400).json({ error: 'A data inicial não pode ser maior que a data final.' });
+    }
+
+    const dates = datesBetween(inicio, fim);
+    if (dates.length > 366) {
+      return res.status(400).json({ error: 'Selecione um período de até 366 dias.' });
+    }
+
+    const docs = (await selectDocs(TABLES.viagens))
+      .filter(doc => String(doc.data || '') >= inicio && String(doc.data || '') <= fim);
+    const workbook = buildViagensWorkbook(docs, dates);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `viagens_${formatDateSheetName(inicio)}_${formatDateSheetName(fim)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(Buffer.from(buffer));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

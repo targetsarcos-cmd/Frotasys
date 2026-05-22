@@ -82,6 +82,7 @@ const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
+const TIME_FIELDS = ['descarga', 'agendamento', 'horas'];
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
   cte: 'CT-E',
@@ -146,6 +147,7 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'pamcard', label: 'PAMCARD' },
   { key: 'status', label: 'STATUS' },
   { key: 'usuario', label: 'USUÁRIO' },
+  { key: 'descarga', label: 'DESCARGA' },
   { key: 'agendamento', label: 'AGENDAMENTO' },
   { key: 'telefone', label: 'TELEFONE' },
   { key: 'frete', label: 'EVENTO' },
@@ -358,6 +360,7 @@ function initUI() {
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
   document.getElementById('settings-btn-close').addEventListener('click', closeSettingsModal);
+  document.getElementById('settings-export-btn').addEventListener('click', exportViagensExcel);
   document.getElementById('settings-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('settings-modal-overlay')) closeSettingsModal();
   });
@@ -366,6 +369,9 @@ function initUI() {
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
   document.getElementById('btn-save').addEventListener('click', saveViagem);
+  document.getElementById('f-descarga').addEventListener('input', e => {
+    e.target.value = maskHourInput(e.target.value);
+  });
   document.getElementById('f-agendamento').addEventListener('input', e => {
     e.target.value = maskHourInput(e.target.value);
   });
@@ -402,7 +408,7 @@ function initUI() {
   });
 
   document.addEventListener('contextmenu', e => {
-    const documentCell = e.target.closest('td[data-field="cte"]:not(.cell-select), td[data-field="manifesto"]:not(.cell-select), td[data-field="contrato"]:not(.cell-select), td[data-field="nota"]:not(.cell-select)');
+    const documentCell = e.target.closest('td[data-field="dt"]:not(.cell-select), td[data-field="cte"]:not(.cell-select), td[data-field="manifesto"]:not(.cell-select), td[data-field="contrato"]:not(.cell-select), td[data-field="nota"]:not(.cell-select), td[data-field="num_pedagio"]:not(.cell-select)');
     if (documentCell) {
       e.stopPropagation();
       showContratoMenu(e, documentCell);
@@ -1215,6 +1221,7 @@ const FIELDS = [
   { key: 'pamcard', label: 'PAMCARD', select: true },
   { key: 'status', label: 'STATUS', select: true },
   { key: 'usuario', label: 'USUÁRIO' },
+  { key: 'descarga', label: 'DESCARGA', quick: true, time: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
   { key: 'frete', label: 'EVENTO', quick: true },
@@ -1469,6 +1476,7 @@ function setSelectOptions(select, options) {
 
 function openSettingsModal() {
   if (!isAdmin()) return;
+  resetExportViagensForm();
   renderSettingsModal();
   document.getElementById('settings-modal-overlay').classList.remove('hidden');
 }
@@ -1505,6 +1513,97 @@ function renderSettingsModal() {
       </div>
     </section>`;
   }).join('');
+}
+
+function resetExportViagensForm() {
+  const start = document.getElementById('export-start-date');
+  const end = document.getElementById('export-end-date');
+  const status = document.getElementById('settings-export-status');
+  if (start && !start.value) start.value = state.currentDate;
+  if (end && !end.value) end.value = state.currentDate;
+  if (status) {
+    status.textContent = '';
+    status.className = 'settings-export-status';
+  }
+}
+
+async function exportViagensExcel() {
+  const start = document.getElementById('export-start-date')?.value;
+  const end = document.getElementById('export-end-date')?.value;
+  const btn = document.getElementById('settings-export-btn');
+
+  if (!start || !end) {
+    setExportStatus('Selecione a data inicial e a data final.', true);
+    return;
+  }
+  if (start > end) {
+    setExportStatus('A data inicial não pode ser maior que a data final.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Exportando...';
+  setExportStatus('Gerando arquivo Excel...', false);
+
+  try {
+    const token = await FrotasysAuth.getAccessToken();
+    const params = new URLSearchParams({ inicio: start, fim: end });
+    const res = await fetch(`/api/viagens/export?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+
+    if (!res.ok) {
+      const message = await responseErrorMessage(res);
+      setExportStatus(message || 'Não foi possível exportar as viagens.', true);
+      return;
+    }
+
+    const blob = await res.blob();
+    const filename = filenameFromDisposition(res.headers.get('Content-Disposition')) || `viagens_${formatDateForFilename(start)}_${formatDateForFilename(end)}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    setExportStatus('Arquivo Excel gerado.', false, true);
+  } catch (e) {
+    console.error('Erro ao exportar viagens:', e);
+    setExportStatus('Erro ao exportar as viagens.', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Exportar Excel';
+  }
+}
+
+async function responseErrorMessage(res) {
+  const text = await res.text();
+  if (!text) return '';
+  try {
+    const data = JSON.parse(text);
+    return data.error || text;
+  } catch (e) {
+    return text;
+  }
+}
+
+function setExportStatus(message, isError = false, isSuccess = false) {
+  const status = document.getElementById('settings-export-status');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `settings-export-status ${isError ? 'is-error' : ''} ${isSuccess ? 'is-success' : ''}`.trim();
+}
+
+function filenameFromDisposition(disposition) {
+  const match = String(disposition || '').match(/filename="?([^"]+)"?/i);
+  return match ? match[1] : '';
+}
+
+function formatDateForFilename(date) {
+  return formatDateBR(date).replace(/\//g, '-');
 }
 
 function renderSettingsOperations() {
@@ -2035,7 +2134,7 @@ function startInlineEdit(td) {
   if (field === 'telefone') {
     inp.oninput = () => { inp.value = maskPhoneListInput(inp.value); };
   }
-  if (field === 'horas' || field === 'agendamento') {
+  if (TIME_FIELDS.includes(field)) {
     inp.oninput = () => { inp.value = maskHourInput(inp.value); };
   }
   if (isDocumentNumberField(field)) {
@@ -2105,7 +2204,7 @@ function cancelInlineEdit() {
 }
 
 function normalizeFieldValue(field, value) {
-  if (field === 'horas' || field === 'agendamento') return normalizeHours(value);
+  if (TIME_FIELDS.includes(field)) return normalizeHours(value);
   if (field === 'telefone') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
@@ -2118,7 +2217,7 @@ function formatCellValue(field, value) {
   if (isDocumentNumberField(field) && value !== '') return formatDocumentNumber(value, field);
   if (field === 'vlr_pedagio' && value !== '') return formatMoney(value);
   if (field === 'peso' && value !== '') return formatPeso(value);
-  if ((field === 'horas' || field === 'agendamento') && value !== '') return normalizeHours(value);
+  if (TIME_FIELDS.includes(field) && value !== '') return normalizeHours(value);
   if (field === 'telefone' && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
   return value || '';
@@ -2126,7 +2225,7 @@ function formatCellValue(field, value) {
 
 function inputPlaceholder(field) {
   if (field === 'telefone') return '(00) 00000-0000 / (00) 00000-0000';
-  if (field === 'horas' || field === 'agendamento') return '00:00';
+  if (TIME_FIELDS.includes(field)) return '00:00';
   if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';
   return '';
 }
@@ -2207,7 +2306,7 @@ function openModal(viagem = null) {
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
   document.querySelectorAll('#modal-overlay .hidden-on-new').forEach(el => el.classList.toggle('is-hidden', !viagem));
   document.querySelectorAll('#modal-overlay .bulk-only').forEach(el => el.classList.toggle('is-hidden', !!viagem));
-  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','telefone','frete','origem','destino','peso','obs'];
+  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','descarga','agendamento','telefone','frete','origem','destino','peso','obs'];
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
     if (!el) return;
@@ -2353,6 +2452,7 @@ async function saveViagem() {
     kanguru: v('f-kanguru'),
     pamcard: v('f-pamcard'),
     status: v('f-status'),
+    descarga: normalizeHours(v('f-descarga')),
     agendamento: normalizeHours(v('f-agendamento')),
     telefone: normalizePhoneList(v('f-telefone')),
     frete: v('f-frete'),
