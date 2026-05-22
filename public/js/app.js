@@ -1435,9 +1435,9 @@ async function fetchCarregamentosByNotaOrCte({ term = '', cte = '', nota = '' })
     .filter(viagem => {
       const nota = normalizeSearchTerm(viagem.nota);
       const cte = normalizeSearchTerm(viagem.cte);
-      if (normalizedTerm && !nota.includes(normalizedTerm) && !cte.includes(normalizedTerm)) return false;
-      if (normalizedCte && !cte.includes(normalizedCte)) return false;
-      if (normalizedNota && !nota.includes(normalizedNota)) return false;
+      if (normalizedTerm && nota !== normalizedTerm && cte !== normalizedTerm) return false;
+      if (normalizedCte && cte !== normalizedCte) return false;
+      if (normalizedNota && nota !== normalizedNota) return false;
       return true;
     })
     .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));

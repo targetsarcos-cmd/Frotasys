@@ -1081,9 +1081,9 @@ app.get('/api/viagens/search', async (req, res) => {
       .filter(doc => {
         const nota = comparableUniqueValue('nota', doc.nota);
         const cte = comparableUniqueValue('cte', doc.cte);
-        if (notaTerm && !nota.includes(notaTerm)) return false;
-        if (cteTerm && !cte.includes(cteTerm)) return false;
-        if (term) return nota.includes(term) || cte.includes(term);
+        if (notaTerm && nota !== notaTerm) return false;
+        if (cteTerm && cte !== cteTerm) return false;
+        if (term) return nota === term || cte === term;
         return true;
       })
       .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
