@@ -2733,6 +2733,9 @@ async function renderSummaryPanelBlob(panel) {
   const stage = createSummaryCaptureStage(panel);
   try {
     return await renderSummaryCaptureBlob(stage);
+  } catch (error) {
+    console.warn('html2canvas falhou. Gerando resumo por canvas:', error);
+    return renderSummaryCanvasBlob(panel);
   } finally {
     stage.remove();
   }
@@ -2867,6 +2870,183 @@ async function renderSummaryCaptureBlob(stage) {
   return blob;
 }
 
+async function renderSummaryCanvasBlob(panel) {
+  if (document.fonts?.ready) await document.fonts.ready;
+
+  const cards = [...panel.querySelectorAll('.summary-card')];
+  if (!cards.length) throw new Error('Resumo vazio para gerar imagem.');
+
+  const data = cards.map(readSummaryCardData);
+  const width = 1280;
+  const margin = 24;
+  const gap = 14;
+  const cardWidth = width - margin * 2;
+  const heights = data.map(card => 96 + (card.rows.length + 1) * 30 + 92);
+  const height = margin + 34 + 16 + heights.reduce((sum, value) => sum + value, 0) + gap * (data.length - 1) + margin;
+  const ratio = Math.min(2, window.devicePixelRatio || 1.5);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Não foi possível criar a imagem do resumo.');
+  ctx.scale(ratio, ratio);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = '#172033';
+  ctx.font = '800 24px Inter, Arial, sans-serif';
+  ctx.fillText('Resumo Consolidado', margin, margin + 24);
+
+  let y = margin + 50;
+  data.forEach((card, index) => {
+    drawSummaryCanvasCard(ctx, card, margin, y, cardWidth, heights[index]);
+    y += heights[index] + gap;
+  });
+
+  const blob = await canvasToPngBlob(canvas);
+  if (!blob) throw new Error('Falha ao gerar imagem do resumo.');
+  return blob;
+}
+
+function readSummaryCardData(card) {
+  return {
+    title: cleanCanvasText(card.querySelector('.summary-operation strong')?.textContent || 'Operação'),
+    accent: summaryCaptureAccent(card),
+    percent: cleanCanvasText(card.querySelector('.summary-percent span')?.textContent || ''),
+    headers: [...card.querySelectorAll('thead th')].map(cell => cleanCanvasText(cell.textContent)),
+    rows: [...card.querySelectorAll('tbody tr')]
+      .filter(row => !row.classList.contains('collapsed'))
+      .map(row => ({
+        className: row.className || '',
+        cells: [...row.cells].map(cell => cleanCanvasText(cell.textContent))
+      })),
+    kpis: [...card.querySelectorAll('.summary-kpi')].map(kpi => ({
+      label: cleanCanvasText(kpi.querySelector('span')?.textContent || ''),
+      value: cleanCanvasText(kpi.querySelector('strong')?.textContent || ''),
+      className: kpi.className || ''
+    }))
+  };
+}
+
+function cleanCanvasText(value) {
+  return String(value || '')
+    .replace(/[▶▼⊖]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function drawSummaryCanvasCard(ctx, card, x, y, width, height) {
+  const tableTop = y + 18;
+  const tableLeft = x + 14;
+  const tableWidth = width - 28;
+  const rowHeight = 30;
+  const columns = Math.max(card.headers.length, ...card.rows.map(row => row.cells.length));
+  const firstCol = 170;
+  const otherCol = columns > 1 ? (tableWidth - firstCol) / (columns - 1) : tableWidth;
+
+  drawRoundRect(ctx, x, y, width, height, 8, '#ffffff', '#d8e0ec');
+  ctx.fillStyle = card.accent;
+  ctx.fillRect(x, y, 5, height);
+
+  drawTableRow(ctx, card.headers, tableLeft, tableTop, firstCol, otherCol, rowHeight, '#f8fafc', '#34465e', true);
+  card.rows.forEach((row, index) => {
+    const tone = row.className.includes('meta') ? '#f0fdf4'
+      : row.className.includes('total') ? '#f8fbff'
+        : row.className.includes('falta') ? '#fff1f2'
+          : '#ffffff';
+    const color = row.className.includes('falta') ? '#9f1239'
+      : row.className.includes('meta') ? '#0f8a4a'
+        : row.className.includes('total') ? '#0f3f95'
+          : '#172033';
+    drawTableRow(ctx, row.cells, tableLeft, tableTop + rowHeight * (index + 1), firstCol, otherCol, rowHeight, tone, color, false);
+  });
+
+  const footerY = tableTop + rowHeight * (card.rows.length + 1) + 16;
+  ctx.strokeStyle = '#d8e0ec';
+  ctx.beginPath();
+  ctx.moveTo(x, footerY - 8);
+  ctx.lineTo(x + width, footerY - 8);
+  ctx.stroke();
+
+  drawRoundRect(ctx, tableLeft, footerY, 44, 44, 7, card.accent, card.accent);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 22px Inter, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(card.title.charAt(0) || 'R', tableLeft + 22, footerY + 23);
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = card.accent;
+  ctx.font = '800 11px Inter, Arial, sans-serif';
+  ctx.fillText('OPERAÇÃO', tableLeft + 56, footerY + 16);
+  ctx.fillStyle = '#172033';
+  ctx.font = '900 17px Inter, Arial, sans-serif';
+  ctx.fillText(card.title, tableLeft + 56, footerY + 39);
+
+  const kpiX = tableLeft + 260;
+  const kpiW = 136;
+  card.kpis.slice(0, 5).forEach((kpi, index) => {
+    const bx = kpiX + index * kpiW;
+    drawRoundRect(ctx, bx, footerY, kpiW - 8, 48, 6, '#ffffff', '#d8e0ec');
+    ctx.fillStyle = '#34465e';
+    ctx.font = '800 10px Inter, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(kpi.label, bx + (kpiW - 8) / 2, footerY + 17);
+    ctx.fillStyle = kpi.className.includes('falta') ? '#e11d48' : kpi.className.includes('agenc') ? '#8b5cf6' : card.accent;
+    ctx.font = '900 16px IBM Plex Mono, Consolas, monospace';
+    ctx.fillText(kpi.value, bx + (kpiW - 8) / 2, footerY + 38);
+  });
+
+  ctx.textAlign = 'center';
+  drawRoundRect(ctx, x + width - 92, footerY, 62, 62, 31, '#ffffff', card.accent, 5);
+  ctx.fillStyle = '#172033';
+  ctx.font = '900 17px IBM Plex Mono, Consolas, monospace';
+  ctx.fillText(card.percent || '0%', x + width - 61, footerY + 38);
+  ctx.fillStyle = '#5c6b7f';
+  ctx.font = '800 11px Inter, Arial, sans-serif';
+  ctx.fillText('% da Meta', x + width - 61, footerY + 78);
+  ctx.textAlign = 'left';
+}
+
+function drawTableRow(ctx, cells, x, y, firstCol, otherCol, height, background, color, header) {
+  ctx.fillStyle = background;
+  ctx.fillRect(x, y, firstCol + otherCol * Math.max(0, cells.length - 1), height);
+  ctx.strokeStyle = '#d8e0ec';
+  ctx.font = header ? '900 11px Inter, Arial, sans-serif' : '800 12px IBM Plex Mono, Consolas, monospace';
+  ctx.textBaseline = 'middle';
+
+  cells.forEach((cell, index) => {
+    const cellX = x + (index === 0 ? 0 : firstCol + otherCol * (index - 1));
+    const cellW = index === 0 ? firstCol : otherCol;
+    ctx.strokeRect(cellX, y, cellW, height);
+    ctx.fillStyle = color;
+    ctx.textAlign = index === 0 ? 'left' : 'right';
+    const textX = index === 0 ? cellX + 10 : cellX + cellW - 10;
+    ctx.fillText(cell, textX, y + height / 2);
+  });
+}
+
+function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke, strokeWidth = 1) {
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, width, height, radius);
+  } else {
+    ctx.rect(x, y, width, height);
+  }
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) {
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+}
+
 function summaryClipboardErrorMessage(error) {
   if (!window.isSecureContext) {
     return 'Não foi possível copiar a imagem. Abra o Dashlog em HTTPS ou localhost para liberar a área de transferência.';
@@ -2905,10 +3085,45 @@ function createSummaryCaptureStage(panel) {
     label.textContent = button.textContent.replace(/[▶▼]/g, '').trim();
     button.replaceWith(label);
   });
+  sanitizeSummaryCaptureClone(clone);
 
   stage.appendChild(clone);
   document.body.appendChild(stage);
   return stage;
+}
+
+function sanitizeSummaryCaptureClone(clone) {
+  clone.querySelectorAll('.summary-card').forEach(card => {
+    const accent = summaryCaptureAccent(card);
+    card.style.setProperty('--card-accent', accent);
+    card.style.borderLeftColor = accent;
+    card.style.boxShadow = 'none';
+  });
+
+  clone.querySelectorAll('.summary-icon').forEach(icon => {
+    const accent = summaryCaptureAccent(icon.closest('.summary-card'));
+    icon.style.background = accent;
+    icon.style.boxShadow = 'none';
+  });
+
+  clone.querySelectorAll('.summary-percent').forEach(percent => {
+    const value = parseFloat(percent.style.getPropertyValue('--percent')) || 0;
+    const accent = summaryCaptureAccent(percent.closest('.summary-card'));
+    percent.style.background = '#ffffff';
+    percent.style.border = `5px solid ${accent}`;
+    percent.style.boxShadow = `inset 0 0 0 ${Math.max(0, Math.round((100 - value) / 10))}px rgba(244, 161, 184, .28)`;
+  });
+
+  clone.querySelectorAll('*').forEach(el => {
+    el.style.transition = 'none';
+    el.style.animation = 'none';
+  });
+}
+
+function summaryCaptureAccent(card) {
+  if (card?.classList?.contains('card-purple')) return '#8b5cf6';
+  if (card?.classList?.contains('card-green')) return '#16a34a';
+  return '#2563eb';
 }
 
 function canvasToPngBlob(canvas) {
