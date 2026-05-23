@@ -31,6 +31,7 @@ const state = {
   summaryCopyBlob: null,
   summaryCopyDataUrl: '',
   summaryCopyBlobAt: 0,
+  summaryCopyRenderPromise: null,
   userProfile: null,
   undoAction: null,
   ws: null
@@ -431,7 +432,9 @@ function initUI() {
   document.getElementById('meta-goal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('meta-goal-overlay')) closeMetaGoalDialog();
   });
-  document.getElementById('summary-copy-btn')?.addEventListener('click', copySummaryAsImage);
+  const summaryCopyBtn = document.getElementById('summary-copy-btn');
+  summaryCopyBtn?.addEventListener('pointerdown', prepareSummaryCopyImage);
+  summaryCopyBtn?.addEventListener('click', copySummaryAsImage);
 
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
@@ -2652,39 +2655,86 @@ async function copySummaryAsImage() {
   const button = document.getElementById('summary-copy-btn');
   if (!panel || !document.querySelector('#summary-cards .summary-card')) return;
 
-  if (state.summaryCopyBlob && Date.now() - state.summaryCopyBlobAt < 120000) {
-    await writePreparedSummaryCopy(button);
-    return;
-  }
+  if (!hasFreshSummaryCopyBlob()) {
+    if (!window.html2canvas) {
+      showSummaryToast('Não foi possível gerar a imagem do resumo. Atualize a página e tente novamente.', 'error');
+      return;
+    }
 
-  if (!window.html2canvas) {
-    showSummaryToast('Não foi possível gerar a imagem do resumo. Atualize a página e tente novamente.', 'error');
+    showSummaryToast('Preparando imagem do resumo...');
+    if (!state.summaryCopyRenderPromise) prepareSummaryCopyImage();
+    state.summaryCopyRenderPromise
+      ?.then(() => showSummaryToast('Imagem pronta. Clique novamente para copiar.'))
+      .catch(error => {
+        console.error('Erro ao preparar imagem do resumo:', error);
+        showSummaryToast('Não foi possível gerar a imagem do resumo.', 'error');
+      });
     return;
   }
 
   if (button) button.disabled = true;
-  showSummaryToast('Preparando imagem do resumo...');
-  const stage = createSummaryCaptureStage(panel);
-  const pngPromise = renderSummaryCaptureBlob(stage);
 
   try {
-    await writeSummaryImageToClipboard(pngPromise);
+    await copyPreparedSummaryImage(state.summaryCopyBlob);
     clearPreparedSummaryCopy();
     showSummaryToast('Resumo copiado para a área de transferência');
   } catch (error) {
-    console.warn('Não foi possível copiar resumo como imagem no primeiro clique:', error);
-    const preparedBlob = await pngPromise.catch(() => null);
-    if (preparedBlob) {
-      state.summaryCopyBlob = preparedBlob;
-      state.summaryCopyDataUrl = await blobToDataUrl(preparedBlob).catch(() => '');
+    console.error('Erro ao copiar resumo como imagem:', error);
+    showSummaryToast(summaryClipboardErrorMessage(error), 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function prepareSummaryCopyImage() {
+  const panel = document.getElementById('summary-arcos');
+  if (!panel || !document.querySelector('#summary-cards .summary-card')) return;
+  if (hasFreshSummaryCopyBlob() || state.summaryCopyRenderPromise || !window.html2canvas) return;
+  state.summaryCopyRenderPromise = renderSummaryPanelBlob(panel)
+    .then(async blob => {
+      state.summaryCopyBlob = blob;
+      state.summaryCopyDataUrl = await blobToDataUrl(blob).catch(() => '');
       state.summaryCopyBlobAt = Date.now();
-      showSummaryToast('Imagem pronta. Clique novamente no botão para copiar.', 'error');
-    } else {
-      showSummaryToast(summaryClipboardErrorMessage(error), 'error');
-    }
+      return blob;
+    })
+    .catch(error => {
+      clearPreparedSummaryCopy();
+      throw error;
+    })
+    .finally(() => {
+      state.summaryCopyRenderPromise = null;
+    });
+}
+
+async function getPreparedSummaryCopyBlob(panel) {
+  if (!window.html2canvas) {
+    throw new Error('Não foi possível gerar a imagem do resumo.');
+  }
+
+  if (hasFreshSummaryCopyBlob()) return state.summaryCopyBlob;
+
+  if (!state.summaryCopyRenderPromise) {
+    showSummaryToast('Preparando imagem do resumo...');
+    prepareSummaryCopyImage();
+  }
+
+  if (state.summaryCopyRenderPromise) {
+    return state.summaryCopyRenderPromise;
+  }
+
+  return renderSummaryPanelBlob(panel);
+}
+
+function hasFreshSummaryCopyBlob() {
+  return Boolean(state.summaryCopyBlob && Date.now() - state.summaryCopyBlobAt < 120000);
+}
+
+async function renderSummaryPanelBlob(panel) {
+  const stage = createSummaryCaptureStage(panel);
+  try {
+    return await renderSummaryCaptureBlob(stage);
   } finally {
     stage.remove();
-    if (button) button.disabled = false;
   }
 }
 
@@ -2708,16 +2758,23 @@ async function writeSummaryImageToClipboard(blobOrPromise) {
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobOrPromise })]);
 }
 
+async function copyPreparedSummaryImage(blob) {
+  try {
+    await writeSummaryImageToClipboard(blob);
+    return;
+  } catch (clipboardError) {
+    const dataUrl = state.summaryCopyDataUrl || await blobToDataUrl(blob);
+    state.summaryCopyDataUrl = dataUrl;
+    if (!copyDataUrlImageToClipboard(dataUrl)) {
+      throw clipboardError;
+    }
+  }
+}
+
 async function writePreparedSummaryCopy(button) {
   if (button) button.disabled = true;
   try {
-    try {
-      await writeSummaryImageToClipboard(state.summaryCopyBlob);
-    } catch (clipboardError) {
-      if (!state.summaryCopyDataUrl || !copyDataUrlImageToClipboard(state.summaryCopyDataUrl)) {
-        throw clipboardError;
-      }
-    }
+    await copyPreparedSummaryImage(state.summaryCopyBlob);
     clearPreparedSummaryCopy();
     showSummaryToast('Resumo copiado como imagem');
   } catch (error) {
@@ -2729,6 +2786,8 @@ async function writePreparedSummaryCopy(button) {
 }
 
 function copyDataUrlImageToClipboard(dataUrl) {
+  if (copyImageViaCopyEvent(dataUrl)) return true;
+
   const wrapper = document.createElement('div');
   const img = document.createElement('img');
   const selection = window.getSelection();
@@ -2758,6 +2817,29 @@ function copyDataUrlImageToClipboard(dataUrl) {
   } finally {
     selection?.removeAllRanges();
     wrapper.remove();
+  }
+}
+
+function copyImageViaCopyEvent(dataUrl) {
+  let handled = false;
+  const html = `<img src="${dataUrl}" alt="Resumo Consolidado">`;
+  const onCopy = event => {
+    event.clipboardData?.setData('text/html', html);
+    event.clipboardData?.setData('text/uri-list', dataUrl);
+    event.clipboardData?.setData('text/plain', 'Resumo Consolidado');
+    event.preventDefault();
+    handled = true;
+  };
+
+  document.addEventListener('copy', onCopy, { once: true });
+  try {
+    const copied = document.execCommand('copy');
+    return copied && handled;
+  } catch (error) {
+    console.warn('Fallback de cópia por evento falhou:', error);
+    return false;
+  } finally {
+    document.removeEventListener('copy', onCopy);
   }
 }
 
@@ -2803,6 +2885,7 @@ function clearPreparedSummaryCopy() {
   state.summaryCopyBlob = null;
   state.summaryCopyDataUrl = '';
   state.summaryCopyBlobAt = 0;
+  state.summaryCopyRenderPromise = null;
 }
 
 function createSummaryCaptureStage(panel) {
