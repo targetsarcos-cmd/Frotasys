@@ -95,7 +95,7 @@ const DEFAULT_CONFIG_COLORS = {
 };
 const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f766e', '#4f46e5', '#c05621', '#0891b2'];
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
-const DESKTOP_MIN_WIDTH = 860;
+const DESKTOP_MIN_WIDTH = 760;
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas'];

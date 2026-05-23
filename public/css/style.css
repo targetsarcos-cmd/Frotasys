@@ -37,7 +37,7 @@ html, body {
   display: none;
 }
 
-@media (max-width: 859.98px) {
+@media (max-width: 759.98px) {
   body {
     min-height: 100vh;
     background:
@@ -2420,8 +2420,9 @@ body.reports-page-active .reports-modal .modal-footer {
 }
 
 .report-summary-origin {
-  width: max-content;
-  min-width: 680px;
+  width: 680px;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-left: 4px solid var(--card-accent, var(--accent));
@@ -2440,10 +2441,10 @@ body.reports-page-active .reports-modal .modal-footer {
 }
 
 .report-summary-table {
-  width: max-content;
+  width: 100%;
   min-width: 0;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
   font-family: var(--font-mono);
   font-size: 9px;
 }
@@ -2451,7 +2452,7 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-table th,
 .report-summary-table td {
   border: 1px solid rgba(203, 213, 225, .68);
-  min-width: 108px;
+  min-width: 0;
   padding: 2px 3px;
   text-align: right;
   white-space: nowrap;
@@ -4145,21 +4146,59 @@ td.has-agendamento {
 
 @media (max-width: 1100px) {
   .header {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: minmax(128px, auto) minmax(260px, 1fr);
+    grid-template-areas:
+      "brand search"
+      "actions actions";
+    align-items: center;
+    gap: 10px 14px;
+    padding: 10px 18px;
+    min-height: 0;
+  }
+
+  .header-left {
+    grid-area: brand;
+    min-width: 0;
+  }
+
+  .brand-logo {
+    height: 46px;
+    max-width: 180px;
   }
 
   .header-actions {
+    grid-area: actions;
     width: 100%;
     padding-right: 0;
-    justify-content: space-between;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
   }
 
   .header-search {
+    grid-area: search;
     width: 100%;
     max-width: none;
     min-width: 0;
+  }
+
+  .btn-reminders,
+  .btn-add,
+  .btn-reports,
+  .btn-frete-consult,
+  .btn-waitlist,
+  .btn-users,
+  .btn-logout {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .btn-settings {
+    width: 32px;
+    height: 32px;
   }
 
   .advanced-search-form {
