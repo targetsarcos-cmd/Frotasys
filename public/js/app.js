@@ -229,6 +229,7 @@ function isDesktopViewport() {
 function applyViewportGuard() {
   document.body.classList.toggle('is-unsupported-viewport', !isDesktopViewport());
   if (isDesktopViewport()) startApp();
+  if (appStarted) requestAnimationFrame(updateAllTableScrollControls);
 }
 
 async function startApp() {
@@ -2260,17 +2261,26 @@ function updateTableScrollControls(secao) {
   const scrollArea = table?.closest('.table-scroll-area');
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   if (!wrapper) return;
-  const hasHorizontalScroll = table.scrollWidth > (scrollArea?.clientWidth || wrapper.clientWidth);
+  const contentWidth = Math.max(table?.scrollWidth || 0, scrollArea?.scrollWidth || 0);
+  const hasHorizontalScroll = contentWidth > (scrollArea?.clientWidth || wrapper.clientWidth);
   wrapper.classList.toggle('has-horizontal-scroll', hasHorizontalScroll);
   if (topScroll) {
     const spacer = topScroll.firstElementChild;
-    if (spacer) spacer.style.width = `${table.scrollWidth}px`;
-    topScroll.scrollLeft = scrollArea?.scrollLeft || 0;
+    if (spacer) spacer.style.width = `${contentWidth}px`;
+    const areaMax = getMaxScrollLeft(scrollArea);
+    const topMax = getMaxScrollLeft(topScroll);
+    const ratio = areaMax > 0 ? (scrollArea?.scrollLeft || 0) / areaMax : 0;
+    topScroll.scrollLeft = topMax > 0 ? ratio * topMax : (scrollArea?.scrollLeft || 0);
   }
   if (scrollArea && !scrollArea.dataset.scrollSyncReady) {
     scrollArea.dataset.scrollSyncReady = 'true';
     scrollArea.addEventListener('scroll', () => syncTableScrollFromBottom(secao));
   }
+}
+
+function updateAllTableScrollControls() {
+  updateTableScrollControls('arcos');
+  updateTableScrollControls('agenciando');
 }
 
 function scrollTableToEdge(secao, direction) {
@@ -2320,7 +2330,11 @@ function syncTableScrollFromTop(secao) {
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
   if (!topScroll || !scrollArea) return;
-  setTableScrollLeft(secao, topScroll.scrollLeft);
+  updateTableScrollControls(secao);
+  const topMax = getMaxScrollLeft(topScroll);
+  const areaMax = getMaxScrollLeft(scrollArea);
+  const left = topMax > 0 ? (topScroll.scrollLeft / topMax) * areaMax : topScroll.scrollLeft;
+  setTableScrollLeft(secao, left);
 }
 
 function syncTableScrollFromBottom(secao) {
@@ -2328,6 +2342,7 @@ function syncTableScrollFromBottom(secao) {
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
   if (!topScroll || !scrollArea) return;
+  updateTableScrollControls(secao);
   setTableScrollLeft(secao, scrollArea.scrollLeft);
 }
 
