@@ -2651,43 +2651,116 @@ async function copySummaryAsImage() {
   const button = document.getElementById('summary-copy-btn');
   if (!panel || !document.querySelector('#summary-cards .summary-card')) return;
 
-  if (!window.isSecureContext) {
-    showSummaryToast('Não foi possível copiar. Abra o Dashlog em HTTPS ou localhost para permitir a área de transferência.', 'error');
-    return;
-  }
-
-  if (!window.html2canvas || !navigator.clipboard?.write || typeof window.ClipboardItem === 'undefined') {
-    showSummaryToast('Não foi possível copiar. O navegador não permitiu copiar imagens para a área de transferência.', 'error');
-    return;
-  }
-
-  if (state.summaryCopyBlob && Date.now() - state.summaryCopyBlobAt < 120000) {
-    await writePreparedSummaryCopy(button);
-    return;
-  }
-
   if (button) button.disabled = true;
-  const stage = createSummaryCaptureStage(panel);
-  let pngPromise = null;
+  let stage = null;
+  let imageError = null;
+  let imageCopied = false;
 
   try {
-    pngPromise = renderSummaryCaptureBlob(stage);
+    if (!canWriteClipboardImage()) {
+      throw new Error('Área de transferência de imagem indisponível neste navegador.');
+    }
+
+    stage = createSummaryCaptureStage(panel);
+    const pngPromise = renderSummaryCaptureBlob(stage);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
     clearPreparedSummaryCopy();
     showSummaryToast('Resumo copiado para a área de transferência');
+    imageCopied = true;
   } catch (error) {
-    console.error('Erro ao copiar resumo como imagem:', error);
-    const preparedBlob = await pngPromise?.catch(() => null);
-    if (preparedBlob && isClipboardNotAllowed(error)) {
-      state.summaryCopyBlob = preparedBlob;
-      state.summaryCopyBlobAt = Date.now();
-      showSummaryToast('Imagem pronta. Clique novamente no botão de copiar para enviar à área de transferência.', 'error');
-    } else {
-      showSummaryToast(summaryClipboardErrorMessage(error), 'error');
+    imageError = error;
+    console.warn('Não foi possível copiar resumo como imagem. Tentando texto:', error);
+  } finally {
+    stage?.remove();
+  }
+
+  if (imageCopied) {
+    if (button) button.disabled = false;
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(buildSummaryCopyText());
+    clearPreparedSummaryCopy();
+    showSummaryToast('Navegador bloqueou a imagem. Resumo copiado como texto.');
+  } catch (textError) {
+    console.error('Erro ao copiar resumo:', imageError || textError, textError);
+    showSummaryToast(summaryClipboardErrorMessage(imageError || textError), 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function canWriteClipboardImage() {
+  return Boolean(
+    window.isSecureContext &&
+    window.html2canvas &&
+    navigator.clipboard?.write &&
+    typeof window.ClipboardItem !== 'undefined'
+  );
+}
+
+function buildSummaryCopyText() {
+  const cards = [...document.querySelectorAll('#summary-cards .summary-card')];
+  const lines = [
+    'Resumo Consolidado',
+    `Data: ${formatDateBR(state.currentDate)}`
+  ];
+
+  cards.forEach(card => {
+    const origem = cleanSummaryCopyText(card.querySelector('.summary-operation strong')?.textContent || 'Operação');
+    const percent = cleanSummaryCopyText(card.querySelector('.summary-percent span')?.textContent || '');
+    const headers = [...card.querySelectorAll('thead th')].map(header => cleanSummaryCopyText(header.textContent));
+    const rows = [...card.querySelectorAll('tbody tr')]
+      .filter(row => !row.classList.contains('collapsed'))
+      .map(row => [...row.cells].map(cell => cleanSummaryCopyText(cell.textContent)).join('\t'));
+
+    lines.push('', origem);
+    if (headers.length) lines.push(headers.join('\t'));
+    lines.push(...rows);
+    if (percent) lines.push(`% da Meta\t${percent}`);
+  });
+
+  return lines.join('\n').trim();
+}
+
+function cleanSummaryCopyText(value) {
+  return String(value || '')
+    .replace(/[▶▼⊖]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function copyTextToClipboard(text) {
+  const value = String(text || '').trim();
+  if (!value) throw new Error('Resumo vazio para copiar.');
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+  } catch (error) {
+    console.warn('Clipboard API de texto indisponível. Tentando fallback:', error);
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, value.length);
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('O navegador recusou o comando de cópia.');
     }
   } finally {
-    stage.remove();
-    if (button) button.disabled = false;
+    textarea.remove();
   }
 }
 
