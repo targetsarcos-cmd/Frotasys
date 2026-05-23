@@ -112,6 +112,7 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'descarga', header: 'DESCARGA', width: 18 },
   { key: 'telefone', header: 'TELEFONE', width: 18 },
   { key: 'frete', header: 'FRETE', width: 18 },
+  { key: 'produto', header: 'PRODUTO', width: 14 },
   { key: 'origem', header: 'ORIGEM', width: 14 },
   { key: 'destino', header: 'DESTINO', width: 14 },
   { key: 'peso', header: 'PESO', width: 10 },
@@ -126,6 +127,8 @@ const VIAGENS_EXPORT_COLUMNS = [
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/vendor/html2canvas', express.static(path.join(__dirname, 'node_modules', 'html2canvas', 'dist')));
+app.use('/vendor/chart.js', express.static(path.join(__dirname, 'node_modules', 'chart.js', 'dist')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

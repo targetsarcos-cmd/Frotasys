@@ -7,9 +7,16 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-busca-avancada">
+<link rel="stylesheet" href="css/style.css?v=20260522-resumo-mobile">
 </head>
 <body>
+<div class="mobile-blocker" aria-live="polite">
+  <section class="mobile-blocker-card">
+    <div class="mobile-blocker-mark">D</div>
+    <h1>Acesso indisponível em dispositivos móveis</h1>
+    <p>O Dashlog foi desenvolvido para uso em computador. Acesse por um notebook ou desktop.</p>
+  </section>
+</div>
 
 <div class="session-status">
   <div id="ws-status" class="ws-status offline">Desconectado</div>
@@ -45,6 +52,7 @@
         </div>
       </div>
     </div>
+    <button class="btn-reports" id="btn-relatorios">Relatórios</button>
     <button class="btn-frete-consult" id="btn-frete-consult">Consulta Frete</button>
     <button class="btn-waitlist" id="btn-lista-espera">Lista de Espera</button>
     <button class="btn-users is-hidden" id="btn-users-admin">Usuários</button>
@@ -95,8 +103,8 @@
               <th>DESCARGA</th>
               <th>TELEFONE</th>
               <th>EVENTO</th>
-              <th>ORIGEM</th>
               <th>PRODUTO</th>
+              <th>ORIGEM</th>
               <th>DESTINO</th>
               <th>PESO</th>
               <th>DT</th>
@@ -122,7 +130,12 @@
 
   <section class="summary-layout">
     <div class="summary-panel" id="summary-arcos">
-      <div class="summary-title">Resumo consolidado</div>
+      <div class="summary-head">
+        <div class="summary-title">Resumo Consolidado</div>
+        <button type="button" class="summary-copy-btn" id="summary-copy-btn" title="Copiar resumo como imagem" aria-label="Copiar resumo como imagem">
+          <span class="windows-copy-icon" aria-hidden="true"></span>
+        </button>
+      </div>
       <div class="summary-cards" id="summary-cards"></div>
     </div>
   </section>
@@ -154,8 +167,8 @@
               <th>DESCARGA</th>
               <th>TELEFONE</th>
               <th>EVENTO</th>
-              <th>ORIGEM</th>
               <th>PRODUTO</th>
+              <th>ORIGEM</th>
               <th>DESTINO</th>
               <th>PESO</th>
               <th>DT</th>
@@ -443,6 +456,74 @@
   </div>
 </div>
 
+<div id="reports-overlay" class="modal-overlay hidden">
+  <div class="modal reports-modal">
+    <div class="modal-header">
+      <span>Relatórios</span>
+      <button class="modal-close" id="reports-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body reports-body">
+      <section class="reports-filters">
+        <label>
+          <span>PERÍODO INICIAL</span>
+          <input type="date" id="report-start-date">
+        </label>
+        <label>
+          <span>PERÍODO FINAL</span>
+          <input type="date" id="report-end-date">
+        </label>
+        <label>
+          <span>OPERAÇÃO</span>
+          <select id="report-operation"></select>
+        </label>
+        <button type="button" class="btn-primary reports-refresh" id="reports-refresh">Atualizar</button>
+      </section>
+      <div class="reports-status" id="reports-status"></div>
+      <section class="reports-kpis" id="reports-kpis"></section>
+      <section class="reports-grid">
+        <article class="report-card report-card-large">
+          <div class="report-card-head">
+            <strong>Tipo de frota</strong>
+            <span>Participação por cadastro</span>
+          </div>
+          <div class="report-chart-wrap"><canvas id="chart-report-tipo"></canvas></div>
+        </article>
+        <article class="report-card">
+          <div class="report-card-head">
+            <strong>Atendimento da meta</strong>
+            <span>Agenciado + faturado</span>
+          </div>
+          <div class="report-chart-wrap"><canvas id="chart-report-atendimento"></canvas></div>
+        </article>
+        <article class="report-card report-card-wide">
+          <div class="report-card-head">
+            <strong>Meta por destino</strong>
+            <span>Percentual carregado por praça</span>
+          </div>
+          <div class="report-chart-wrap"><canvas id="chart-report-destino"></canvas></div>
+        </article>
+        <article class="report-card">
+          <div class="report-card-head">
+            <strong>Registro operacional</strong>
+            <span>Faturado x agenciado</span>
+          </div>
+          <div class="report-chart-wrap"><canvas id="chart-report-registro"></canvas></div>
+        </article>
+        <article class="report-card report-card-wide">
+          <div class="report-card-head">
+            <strong>Evolução diária</strong>
+            <span>Carregado x meta</span>
+          </div>
+          <div class="report-chart-wrap"><canvas id="chart-report-evolucao"></canvas></div>
+        </article>
+      </section>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" id="reports-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div id="waitlist-overlay" class="modal-overlay hidden">
   <div class="modal waitlist-modal">
     <div class="modal-header">
@@ -635,7 +716,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/vendor/html2canvas/html2canvas.min.js"></script>
+<script src="/vendor/chart.js/chart.umd.js"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260522-ajustes-menu-tabela"></script>
+<script src="js/app.js?v=20260522-resumo-mobile"></script>
 </body>
 </html>

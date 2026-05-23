@@ -27,6 +27,7 @@ const state = {
   metaGoalQueue: [],
   metaGoalDialogOpen: false,
   metaGoalCurrent: null,
+  reportCharts: {},
   userProfile: null,
   undoAction: null,
   ws: null
@@ -83,6 +84,7 @@ const DEFAULT_CONFIG_COLORS = {
 };
 const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f766e', '#4f46e5', '#c05621', '#0891b2'];
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
+const DESKTOP_MIN_WIDTH = 1024;
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas'];
@@ -197,7 +199,30 @@ function renderDateWeekday() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
+let appStarted = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+  installViewportGuard();
+  if (isDesktopViewport()) startApp();
+});
+
+function installViewportGuard() {
+  applyViewportGuard();
+  window.addEventListener('resize', applyViewportGuard);
+}
+
+function isDesktopViewport() {
+  return window.innerWidth >= DESKTOP_MIN_WIDTH;
+}
+
+function applyViewportGuard() {
+  document.body.classList.toggle('is-unsupported-viewport', !isDesktopViewport());
+  if (isDesktopViewport()) startApp();
+}
+
+async function startApp() {
+  if (appStarted || !isDesktopViewport()) return;
+  appStarted = true;
   document.getElementById('date-picker').value = state.currentDate;
   renderDateWeekday();
   const auth = await FrotasysAuth.init({ requireAuth: true });
@@ -209,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initUI();
   applyPermissions();
   loadAll();
-});
+}
 
 // ─── WEBSOCKET ────────────────────────────────────────────────────────────────
 function initWS() {
@@ -364,6 +389,18 @@ function initUI() {
   document.getElementById('frete-consult-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('frete-consult-overlay')) closeFreteConsultModal();
   });
+  document.getElementById('btn-relatorios').addEventListener('click', openReportsModal);
+  document.getElementById('reports-close').addEventListener('click', closeReportsModal);
+  document.getElementById('reports-btn-close').addEventListener('click', closeReportsModal);
+  document.getElementById('reports-refresh').addEventListener('click', updateReports);
+  ['report-start-date', 'report-end-date', 'report-operation'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      if (!document.getElementById('reports-overlay')?.classList.contains('hidden')) updateReports();
+    });
+  });
+  document.getElementById('reports-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('reports-overlay')) closeReportsModal();
+  });
   document.getElementById('btn-lista-espera').addEventListener('click', openListaEsperaModal);
   document.getElementById('waitlist-close').addEventListener('click', closeListaEsperaModal);
   document.getElementById('waitlist-btn-close').addEventListener('click', closeListaEsperaModal);
@@ -391,6 +428,7 @@ function initUI() {
   document.getElementById('meta-goal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('meta-goal-overlay')) closeMetaGoalDialog();
   });
+  document.getElementById('summary-copy-btn')?.addEventListener('click', copySummaryAsImage);
 
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
@@ -497,6 +535,7 @@ function initUI() {
       closeModal();
       closeSearchModal();
       closeFreteConsultModal();
+      closeReportsModal();
       closeListaEsperaModal();
       closeEventWarning();
       closeMetaGoalDialog();
@@ -747,7 +786,7 @@ async function createUserProfile(event) {
 
   message.textContent = '';
   message.className = 'user-create-message';
-  button.disabled = true;
+  if (button) button.disabled = true;
   button.textContent = 'Criando...';
 
   const created = await apiFetch('/api/users', {
@@ -844,6 +883,323 @@ async function openFreteConsultModal() {
 
 function closeFreteConsultModal() {
   document.getElementById('frete-consult-overlay').classList.add('hidden');
+}
+
+function openReportsModal() {
+  syncDynamicSelects();
+  const start = document.getElementById('report-start-date');
+  const end = document.getElementById('report-end-date');
+  if (start && !start.value) start.value = monthStartStr(state.currentDate);
+  if (end && !end.value) end.value = state.currentDate;
+  setReportOperationOptions();
+  document.getElementById('reports-overlay').classList.remove('hidden');
+  updateReports();
+}
+
+function closeReportsModal() {
+  document.getElementById('reports-overlay').classList.add('hidden');
+}
+
+async function updateReports() {
+  const start = document.getElementById('report-start-date')?.value;
+  const end = document.getElementById('report-end-date')?.value;
+  const operation = document.getElementById('report-operation')?.value || '';
+  const button = document.getElementById('reports-refresh');
+
+  if (!isValidDateRange(start, end)) {
+    setReportsStatus('Informe um período válido de até 366 dias.', true);
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Atualizando...';
+  setReportsStatus('Carregando dados do período...');
+
+  try {
+    const params = new URLSearchParams({ dataInicio: start, dataFim: end });
+    const [viagens, metas] = await Promise.all([
+      apiFetch(`/api/viagens/search?${params.toString()}`),
+      apiFetch('/api/metas')
+    ]);
+    const report = buildReportsData(Array.isArray(viagens) ? viagens : [], Array.isArray(metas) ? metas : [], { start, end, operation });
+    renderReports(report);
+    setReportsStatus(report.rows.length ? '' : 'Nenhuma viagem encontrada para os filtros selecionados.');
+  } catch (error) {
+    console.error('Erro ao atualizar relatórios:', error);
+    setReportsStatus('Não foi possível carregar os relatórios.', true);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Atualizar';
+  }
+}
+
+function buildReportsData(viagens, metas, filters) {
+  const operations = reportOperations(filters.operation);
+  const dates = dateRangeList(filters.start, filters.end);
+  const rows = filterReportRows(viagens, operations);
+  const fatRows = rows.filter(v => v.secao === 'arcos' && hasNotaPreenchida(v));
+  const agencRows = rows.filter(v => v.secao === 'agenciando' || (v.secao === 'arcos' && !hasNotaPreenchida(v)));
+  const loadedTotal = sumPeso(rows);
+
+  const metaByDestination = {};
+  const loadedByDestination = {};
+  const metaByDate = Object.fromEntries(dates.map(date => [date, 0]));
+  const loadedByDate = Object.fromEntries(dates.map(date => [date, 0]));
+
+  rows.forEach(row => {
+    const destino = row.destino || 'SEM DESTINO';
+    loadedByDestination[destino] = (loadedByDestination[destino] || 0) + parseNumber(row.peso);
+    if (loadedByDate[row.data] !== undefined) loadedByDate[row.data] += parseNumber(row.peso);
+  });
+
+  dates.forEach(date => {
+    operations.forEach(op => {
+      summaryDestinationsForOperation(op).forEach(destino => {
+        const meta = reportMetaForDestination(metas, date, op, destino);
+        metaByDestination[destino] = (metaByDestination[destino] || 0) + meta;
+        metaByDate[date] += meta;
+      });
+    });
+  });
+
+  const metaTotal = Object.values(metaByDate).reduce((sum, value) => sum + value, 0);
+  const typeCounts = ['AGREGADO', 'FROTA', 'DEDICADO', 'CARRETEIRO'].map(tipo => ({
+    label: tipo,
+    value: rows.filter(row => normalizeTipo(row.tipo) === tipo).length
+  }));
+
+  const registro = [
+    { label: 'FATURADO', value: sumPeso(fatRows) },
+    { label: 'AGENCIADO', value: sumPeso(agencRows) }
+  ];
+
+  const destinos = [...new Set([...Object.keys(metaByDestination), ...Object.keys(loadedByDestination)])]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    rows,
+    operations,
+    dates,
+    metaTotal,
+    loadedTotal,
+    atendimento: metaTotal > 0 ? (loadedTotal / metaTotal) * 100 : 0,
+    typeCounts,
+    registro,
+    destinos: destinos.map(destino => ({
+      destino,
+      meta: metaByDestination[destino] || 0,
+      loaded: loadedByDestination[destino] || 0,
+      percent: metaByDestination[destino] > 0 ? ((loadedByDestination[destino] || 0) / metaByDestination[destino]) * 100 : 0
+    })),
+    daily: dates.map(date => ({
+      date,
+      meta: metaByDate[date] || 0,
+      loaded: loadedByDate[date] || 0
+    }))
+  };
+}
+
+function reportOperations(operation) {
+  const ops = operationsList();
+  if (!operation) return ops;
+  return ops.filter(op => normalizeOption(op.origem) === normalizeOption(operation));
+}
+
+function filterReportRows(rows, operations) {
+  const byOrigin = Object.fromEntries(operations.map(op => [
+    normalizeOption(op.origem),
+    new Set(summaryProductsForOperation(op).map(normalizeOption))
+  ]));
+  return rows.filter(row => {
+    const products = byOrigin[normalizeOption(row.origem)];
+    return products && products.has(normalizeOption(row.produto));
+  });
+}
+
+function reportMetaForDestination(metas, date, operation, destino) {
+  const tipo = operation.metaTipo || metaTipo(operation.origem);
+  return summaryProductsForOperation(operation).reduce((sum, produto) => {
+    const metaDoc = metas.find(meta =>
+      meta.data === date &&
+      meta.destino === destino &&
+      meta.tipo === tipo &&
+      normalizeOption(meta.produto) === normalizeOption(produto)
+    );
+    return sum + (metaDoc ? parseNumber(metaDoc.valor) : 0);
+  }, 0);
+}
+
+function renderReports(report) {
+  renderReportKpis(report);
+  renderReportCharts(report);
+}
+
+function renderReportKpis(report) {
+  const kpis = document.getElementById('reports-kpis');
+  const atendimento = Math.round(report.atendimento);
+  kpis.innerHTML = `
+    ${renderReportKpi('Registros', report.rows.length.toLocaleString('pt-BR'), `${report.operations.length} operação${report.operations.length === 1 ? '' : 'es'}`)}
+    ${renderReportKpi('Carregado', formatKg(report.loadedTotal), 'Faturado + agenciado')}
+    ${renderReportKpi('Meta', formatKg(report.metaTotal), 'Soma do período')}
+    ${renderReportKpi('Atendimento', `${atendimento}%`, report.metaTotal ? `${formatKg(report.loadedTotal)} de ${formatKg(report.metaTotal)}` : 'Sem meta cadastrada')}
+  `;
+}
+
+function renderReportKpi(label, value, detail) {
+  return `<article class="report-kpi">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(String(value))}</strong>
+    <em>${escapeHtml(detail)}</em>
+  </article>`;
+}
+
+function renderReportCharts(report) {
+  destroyReportCharts();
+  if (!window.Chart) {
+    setReportsStatus('Biblioteca de gráficos indisponível neste navegador.', true);
+    return;
+  }
+
+  const chartText = '#172033';
+  const gridColor = 'rgba(148, 163, 184, .24)';
+  Chart.defaults.color = chartText;
+  Chart.defaults.font.family = "'Inter', sans-serif";
+
+  state.reportCharts.tipo = new Chart(document.getElementById('chart-report-tipo'), {
+    type: 'pie',
+    data: {
+      labels: report.typeCounts.map(item => item.label),
+      datasets: [{ data: report.typeCounts.map(item => item.value), backgroundColor: ['#fbbf24', '#16803f', '#0891b2', '#c93434'], borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: pieChartOptions('registros')
+  });
+
+  const atendimento = Math.min(100, Math.max(0, report.atendimento));
+  state.reportCharts.atendimento = new Chart(document.getElementById('chart-report-atendimento'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Atendido', 'Falta'],
+      datasets: [{ data: [atendimento, Math.max(0, 100 - atendimento)], backgroundColor: ['#2563eb', '#e2e8f0'], borderWidth: 0 }]
+    },
+    options: {
+      ...pieChartOptions('%'),
+      cutout: '68%',
+      plugins: {
+        ...pieChartOptions('%').plugins,
+        title: { display: true, text: `${Math.round(report.atendimento)}%`, color: '#172033', font: { size: 28, weight: '900' }, padding: { bottom: 4 } }
+      }
+    }
+  });
+
+  state.reportCharts.destino = new Chart(document.getElementById('chart-report-destino'), {
+    type: 'bar',
+    data: {
+      labels: report.destinos.map(item => item.destino),
+      datasets: [{ label: '% atendimento', data: report.destinos.map(item => Math.round(item.percent)), backgroundColor: '#2563eb', borderRadius: 7 }]
+    },
+    options: barChartOptions(gridColor, value => `${value}%`, report.destinos)
+  });
+
+  state.reportCharts.registro = new Chart(document.getElementById('chart-report-registro'), {
+    type: 'doughnut',
+    data: {
+      labels: report.registro.map(item => item.label),
+      datasets: [{ data: report.registro.map(item => item.value), backgroundColor: ['#2563eb', '#8b5cf6'], borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: pieChartOptions('t')
+  });
+
+  state.reportCharts.evolucao = new Chart(document.getElementById('chart-report-evolucao'), {
+    data: {
+      labels: report.daily.map(item => formatDateBR(item.date)),
+      datasets: [
+        { type: 'bar', label: 'Carregado', data: report.daily.map(item => item.loaded), backgroundColor: 'rgba(37, 99, 235, .74)', borderRadius: 7 },
+        { type: 'line', label: 'Meta', data: report.daily.map(item => item.meta), borderColor: '#16a34a', backgroundColor: '#16a34a', tension: .28, pointRadius: 3 }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { callback: value => formatKg(value) } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${formatKg(ctx.raw)}` } }
+      }
+    }
+  });
+}
+
+function pieChartOptions(unit) {
+  return {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+      tooltip: {
+        callbacks: {
+          label: context => `${context.label}: ${formatKg(context.raw)} ${unit}`
+        }
+      }
+    }
+  };
+}
+
+function barChartOptions(gridColor, tickFormatter, detailRows = []) {
+  return {
+    maintainAspectRatio: false,
+    scales: {
+      y: { beginAtZero: true, grid: { color: gridColor }, ticks: { callback: tickFormatter } },
+      x: { grid: { display: false } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: context => {
+            const detail = detailRows[context.dataIndex];
+            if (!detail) return `${context.raw}%`;
+            return `${Math.round(detail.percent)}% - ${formatKg(detail.loaded)} de ${formatKg(detail.meta)}`;
+          }
+        }
+      }
+    }
+  };
+}
+
+function destroyReportCharts() {
+  Object.values(state.reportCharts).forEach(chart => chart?.destroy?.());
+  state.reportCharts = {};
+}
+
+function setReportsStatus(message, isError = false) {
+  const status = document.getElementById('reports-status');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `reports-status ${isError ? 'is-error' : ''}`.trim();
+}
+
+function monthStartStr(dateValue) {
+  const [year, month] = String(dateValue || todayStr()).split('-');
+  return `${year}-${month}-01`;
+}
+
+function isValidDateRange(start, end) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) return false;
+  if (start > end) return false;
+  return dateRangeList(start, end).length <= 366;
+}
+
+function dateRangeList(start, end) {
+  const dates = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
 }
 
 async function openListaEsperaModal() {
@@ -1643,8 +1999,8 @@ const FIELDS = [
   { key: 'descarga', label: 'DESCARGA', quick: true, dateTime: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
   { key: 'frete', label: 'EVENTO', quick: true },
-  { key: 'origem', label: 'ORIGEM', select: true },
   { key: 'produto', label: 'PRODUTO', select: true },
+  { key: 'origem', label: 'ORIGEM', select: true },
   { key: 'destino', label: 'DESTINO', select: true },
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'dt', label: 'DT', quick: true },
@@ -1966,6 +2322,7 @@ function syncDynamicSelects() {
   });
   setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
   setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
+  setReportOperationOptions();
 }
 
 function setSelectOptions(select, options) {
@@ -1973,6 +2330,15 @@ function setSelectOptions(select, options) {
   const current = select.value;
   select.innerHTML = options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(opt || '-')}</option>`).join('');
   if (options.includes(current)) select.value = current;
+}
+
+function setReportOperationOptions() {
+  const select = document.getElementById('report-operation');
+  if (!select) return;
+  const current = select.value;
+  const options = originList();
+  select.innerHTML = `<option value="">Todas as operações</option>${options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('')}`;
+  if (options.includes(current) || current === '') select.value = current;
 }
 
 function openSettingsModal() {
@@ -2267,6 +2633,90 @@ function updateSummaryTable() {
   });
 }
 
+async function copySummaryAsImage() {
+  const panel = document.getElementById('summary-arcos');
+  const button = document.getElementById('summary-copy-btn');
+  if (!panel || !document.querySelector('#summary-cards .summary-card')) return;
+
+  if (!window.html2canvas || !navigator.clipboard?.write || typeof window.ClipboardItem === 'undefined') {
+    showSummaryToast('Não foi possível copiar. O navegador não permitiu copiar imagens para a área de transferência.', 'error');
+    return;
+  }
+
+  button.disabled = true;
+  const stage = createSummaryCaptureStage(panel);
+
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const canvas = await window.html2canvas(stage.firstElementChild, {
+      backgroundColor: '#ffffff',
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
+      logging: false
+    });
+    const blob = await canvasToPngBlob(canvas);
+    if (!blob) throw new Error('Falha ao gerar imagem do resumo.');
+
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob })
+    ]);
+    showSummaryToast('Resumo copiado para a área de transferência');
+  } catch (error) {
+    console.error('Erro ao copiar resumo como imagem:', error);
+    showSummaryToast('Não foi possível copiar. O navegador não permitiu acesso à área de transferência.', 'error');
+  } finally {
+    stage.remove();
+    if (button) button.disabled = false;
+  }
+}
+
+function createSummaryCaptureStage(panel) {
+  const width = Math.min(Math.max(Math.ceil(panel.getBoundingClientRect().width || panel.scrollWidth), 860), 1280);
+  const stage = document.createElement('div');
+  stage.className = 'summary-copy-stage';
+  stage.style.width = `${width}px`;
+
+  const clone = panel.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.classList.add('summary-copy-capture');
+  clone.style.width = `${width}px`;
+  clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  clone.querySelectorAll('.summary-copy-btn, .summary-config-btn').forEach(el => el.remove());
+  clone.querySelectorAll('.card-row-toggle').forEach(button => {
+    const label = document.createElement('span');
+    label.textContent = button.textContent.replace(/[▶▼]/g, '').trim();
+    button.replaceWith(label);
+  });
+
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+  return stage;
+}
+
+function canvasToPngBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+function showSummaryToast(message, type = 'success') {
+  let toast = document.querySelector('.summary-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'summary-toast';
+    toast.setAttribute('role', 'status');
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+  toast.className = `summary-toast ${type === 'error' ? 'is-error' : ''}`.trim();
+  clearTimeout(showSummaryToast.timer);
+  requestAnimationFrame(() => toast.classList.add('is-visible'));
+  showSummaryToast.timer = setTimeout(() => {
+    toast.classList.remove('is-visible');
+  }, 3200);
+}
+
 function renderOriginSummaryCard(operacao) {
   const origem = operacao.origem;
   const produtos = summaryProductsForOperation(operacao);
@@ -2314,6 +2764,9 @@ function renderOriginSummaryCard(operacao) {
   const accentClass = cardAccentClass(origem);
   const metaTitle = metaCollapsed ? 'Mostrar meta por tipo de cimento' : 'Ocultar meta por tipo de cimento';
   const totalTitle = totalCollapsed ? 'Mostrar carregado por produto' : 'Ocultar carregado por produto';
+  const configButton = isAdmin()
+    ? `<button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualização do card">⚙</button>`
+    : '';
 
   return `<article class="summary-card ${accentClass} origin-card-${originSlug(origem)}" data-operation-id="${escapeAttr(operationKey)}">
     <div class="summary-card-table-wrap">
@@ -2347,8 +2800,8 @@ function renderOriginSummaryCard(operacao) {
         ${renderSummaryKpi('TOTAL', totals.total, 'total')}
         ${renderSummaryKpi('FALTA', totals.falta, 'falta')}
       </div>
-      <div class="summary-card-actions">
-        <button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualização do card">⚙</button>
+      <div class="summary-card-actions ${isAdmin() ? '' : 'no-config'}">
+        ${configButton}
         <div class="summary-percent" style="--percent:${percentFill}">
           <span>${percent}%</span>
         </div>
@@ -2950,6 +3403,7 @@ function closeModal() {
 }
 
 function openOperationModal(operationId = null) {
+  if (!isAdmin()) return;
   const op = operationId ? findOperation(operationId) : null;
   state.editingOperationId = op?._id || null;
   document.getElementById('op-modal-title').textContent = op ? 'Configurar Card de Resumo' : 'Adicionar Operação';
