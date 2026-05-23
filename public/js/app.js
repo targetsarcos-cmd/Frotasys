@@ -28,6 +28,10 @@ const state = {
   metaGoalDialogOpen: false,
   metaGoalCurrent: null,
   reportCharts: {},
+  reportSummaryCopyBlob: null,
+  reportSummaryCopyDataUrl: '',
+  reportSummaryCopyBlobAt: 0,
+  reportSummaryCopyRenderPromise: null,
   summaryCopyBlob: null,
   summaryCopyDataUrl: '',
   summaryCopyBlobAt: 0,
@@ -397,6 +401,8 @@ function initUI() {
   document.getElementById('reports-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-btn-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-refresh').addEventListener('click', updateReports);
+  document.getElementById('report-summary-copy')?.addEventListener('pointerdown', prepareReportSummaryCopyImage);
+  document.getElementById('report-summary-copy')?.addEventListener('click', copyReportSummaryAsImage);
   ['report-start-date', 'report-end-date', 'report-operation'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () => {
       if (!document.getElementById('reports-overlay')?.classList.contains('hidden')) updateReports();
@@ -421,6 +427,7 @@ function initUI() {
   document.getElementById('search-btn-close').addEventListener('click', closeSearchModal);
   document.getElementById('advanced-search-form').addEventListener('submit', submitAdvancedSearch);
   document.getElementById('search-clear').addEventListener('click', clearAdvancedSearch);
+  document.getElementById('search-results').addEventListener('click', handleSearchResultToggle);
   document.getElementById('search-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('search-modal-overlay')) closeSearchModal();
   });
@@ -1002,8 +1009,47 @@ function buildReportsData(viagens, metas, filters) {
       date,
       meta: metaByDate[date] || 0,
       loaded: loadedByDate[date] || 0
-    }))
+    })),
+    summaryCards: buildReportSummaryCards(rows, metas, dates, operations),
+    filters
   };
+}
+
+function buildReportSummaryCards(rows, metas, dates, operations) {
+  return operations.map(operation => {
+    const origem = operation.origem;
+    const produtos = summaryProductsForOperation(operation);
+    const destinos = summaryDestinationsForOperation(operation);
+    const productSet = new Set(produtos.map(normalizeOption));
+    const operationRows = rows.filter(row => row.origem === origem && productSet.has(normalizeOption(row.produto)));
+    const faturadoRows = operationRows.filter(row => row.secao === 'arcos' && hasNotaPreenchida(row));
+    const agenciadoRows = operationRows.filter(row => row.secao === 'agenciando' || (row.secao === 'arcos' && !hasNotaPreenchida(row)));
+    const totals = { meta: 0, fat: 0, agenc: 0, total: 0, falta: 0 };
+
+    const columns = destinos.map(destino => {
+      const meta = dates.reduce((sum, date) => sum + reportMetaForDestination(metas, date, operation, destino), 0);
+      const fat = sumPeso(faturadoRows.filter(row => row.destino === destino));
+      const agenc = sumPeso(agenciadoRows.filter(row => row.destino === destino));
+      const total = fat + agenc;
+      const falta = meta - total;
+
+      totals.meta += meta;
+      totals.fat += fat;
+      totals.agenc += agenc;
+      totals.total += total;
+      totals.falta += falta;
+
+      return { destino, meta, fat, agenc, total, falta };
+    });
+
+    return {
+      origem,
+      accentClass: cardAccentClass(origem),
+      columns,
+      totals,
+      percent: totals.meta > 0 ? Math.round((totals.total / totals.meta) * 100) : 0
+    };
+  });
 }
 
 function reportOperations(operation) {
@@ -1037,6 +1083,7 @@ function reportMetaForDestination(metas, date, operation, destino) {
 }
 
 function renderReports(report) {
+  renderReportSummary(report);
   renderReportCharts(report);
 }
 
@@ -1065,23 +1112,6 @@ function renderReportCharts(report) {
       plugins: {
         ...pieChartOptions('registros').plugins,
         legend: { display: false }
-      }
-    }
-  });
-
-  const atendimento = Math.min(100, Math.max(0, report.atendimento));
-  state.reportCharts.atendimento = new Chart(document.getElementById('chart-report-atendimento'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Atendido', 'Falta'],
-      datasets: [{ data: [atendimento, Math.max(0, 100 - atendimento)], backgroundColor: ['#2563eb', '#e2e8f0'], borderWidth: 0 }]
-    },
-    options: {
-      ...pieChartOptions('%'),
-      cutout: '68%',
-      plugins: {
-        ...pieChartOptions('%').plugins,
-        title: { display: true, text: `${Math.round(report.atendimento)}%`, color: '#172033', font: { size: 28, weight: '900' }, padding: { bottom: 4 } }
       }
     }
   });
@@ -1126,6 +1156,76 @@ function renderReportCharts(report) {
       }
     }
   });
+}
+
+function renderReportSummary(report) {
+  const container = document.getElementById('report-summary-compact');
+  const period = document.getElementById('report-summary-period');
+  if (!container) return;
+
+  clearPreparedReportSummaryCopy();
+  if (period) {
+    const start = formatDateBR(report.filters?.start || state.currentDate);
+    const end = formatDateBR(report.filters?.end || state.currentDate);
+    const operation = report.filters?.operation ? titleCase(report.filters.operation) : 'Todas as operações';
+    period.textContent = `${start} a ${end} · ${operation}`;
+  }
+
+  const cards = Array.isArray(report.summaryCards) ? report.summaryCards : [];
+  container.innerHTML = cards.length
+    ? cards.map(renderReportSummaryCard).join('')
+    : '<div class="report-empty">Nenhum dado para o resumo.</div>';
+}
+
+function renderReportSummaryCard(card) {
+  const headers = card.columns.map(column => `<th>${escapeHtml(column.destino)}</th>`).join('');
+  const cell = (key) => card.columns.map(column => `<td>${formatKg(column[key])}</td>`).join('');
+  const total = key => formatKg(card.totals[key]);
+  const percentFill = Math.min(100, Math.max(0, card.percent));
+
+  return `<article class="report-summary-origin ${card.accentClass}">
+    <div class="report-summary-table-wrap">
+      <table class="report-summary-table">
+        <thead>
+          <tr><th>TIPO</th>${headers}<th>TOTAL</th></tr>
+        </thead>
+        <tbody>
+          <tr class="card-row-meta"><td>META</td>${cell('meta')}<td>${total('meta')}</td></tr>
+          <tr class="card-row-fat"><td>FATURADO</td>${cell('fat')}<td>${total('fat')}</td></tr>
+          <tr class="card-row-agenc"><td>AGENCIADO</td>${cell('agenc')}<td>${total('agenc')}</td></tr>
+          <tr class="card-row-total"><td>TOTAL</td>${cell('total')}<td>${total('total')}</td></tr>
+          <tr class="card-row-falta"><td>FALTA</td>${cell('falta')}<td>${total('falta')}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="report-summary-bottom">
+      <div class="report-summary-operation">
+        <div class="summary-icon">${summaryIcon(card.origem)}</div>
+        <div>
+          <span>OPERAÇÃO</span>
+          <strong>${escapeHtml(card.origem)}</strong>
+        </div>
+      </div>
+      <div class="report-summary-kpis">
+        ${renderReportSummaryKpi('META', card.totals.meta, 'meta')}
+        ${renderReportSummaryKpi('FATURADO', card.totals.fat, 'fat')}
+        ${renderReportSummaryKpi('AGENCIADO', card.totals.agenc, 'agenc')}
+        ${renderReportSummaryKpi('TOTAL', card.totals.total, 'total')}
+        ${renderReportSummaryKpi('FALTA', card.totals.falta, 'falta')}
+      </div>
+      <div class="report-summary-percent" style="--percent:${percentFill}">
+        <strong>${card.percent}%</strong>
+        <span>% da Meta</span>
+      </div>
+    </div>
+  </article>`;
+}
+
+function renderReportSummaryKpi(label, value, kind) {
+  return `<div class="report-summary-kpi ${kind}">
+    <span>${label}</span>
+    <strong>${formatKg(value)}</strong>
+  </div>`;
 }
 
 function renderFleetTypeLegend(items, colors) {
@@ -1821,7 +1921,7 @@ async function searchCarregamento(termOverride = '', filters = {}) {
   }
 
   status.textContent = `${found.length} ${found.length === 1 ? 'carregamento encontrado' : 'carregamentos encontrados'}.`;
-  results.innerHTML = found.map(renderSearchResult).join('');
+  results.innerHTML = found.map((viagem, index) => renderSearchResult(viagem, index, found.length)).join('');
 }
 
 async function fetchCarregamentosSearch(filters = {}) {
@@ -1904,9 +2004,12 @@ function normalizeNameSearchTerm(value) {
     .toUpperCase();
 }
 
-function renderSearchResult(viagem) {
+function renderSearchResult(viagem, index = 0, total = 1) {
   const title = viagem.nota || viagem.cte || viagem.nome || viagem.placa || 'Carregamento';
   const subtitle = [viagem.origem, viagem.destino].filter(Boolean).join(' → ');
+  const collapsible = total > 1;
+  const collapsed = collapsible && index > 0;
+  const cardId = `search-result-${index}`;
   const fields = SEARCH_RESULT_FIELDS.map(field => `
     <div class="search-result-field">
       <span>${escapeHtml(field.label)}</span>
@@ -1914,16 +2017,34 @@ function renderSearchResult(viagem) {
     </div>
   `).join('');
 
-  return `<section class="search-result-card">
+  return `<section class="search-result-card ${collapsed ? 'is-collapsed' : ''}" data-search-result-card>
     <div class="search-result-head">
       <div>
         <strong>${escapeHtml(title)}</strong>
         <span>${escapeHtml(subtitle || 'Sem origem/destino')}</span>
       </div>
-      <em>${escapeHtml(formatSearchValue('data', viagem.data))}</em>
+      <div class="search-result-head-actions">
+        <em>${escapeHtml(formatSearchValue('data', viagem.data))}</em>
+        ${collapsible ? `<button type="button" class="search-result-toggle" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${escapeAttr(cardId)}" title="${collapsed ? 'Exibir resultado' : 'Recolher resultado'}">
+          <span aria-hidden="true">${collapsed ? '▾' : '▴'}</span>
+        </button>` : ''}
+      </div>
     </div>
-    <div class="search-result-grid">${fields}</div>
+    <div class="search-result-grid" id="${escapeAttr(cardId)}">${fields}</div>
   </section>`;
+}
+
+function handleSearchResultToggle(event) {
+  const button = event.target.closest('.search-result-toggle');
+  if (!button) return;
+  const card = button.closest('[data-search-result-card]');
+  if (!card) return;
+
+  const collapsed = card.classList.toggle('is-collapsed');
+  button.setAttribute('aria-expanded', String(!collapsed));
+  button.title = collapsed ? 'Exibir resultado' : 'Recolher resultado';
+  const icon = button.querySelector('span');
+  if (icon) icon.textContent = collapsed ? '▾' : '▴';
 }
 
 function formatSearchValue(field, value) {
@@ -2774,6 +2895,86 @@ async function copyPreparedSummaryImage(blob) {
   }
 }
 
+function prepareReportSummaryCopyImage() {
+  const panel = document.getElementById('report-summary-card');
+  if (!panel || !document.querySelector('#report-summary-compact .report-summary-origin')) return;
+  if (hasFreshReportSummaryCopyBlob() || state.reportSummaryCopyRenderPromise || !window.html2canvas) return;
+  state.reportSummaryCopyRenderPromise = renderReportSummaryPanelBlob(panel)
+    .then(async blob => {
+      state.reportSummaryCopyBlob = blob;
+      state.reportSummaryCopyDataUrl = await blobToDataUrl(blob).catch(() => '');
+      state.reportSummaryCopyBlobAt = Date.now();
+      return blob;
+    })
+    .catch(error => {
+      clearPreparedReportSummaryCopy();
+      throw error;
+    })
+    .finally(() => {
+      state.reportSummaryCopyRenderPromise = null;
+    });
+}
+
+async function copyReportSummaryAsImage() {
+  const panel = document.getElementById('report-summary-card');
+  const button = document.getElementById('report-summary-copy');
+  if (!panel || !document.querySelector('#report-summary-compact .report-summary-origin')) return;
+
+  if (!hasFreshReportSummaryCopyBlob()) {
+    if (!window.html2canvas) {
+      showSummaryToast('Não foi possível gerar a imagem do resumo. Atualize a página e tente novamente.', 'error');
+      return;
+    }
+
+    showSummaryToast('Preparando imagem do resumo...');
+    if (!state.reportSummaryCopyRenderPromise) prepareReportSummaryCopyImage();
+    state.reportSummaryCopyRenderPromise
+      ?.then(() => showSummaryToast('Imagem pronta. Clique novamente para copiar.'))
+      .catch(error => {
+        console.error('Erro ao preparar imagem do resumo do relatório:', error);
+        showSummaryToast('Não foi possível gerar a imagem do resumo.', 'error');
+      });
+    return;
+  }
+
+  if (button) button.disabled = true;
+  try {
+    await copyPreparedSummaryImage(state.reportSummaryCopyBlob);
+    clearPreparedReportSummaryCopy();
+    showSummaryToast('Resumo copiado para a área de transferência');
+  } catch (error) {
+    console.error('Erro ao copiar resumo do relatório como imagem:', error);
+    showSummaryToast(summaryClipboardErrorMessage(error), 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function hasFreshReportSummaryCopyBlob() {
+  return Boolean(state.reportSummaryCopyBlob && Date.now() - state.reportSummaryCopyBlobAt < 120000);
+}
+
+async function renderReportSummaryPanelBlob(panel) {
+  const stage = document.createElement('div');
+  stage.className = 'summary-copy-stage';
+  stage.style.width = `${Math.ceil(panel.getBoundingClientRect().width || panel.scrollWidth)}px`;
+
+  const clone = panel.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.classList.add('report-summary-copy-capture');
+  clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  clone.querySelectorAll('.report-summary-copy').forEach(el => el.remove());
+  sanitizeSummaryCaptureClone(clone);
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+
+  try {
+    return await renderSummaryCaptureBlob(stage);
+  } finally {
+    stage.remove();
+  }
+}
+
 async function writePreparedSummaryCopy(button) {
   if (button) button.disabled = true;
   try {
@@ -3068,6 +3269,13 @@ function clearPreparedSummaryCopy() {
   state.summaryCopyRenderPromise = null;
 }
 
+function clearPreparedReportSummaryCopy() {
+  state.reportSummaryCopyBlob = null;
+  state.reportSummaryCopyDataUrl = '';
+  state.reportSummaryCopyBlobAt = 0;
+  state.reportSummaryCopyRenderPromise = null;
+}
+
 function createSummaryCaptureStage(panel) {
   const width = Math.min(Math.max(Math.ceil(panel.getBoundingClientRect().width || panel.scrollWidth), 860), 1280);
   const stage = document.createElement('div');
@@ -3093,7 +3301,7 @@ function createSummaryCaptureStage(panel) {
 }
 
 function sanitizeSummaryCaptureClone(clone) {
-  clone.querySelectorAll('.summary-card').forEach(card => {
+  clone.querySelectorAll('.summary-card, .report-summary-origin').forEach(card => {
     const accent = summaryCaptureAccent(card);
     card.style.setProperty('--card-accent', accent);
     card.style.borderLeftColor = accent;
@@ -3101,14 +3309,14 @@ function sanitizeSummaryCaptureClone(clone) {
   });
 
   clone.querySelectorAll('.summary-icon').forEach(icon => {
-    const accent = summaryCaptureAccent(icon.closest('.summary-card'));
+    const accent = summaryCaptureAccent(icon.closest('.summary-card, .report-summary-origin'));
     icon.style.background = accent;
     icon.style.boxShadow = 'none';
   });
 
   clone.querySelectorAll('.summary-percent').forEach(percent => {
     const value = parseFloat(percent.style.getPropertyValue('--percent')) || 0;
-    const accent = summaryCaptureAccent(percent.closest('.summary-card'));
+    const accent = summaryCaptureAccent(percent.closest('.summary-card, .report-summary-origin'));
     percent.style.background = '#ffffff';
     percent.style.border = `5px solid ${accent}`;
     percent.style.boxShadow = `inset 0 0 0 ${Math.max(0, Math.round((100 - value) / 10))}px rgba(244, 161, 184, .28)`;

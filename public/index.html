@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260522-relatorios-legenda">
+<link rel="stylesheet" href="css/style.css?v=20260523-relatorio-resumo">
 </head>
 <body>
 <div class="mobile-blocker" aria-live="polite">
@@ -490,12 +490,17 @@
             <div class="report-type-legend" id="report-type-legend"></div>
           </div>
         </article>
-        <article class="report-card">
-          <div class="report-card-head">
-            <strong>Atendimento da meta</strong>
-            <span>Agenciado + faturado</span>
+        <article class="report-card report-summary-card" id="report-summary-card">
+          <div class="report-summary-head">
+            <div>
+              <strong>Resumo Consolidado</strong>
+              <span id="report-summary-period">Período filtrado</span>
+            </div>
+            <button type="button" class="summary-copy-btn report-summary-copy" id="report-summary-copy" title="Copiar resumo como imagem" aria-label="Copiar resumo como imagem">
+              <span class="windows-copy-icon" aria-hidden="true"></span>
+            </button>
           </div>
-          <div class="report-chart-wrap"><canvas id="chart-report-atendimento"></canvas></div>
+          <div class="report-summary-compact" id="report-summary-compact"></div>
         </article>
         <article class="report-card report-card-wide">
           <div class="report-card-head">
@@ -721,6 +726,6 @@
 <script src="/vendor/html2canvas/html2canvas.min.js"></script>
 <script src="/vendor/chart.js/chart.umd.js"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260522-summary-image-copy-v5"></script>
+<script src="js/app.js?v=20260523-relatorio-resumo"></script>
 </body>
 </html>
