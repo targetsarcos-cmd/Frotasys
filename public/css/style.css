@@ -37,7 +37,7 @@ html, body {
   display: none;
 }
 
-@media (max-width: 1023.98px) {
+@media (max-width: 859.98px) {
   body {
     min-height: 100vh;
     background:
@@ -2420,6 +2420,8 @@ body.reports-page-active .reports-modal .modal-footer {
 }
 
 .report-summary-origin {
+  width: max-content;
+  min-width: 680px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-left: 4px solid var(--card-accent, var(--accent));
@@ -2449,7 +2451,7 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-table th,
 .report-summary-table td {
   border: 1px solid rgba(203, 213, 225, .68);
-  min-width: 92px;
+  min-width: 108px;
   padding: 2px 3px;
   text-align: right;
   white-space: nowrap;
@@ -2457,8 +2459,8 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-summary-table th:first-child,
 .report-summary-table td:first-child {
-  min-width: 72px;
-  width: 72px;
+  min-width: 82px;
+  width: 82px;
   text-align: left;
   font-weight: 900;
 }
