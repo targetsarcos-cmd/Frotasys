@@ -2419,9 +2419,28 @@ button, input, select {
 .report-summary-table .card-row-fat td,
 .report-summary-table .card-row-agenc td,
 .report-summary-table .card-row-total td,
-.report-summary-table .card-row-falta td {
+.report-summary-table .card-row-falta td,
+.report-summary-table .card-meta-product-row td,
+.report-summary-table .card-total-product-row td {
   font-size: 11px;
   line-height: 1.2;
+}
+
+.report-summary-table .card-meta-product-row td,
+.report-summary-table .card-total-product-row td {
+  font-size: 10px;
+}
+
+.report-summary-toggle {
+  gap: 4px;
+}
+
+.report-summary-toggle .card-product-arrow {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  font-size: 9px;
+  box-shadow: none;
 }
 
 .report-summary-bottom {

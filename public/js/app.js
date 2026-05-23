@@ -13,6 +13,8 @@ const state = {
   productSummaryOpen: true,
   collapsedMetaProducts: {},
   collapsedTotalProducts: {},
+  reportCollapsedMetaProducts: {},
+  reportCollapsedTotalProducts: {},
   operacoes: [],
   configOptions: {},
   configColors: {},
@@ -28,6 +30,7 @@ const state = {
   metaGoalDialogOpen: false,
   metaGoalCurrent: null,
   reportCharts: {},
+  reportData: null,
   reportSummaryCopyBlob: null,
   reportSummaryCopyDataUrl: '',
   reportSummaryCopyBlobAt: 0,
@@ -1042,14 +1045,48 @@ function buildReportSummaryCards(rows, metas, dates, operations) {
       return { destino, meta, fat, agenc, total, falta };
     });
 
+    const metaProductRows = produtos.map(produto => {
+      let total = 0;
+      const values = destinos.map(destino => {
+        const value = dates.reduce((sum, date) => sum + reportMetaForProductDestination(metas, date, operation, destino, produto), 0);
+        total += value;
+        return value;
+      });
+      return { produto, values, total };
+    });
+
+    const totalProductRows = produtos.map(produto => {
+      let total = 0;
+      const values = destinos.map(destino => {
+        const value = sumPeso(operationRows.filter(row => normalizeOption(row.produto) === normalizeOption(produto) && row.destino === destino));
+        total += value;
+        return value;
+      });
+      return { produto, values, total };
+    });
+
     return {
+      operationKey: operation._id || operation.metaTipo || origem,
       origem,
       accentClass: cardAccentClass(origem),
       columns,
+      metaProductRows,
+      totalProductRows,
       totals,
       percent: totals.meta > 0 ? Math.round((totals.total / totals.meta) * 100) : 0
     };
   });
+}
+
+function reportMetaForProductDestination(metas, date, operation, destino, produto) {
+  const tipo = operation.metaTipo || metaTipo(operation.origem);
+  const metaDoc = metas.find(meta =>
+    meta.data === date &&
+    meta.destino === destino &&
+    meta.tipo === tipo &&
+    normalizeOption(meta.produto) === normalizeOption(produto)
+  );
+  return metaDoc ? parseNumber(metaDoc.valor) : 0;
 }
 
 function reportOperations(operation) {
@@ -1070,19 +1107,13 @@ function filterReportRows(rows, operations) {
 }
 
 function reportMetaForDestination(metas, date, operation, destino) {
-  const tipo = operation.metaTipo || metaTipo(operation.origem);
   return summaryProductsForOperation(operation).reduce((sum, produto) => {
-    const metaDoc = metas.find(meta =>
-      meta.data === date &&
-      meta.destino === destino &&
-      meta.tipo === tipo &&
-      normalizeOption(meta.produto) === normalizeOption(produto)
-    );
-    return sum + (metaDoc ? parseNumber(metaDoc.valor) : 0);
+    return sum + reportMetaForProductDestination(metas, date, operation, destino, produto);
   }, 0);
 }
 
 function renderReports(report) {
+  state.reportData = report;
   renderReportSummary(report);
   renderReportCharts(report);
 }
@@ -1182,6 +1213,13 @@ function renderReportSummaryCard(card) {
   const cell = (key) => card.columns.map(column => `<td>${formatKg(column[key])}</td>`).join('');
   const total = key => formatKg(card.totals[key]);
   const percentFill = Math.min(100, Math.max(0, card.percent));
+  const operationKey = card.operationKey || card.origem;
+  const metaCollapsed = state.reportCollapsedMetaProducts[operationKey] !== false;
+  const totalCollapsed = state.reportCollapsedTotalProducts[operationKey] !== false;
+  const metaTitle = metaCollapsed ? 'Mostrar meta por tipo de cimento' : 'Ocultar meta por tipo de cimento';
+  const totalTitle = totalCollapsed ? 'Mostrar carregado por tipo de cimento' : 'Ocultar carregado por tipo de cimento';
+  const metaProductRows = renderReportSummaryProductRows(card.metaProductRows, metaCollapsed, 'card-meta-product-row');
+  const totalProductRows = renderReportSummaryProductRows(card.totalProductRows, totalCollapsed, 'card-total-product-row');
 
   return `<article class="report-summary-origin ${card.accentClass}">
     <div class="report-summary-table-wrap">
@@ -1190,10 +1228,12 @@ function renderReportSummaryCard(card) {
           <tr><th>TIPO</th>${headers}<th>TOTAL</th></tr>
         </thead>
         <tbody>
-          <tr class="card-row-meta"><td>META</td>${cell('meta')}<td>${total('meta')}</td></tr>
+          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '▶' : '▼'}</span><span>META</span></button></td>${cell('meta')}<td>${total('meta')}</td></tr>
+          ${metaProductRows}
           <tr class="card-row-fat"><td>FATURADO</td>${cell('fat')}<td>${total('fat')}</td></tr>
           <tr class="card-row-agenc"><td>AGENCIADO</td>${cell('agenc')}<td>${total('agenc')}</td></tr>
-          <tr class="card-row-total"><td>TOTAL</td>${cell('total')}<td>${total('total')}</td></tr>
+          <tr class="card-row-total"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? '▶' : '▼'}</span><span>TOTAL</span></button></td>${cell('total')}<td>${total('total')}</td></tr>
+          ${totalProductRows}
           <tr class="card-row-falta"><td>FALTA</td>${cell('falta')}<td>${total('falta')}</td></tr>
         </tbody>
       </table>
@@ -1219,6 +1259,26 @@ function renderReportSummaryCard(card) {
       </div>
     </div>
   </article>`;
+}
+
+function renderReportSummaryProductRows(rows = [], collapsed, className) {
+  return rows.map(row => `<tr class="card-product-row ${className} ${collapsed ? 'collapsed' : ''}">
+    <td>${escapeHtml(row.produto)}</td>
+    ${row.values.map(value => `<td>${formatKg(value)}</td>`).join('')}
+    <td>${formatKg(row.total)}</td>
+  </tr>`).join('');
+}
+
+function toggleReportSummaryMetaProducts(operationKey) {
+  state.reportCollapsedMetaProducts[operationKey] = state.reportCollapsedMetaProducts[operationKey] !== false ? false : true;
+  clearPreparedReportSummaryCopy();
+  if (state.reportData) renderReportSummary(state.reportData);
+}
+
+function toggleReportSummaryTotalProducts(operationKey) {
+  state.reportCollapsedTotalProducts[operationKey] = state.reportCollapsedTotalProducts[operationKey] !== false ? false : true;
+  clearPreparedReportSummaryCopy();
+  if (state.reportData) renderReportSummary(state.reportData);
 }
 
 function renderReportSummaryKpi(label, value, kind) {
@@ -2964,6 +3024,11 @@ async function renderReportSummaryPanelBlob(panel) {
   clone.classList.add('report-summary-copy-capture');
   clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
   clone.querySelectorAll('.report-summary-copy').forEach(el => el.remove());
+  clone.querySelectorAll('.card-row-toggle').forEach(button => {
+    const label = document.createElement('span');
+    label.textContent = button.textContent.replace(/[▶▼]/g, '').trim();
+    button.replaceWith(label);
+  });
   sanitizeSummaryCaptureClone(clone);
   stage.appendChild(clone);
   document.body.appendChild(stage);
