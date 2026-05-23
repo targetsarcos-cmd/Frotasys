@@ -28,6 +28,8 @@ const state = {
   metaGoalDialogOpen: false,
   metaGoalCurrent: null,
   reportCharts: {},
+  summaryCopyBlob: null,
+  summaryCopyBlobAt: 0,
   userProfile: null,
   undoAction: null,
   ws: null
@@ -1043,16 +1045,24 @@ function renderReportCharts(report) {
 
   const chartText = '#172033';
   const gridColor = 'rgba(148, 163, 184, .24)';
+  const typeColors = ['#fbbf24', '#16803f', '#0891b2', '#c93434'];
   Chart.defaults.color = chartText;
   Chart.defaults.font.family = "'Inter', sans-serif";
 
+  renderFleetTypeLegend(report.typeCounts, typeColors);
   state.reportCharts.tipo = new Chart(document.getElementById('chart-report-tipo'), {
     type: 'pie',
     data: {
       labels: report.typeCounts.map(item => item.label),
-      datasets: [{ data: report.typeCounts.map(item => item.value), backgroundColor: ['#fbbf24', '#16803f', '#0891b2', '#c93434'], borderWidth: 2, borderColor: '#fff' }]
+      datasets: [{ data: report.typeCounts.map(item => item.value), backgroundColor: typeColors, borderWidth: 2, borderColor: '#fff' }]
     },
-    options: pieChartOptions('registros')
+    options: {
+      ...pieChartOptions('registros'),
+      plugins: {
+        ...pieChartOptions('registros').plugins,
+        legend: { display: false }
+      }
+    }
   });
 
   const atendimento = Math.min(100, Math.max(0, report.atendimento));
@@ -1112,6 +1122,22 @@ function renderReportCharts(report) {
       }
     }
   });
+}
+
+function renderFleetTypeLegend(items, colors) {
+  const legend = document.getElementById('report-type-legend');
+  if (!legend) return;
+  const total = items.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  legend.innerHTML = items.map((item, index) => {
+    const percent = total > 0 ? Math.round((Number(item.value || 0) / total) * 100) : 0;
+    const valueLabel = `${Number(item.value || 0).toLocaleString('pt-BR')} registro${Number(item.value || 0) === 1 ? '' : 's'}`;
+    return `<div class="report-type-legend-item" style="color:${escapeAttr(colors[index])}">
+      <span class="report-type-legend-line"></span>
+      <span class="report-type-legend-label">${escapeHtml(item.label)}</span>
+      <strong class="report-type-legend-percent">${percent}%</strong>
+      <span class="report-type-legend-value">${escapeHtml(valueLabel)}</span>
+    </div>`;
+  }).join('');
 }
 
 function pieChartOptions(unit) {
@@ -2610,6 +2636,7 @@ function renderSummary() {
 function updateSummaryTable() {
   const container = document.getElementById('summary-cards');
   if (!container) return;
+  clearPreparedSummaryCopy();
 
   const visibleOperations = operationsList().filter(op => !state.originFilter || op.origem === state.originFilter);
   container.innerHTML = visibleOperations.map(op => renderOriginSummaryCard(op)).join('');
@@ -2624,28 +2651,56 @@ async function copySummaryAsImage() {
   const button = document.getElementById('summary-copy-btn');
   if (!panel || !document.querySelector('#summary-cards .summary-card')) return;
 
-  if (!window.html2canvas || !navigator.clipboard?.write || typeof window.ClipboardItem === 'undefined') {
-    showSummaryToast('Não foi possível copiar. O navegador não permitiu copiar imagens para a área de transferência.', 'error');
-    return;
-  }
-
   if (!window.isSecureContext) {
     showSummaryToast('Não foi possível copiar. Abra o Dashlog em HTTPS ou localhost para permitir a área de transferência.', 'error');
     return;
   }
 
+  if (!window.html2canvas || !navigator.clipboard?.write || typeof window.ClipboardItem === 'undefined') {
+    showSummaryToast('Não foi possível copiar. O navegador não permitiu copiar imagens para a área de transferência.', 'error');
+    return;
+  }
+
+  if (state.summaryCopyBlob && Date.now() - state.summaryCopyBlobAt < 120000) {
+    await writePreparedSummaryCopy(button);
+    return;
+  }
+
   if (button) button.disabled = true;
   const stage = createSummaryCaptureStage(panel);
+  let pngPromise = null;
 
   try {
-    const pngPromise = renderSummaryCaptureBlob(stage);
+    pngPromise = renderSummaryCaptureBlob(stage);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
+    clearPreparedSummaryCopy();
     showSummaryToast('Resumo copiado para a área de transferência');
   } catch (error) {
     console.error('Erro ao copiar resumo como imagem:', error);
-    showSummaryToast(summaryClipboardErrorMessage(error), 'error');
+    const preparedBlob = await pngPromise?.catch(() => null);
+    if (preparedBlob && isClipboardNotAllowed(error)) {
+      state.summaryCopyBlob = preparedBlob;
+      state.summaryCopyBlobAt = Date.now();
+      showSummaryToast('Imagem pronta. Clique novamente no botão de copiar para enviar à área de transferência.', 'error');
+    } else {
+      showSummaryToast(summaryClipboardErrorMessage(error), 'error');
+    }
   } finally {
     stage.remove();
+    if (button) button.disabled = false;
+  }
+}
+
+async function writePreparedSummaryCopy(button) {
+  if (button) button.disabled = true;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': state.summaryCopyBlob })]);
+    clearPreparedSummaryCopy();
+    showSummaryToast('Resumo copiado para a área de transferência');
+  } catch (error) {
+    console.error('Erro ao copiar resumo preparado:', error);
+    showSummaryToast(summaryClipboardErrorMessage(error), 'error');
+  } finally {
     if (button) button.disabled = false;
   }
 }
@@ -2666,11 +2721,19 @@ async function renderSummaryCaptureBlob(stage) {
 }
 
 function summaryClipboardErrorMessage(error) {
-  const name = String(error?.name || '');
-  if (name === 'NotAllowedError') {
+  if (isClipboardNotAllowed(error)) {
     return 'Não foi possível copiar. Permita acesso à área de transferência nas configurações do navegador.';
   }
   return 'Não foi possível copiar. O navegador não permitiu acesso à área de transferência.';
+}
+
+function isClipboardNotAllowed(error) {
+  return String(error?.name || '') === 'NotAllowedError';
+}
+
+function clearPreparedSummaryCopy() {
+  state.summaryCopyBlob = null;
+  state.summaryCopyBlobAt = 0;
 }
 
 function createSummaryCaptureStage(panel) {
