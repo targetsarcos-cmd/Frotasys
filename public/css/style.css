@@ -2433,13 +2433,15 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-summary-table-wrap {
   overflow-x: auto;
+  display: flex;
+  justify-content: flex-start;
 }
 
 .report-summary-table {
-  width: 100%;
-  min-width: 520px;
+  width: max-content;
+  min-width: 0;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   font-family: var(--font-mono);
   font-size: 9px;
 }
@@ -2447,6 +2449,7 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-table th,
 .report-summary-table td {
   border: 1px solid rgba(203, 213, 225, .68);
+  min-width: 92px;
   padding: 2px 3px;
   text-align: right;
   white-space: nowrap;
@@ -2454,7 +2457,8 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-summary-table th:first-child,
 .report-summary-table td:first-child {
-  width: 68px;
+  min-width: 72px;
+  width: 72px;
   text-align: left;
   font-weight: 900;
 }
