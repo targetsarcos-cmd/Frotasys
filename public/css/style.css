@@ -2182,10 +2182,12 @@ button, input, select {
 
 .reports-modal {
   width: min(1280px, 96vw);
+  height: min(820px, 92vh);
 }
 
 .reports-body {
   background: #f6f8fb;
+  overflow: auto;
 }
 
 .reports-filters {
@@ -2232,77 +2234,48 @@ button, input, select {
 }
 
 .reports-status {
-  min-height: 18px;
+  min-height: 0;
   color: var(--text-dim);
   font-weight: 750;
-  margin: 0 2px 10px;
+  margin: 0 2px 8px;
 }
 
 .reports-status.is-error {
   color: var(--red);
 }
 
-.reports-kpis {
+.reports-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 12px;
-}
-
-.report-kpi {
-  min-height: 76px;
-  display: grid;
-  align-content: center;
-  gap: 5px;
-  padding: 13px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, .06);
-}
-
-.report-kpi span {
-  color: var(--text-dim);
-  font-size: 11px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.report-kpi strong {
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 900;
-}
-
-.report-kpi em {
-  color: var(--text-dim);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 750;
-}
-
-.reports-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  align-items: start;
 }
 
 .report-card {
-  min-height: 320px;
+  height: 250px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 12px 30px rgba(15, 23, 42, .07);
+  overflow: hidden;
 }
 
 .report-card-large,
 .report-card-wide {
   grid-column: span 2;
+}
+
+.report-card-wide {
+  height: 270px;
+}
+
+.report-card-wide .report-chart-wrap {
+  height: 208px;
 }
 
 .report-card-head {
@@ -2327,13 +2300,17 @@ button, input, select {
 
 .report-chart-wrap {
   position: relative;
-  flex: 1;
-  min-height: 250px;
+  flex: 0 0 auto;
+  height: 188px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .report-chart-wrap canvas {
+  display: block;
   width: 100% !important;
   height: 100% !important;
+  max-height: 100%;
 }
 
 .report-empty {
@@ -2352,7 +2329,6 @@ button, input, select {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .reports-kpis,
   .reports-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

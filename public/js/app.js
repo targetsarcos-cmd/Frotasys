@@ -1031,27 +1031,7 @@ function reportMetaForDestination(metas, date, operation, destino) {
 }
 
 function renderReports(report) {
-  renderReportKpis(report);
   renderReportCharts(report);
-}
-
-function renderReportKpis(report) {
-  const kpis = document.getElementById('reports-kpis');
-  const atendimento = Math.round(report.atendimento);
-  kpis.innerHTML = `
-    ${renderReportKpi('Registros', report.rows.length.toLocaleString('pt-BR'), `${report.operations.length} operação${report.operations.length === 1 ? '' : 'es'}`)}
-    ${renderReportKpi('Carregado', formatKg(report.loadedTotal), 'Faturado + agenciado')}
-    ${renderReportKpi('Meta', formatKg(report.metaTotal), 'Soma do período')}
-    ${renderReportKpi('Atendimento', `${atendimento}%`, report.metaTotal ? `${formatKg(report.loadedTotal)} de ${formatKg(report.metaTotal)}` : 'Sem meta cadastrada')}
-  `;
-}
-
-function renderReportKpi(label, value, detail) {
-  return `<article class="report-kpi">
-    <span>${escapeHtml(label)}</span>
-    <strong>${escapeHtml(String(value))}</strong>
-    <em>${escapeHtml(detail)}</em>
-  </article>`;
 }
 
 function renderReportCharts(report) {
@@ -1119,7 +1099,9 @@ function renderReportCharts(report) {
       ]
     },
     options: {
+      responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 120,
       scales: {
         y: { beginAtZero: true, grid: { color: gridColor }, ticks: { callback: value => formatKg(value) } },
         x: { grid: { display: false } }
@@ -1134,7 +1116,9 @@ function renderReportCharts(report) {
 
 function pieChartOptions(unit) {
   return {
+    responsive: true,
     maintainAspectRatio: false,
+    resizeDelay: 120,
     plugins: {
       legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
       tooltip: {
@@ -1148,7 +1132,9 @@ function pieChartOptions(unit) {
 
 function barChartOptions(gridColor, tickFormatter, detailRows = []) {
   return {
+    responsive: true,
     maintainAspectRatio: false,
+    resizeDelay: 120,
     scales: {
       y: { beginAtZero: true, grid: { color: gridColor }, ticks: { callback: tickFormatter } },
       x: { grid: { display: false } }
@@ -2643,33 +2629,48 @@ async function copySummaryAsImage() {
     return;
   }
 
-  button.disabled = true;
+  if (!window.isSecureContext) {
+    showSummaryToast('Não foi possível copiar. Abra o Dashlog em HTTPS ou localhost para permitir a área de transferência.', 'error');
+    return;
+  }
+
+  if (button) button.disabled = true;
   const stage = createSummaryCaptureStage(panel);
 
   try {
-    if (document.fonts?.ready) await document.fonts.ready;
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-    const canvas = await window.html2canvas(stage.firstElementChild, {
-      backgroundColor: '#ffffff',
-      scale: Math.min(2, window.devicePixelRatio || 1.5),
-      useCORS: true,
-      logging: false
-    });
-    const blob = await canvasToPngBlob(canvas);
-    if (!blob) throw new Error('Falha ao gerar imagem do resumo.');
-
-    await navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': blob })
-    ]);
+    const pngPromise = renderSummaryCaptureBlob(stage);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
     showSummaryToast('Resumo copiado para a área de transferência');
   } catch (error) {
     console.error('Erro ao copiar resumo como imagem:', error);
-    showSummaryToast('Não foi possível copiar. O navegador não permitiu acesso à área de transferência.', 'error');
+    showSummaryToast(summaryClipboardErrorMessage(error), 'error');
   } finally {
     stage.remove();
     if (button) button.disabled = false;
   }
+}
+
+async function renderSummaryCaptureBlob(stage) {
+  if (document.fonts?.ready) await document.fonts.ready;
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const canvas = await window.html2canvas(stage.firstElementChild, {
+    backgroundColor: '#ffffff',
+    scale: Math.min(2, window.devicePixelRatio || 1.5),
+    useCORS: true,
+    logging: false
+  });
+  const blob = await canvasToPngBlob(canvas);
+  if (!blob) throw new Error('Falha ao gerar imagem do resumo.');
+  return blob;
+}
+
+function summaryClipboardErrorMessage(error) {
+  const name = String(error?.name || '');
+  if (name === 'NotAllowedError') {
+    return 'Não foi possível copiar. Permita acesso à área de transferência nas configurações do navegador.';
+  }
+  return 'Não foi possível copiar. O navegador não permitiu acesso à área de transferência.';
 }
 
 function createSummaryCaptureStage(panel) {
