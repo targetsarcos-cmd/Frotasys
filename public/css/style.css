@@ -666,6 +666,10 @@ button, input, select {
   padding: 22px 24px 32px;
 }
 
+body.reports-page-active .main {
+  display: none;
+}
+
 .toolbar {
   display: flex;
   align-items: flex-end;
@@ -2185,6 +2189,51 @@ button, input, select {
   height: min(820px, 92vh);
 }
 
+body.reports-page-active #reports-overlay {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  min-height: calc(100vh - 72px);
+  padding: 0;
+  background: #f6f8fb;
+  backdrop-filter: none;
+}
+
+body.reports-page-active .reports-modal {
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  min-height: calc(100vh - 72px);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body.reports-page-active .reports-body {
+  flex: 1;
+  overflow: visible;
+  padding: 18px 20px 86px;
+}
+
+body.reports-page-active .reports-modal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+}
+
+body.reports-page-active .reports-modal .modal-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 25;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 -10px 28px rgba(15, 23, 42, .08);
+}
+
 .reports-body {
   background: #f6f8fb;
   overflow: auto;
@@ -2280,9 +2329,11 @@ button, input, select {
 
 .report-summary-card {
   grid-column: span 2;
-  height: 280px;
+  height: auto;
+  min-height: 280px;
   gap: 6px;
-  padding: 10px;
+  padding: 8px;
+  overflow: visible;
 }
 
 .report-card-large .report-chart-wrap {
@@ -2363,10 +2414,9 @@ button, input, select {
 
 .report-summary-compact {
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   display: grid;
-  gap: 6px;
-  padding-right: 2px;
+  gap: 5px;
 }
 
 .report-summary-origin {
@@ -2387,24 +2437,24 @@ button, input, select {
 
 .report-summary-table {
   width: 100%;
-  min-width: 560px;
+  min-width: 520px;
   border-collapse: collapse;
   table-layout: fixed;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .report-summary-table th,
 .report-summary-table td {
   border: 1px solid rgba(203, 213, 225, .68);
-  padding: 2px 4px;
+  padding: 2px 3px;
   text-align: right;
   white-space: nowrap;
 }
 
 .report-summary-table th:first-child,
 .report-summary-table td:first-child {
-  width: 78px;
+  width: 68px;
   text-align: left;
   font-weight: 900;
 }
@@ -2422,13 +2472,13 @@ button, input, select {
 .report-summary-table .card-row-falta td,
 .report-summary-table .card-meta-product-row td,
 .report-summary-table .card-total-product-row td {
-  font-size: 11px;
-  line-height: 1.2;
+  font-size: 10px;
+  line-height: 1.15;
 }
 
 .report-summary-table .card-meta-product-row td,
 .report-summary-table .card-total-product-row td {
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .report-summary-toggle {
@@ -2445,10 +2495,10 @@ button, input, select {
 
 .report-summary-bottom {
   display: grid;
-  grid-template-columns: 142px minmax(280px, 1fr) 64px;
+  grid-template-columns: 128px minmax(250px, 1fr) 58px;
   align-items: center;
-  gap: 6px;
-  padding: 6px;
+  gap: 5px;
+  padding: 5px;
   border-top: 1px solid rgba(203, 213, 225, .68);
 }
 

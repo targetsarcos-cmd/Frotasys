@@ -412,7 +412,7 @@ function initUI() {
     });
   });
   document.getElementById('reports-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('reports-overlay')) closeReportsModal();
+    if (!document.body.classList.contains('reports-page-active') && e.target === document.getElementById('reports-overlay')) closeReportsModal();
   });
   document.getElementById('btn-lista-espera').addEventListener('click', openListaEsperaModal);
   document.getElementById('waitlist-close').addEventListener('click', closeListaEsperaModal);
@@ -908,12 +908,16 @@ function openReportsModal() {
   if (start && !start.value) start.value = monthStartStr(state.currentDate);
   if (end && !end.value) end.value = state.currentDate;
   setReportOperationOptions();
+  document.body.classList.add('reports-page-active');
   document.getElementById('reports-overlay').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   updateReports();
 }
 
 function closeReportsModal() {
+  document.body.classList.remove('reports-page-active');
   document.getElementById('reports-overlay').classList.add('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function updateReports() {
@@ -1160,7 +1164,7 @@ function renderReportCharts(report) {
     type: 'doughnut',
     data: {
       labels: report.registro.map(item => item.label),
-      datasets: [{ data: report.registro.map(item => item.value), backgroundColor: ['#2563eb', '#8b5cf6'], borderWidth: 2, borderColor: '#fff' }]
+      datasets: [{ data: report.registro.map(item => item.value), backgroundColor: ['#16803f', '#2563eb'], borderWidth: 2, borderColor: '#fff' }]
     },
     options: pieChartOptions('t')
   });
