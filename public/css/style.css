@@ -1077,7 +1077,7 @@ body.reports-page-active .main {
 
 .col-actions {
   width: max-content;
-  min-width: 188px;
+  min-width: 98px;
 }
 
 /* Inline edit cells */
@@ -1176,7 +1176,7 @@ body.reports-page-active .main {
 /* Row action buttons */
 .row-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .btn-row {
@@ -1206,6 +1206,106 @@ body.reports-page-active .main {
   border-color: var(--red);
   color: var(--red);
   background: #fff1f1;
+}
+
+.btn-row.table-action-icon {
+  width: 26px;
+  min-width: 26px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.table-copy-icon {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.table-copy-icon::before,
+.table-copy-icon::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 1.8px solid currentColor;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.table-copy-icon::before {
+  top: 1px;
+  left: 4px;
+}
+
+.table-copy-icon::after {
+  right: 3px;
+  bottom: 1px;
+}
+
+.table-edit-icon {
+  position: relative;
+  width: 15px;
+  height: 14px;
+  display: block;
+}
+
+.table-edit-icon::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  bottom: 1px;
+  width: 10px;
+  height: 11px;
+  border: 1.7px solid currentColor;
+  border-radius: 2px;
+  background:
+    linear-gradient(currentColor, currentColor) 2px 3px / 6px 1.4px no-repeat,
+    linear-gradient(currentColor, currentColor) 2px 6px / 5px 1.4px no-repeat,
+    #fff;
+}
+
+.table-edit-icon::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 9px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: rotate(-42deg);
+  transform-origin: center;
+  box-shadow: -1px 2px 0 #fff;
+}
+
+.table-delete-icon {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  display: block;
+  color: var(--red);
+}
+
+.table-delete-icon::before,
+.table-delete-icon::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 1px;
+  width: 12px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.table-delete-icon::before {
+  transform: rotate(45deg);
+}
+
+.table-delete-icon::after {
+  transform: rotate(-45deg);
 }
 
 .copy-bubble {

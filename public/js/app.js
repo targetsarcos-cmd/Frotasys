@@ -2241,9 +2241,9 @@ function renderTable(secao) {
       ${cells}
       <td>
         <div class="row-actions">
-          <button class="btn-row" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados">COPIAR</button>
-          ${canEditViagem(v) ? `<button class="btn-row" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar">Editar</button>` : ''}
-          ${canDeleteViagem(v) ? `<button class="btn-row danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir">Excluir</button>` : ''}
+          <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
+          ${canEditViagem(v) ? `<button class="btn-row table-action-icon" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar" aria-label="Editar"><span class="table-edit-icon" aria-hidden="true"></span></button>` : ''}
+          ${canDeleteViagem(v) ? `<button class="btn-row table-action-icon danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''}
         </div>
       </td>
     </tr>`;
