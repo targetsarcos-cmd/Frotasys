@@ -2316,11 +2316,14 @@ function setTableScrollLeft(secao, left) {
   const scrollMain = table?.closest('.table-scroll-main');
   const wrapper = table?.closest('.table-wrapper');
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
+  const areaMax = getMaxScrollLeft(scrollArea);
+  const topMax = getMaxScrollLeft(topScroll);
+  const topLeft = areaMax > 0 && topMax > 0 ? (left / areaMax) * topMax : left;
   tableScrollSyncing[secao] = true;
   if (scrollArea) scrollArea.scrollLeft = left;
   if (scrollMain) scrollMain.scrollLeft = left;
   if (wrapper) wrapper.scrollLeft = left;
-  if (topScroll) topScroll.scrollLeft = left;
+  if (topScroll) topScroll.scrollLeft = topLeft;
   if (document.scrollingElement) document.scrollingElement.scrollLeft = left;
   tableScrollSyncing[secao] = false;
 }
@@ -2330,7 +2333,10 @@ function syncTableScrollFromTop(secao) {
   const topScroll = document.querySelector(`[data-table-scroll-top="${secao}"]`);
   const scrollArea = document.getElementById(`table-${secao}`)?.closest('.table-scroll-area');
   if (!topScroll || !scrollArea) return;
-  updateTableScrollControls(secao);
+  const table = document.getElementById(`table-${secao}`);
+  const spacer = topScroll.firstElementChild;
+  const contentWidth = Math.max(table?.scrollWidth || 0, scrollArea.scrollWidth || 0);
+  if (spacer) spacer.style.width = `${contentWidth}px`;
   const topMax = getMaxScrollLeft(topScroll);
   const areaMax = getMaxScrollLeft(scrollArea);
   const left = topMax > 0 ? (topScroll.scrollLeft / topMax) * areaMax : topScroll.scrollLeft;
