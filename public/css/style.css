@@ -2430,7 +2430,7 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-card {
   grid-column: span 2;
   height: auto;
-  min-height: 340px;
+  min-height: 0;
   gap: 4px;
   padding: 7px;
   overflow: visible;
