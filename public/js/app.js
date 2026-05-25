@@ -1684,7 +1684,7 @@ function renderFreteConsultTable(key, table) {
   const rows = table.rows.map((row, rowIndex) => {
     const rowTone = freteOriginTone(row[0]);
     const cells = row.map((value, colIndex) => `
-      <td contenteditable="true" spellcheck="false" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-value="${escapeAttr(value)}">${escapeHtml(value)}</td>
+      <td contenteditable="true" spellcheck="false" class="frete-cell-${freteColumnType(colIndex)}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-type="${freteColumnType(colIndex)}" data-value="${escapeAttr(formatFreteCellValue(value, colIndex))}">${escapeHtml(formatFreteCellValue(value, colIndex))}</td>
     `).join('');
     return `<tr class="${rowTone}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" ondragover="handleFreteRowDragOver(event)" ondragleave="handleFreteRowDragLeave(event)" ondrop="dropFreteRow(event,'${escapeAttr(key)}',${rowIndex})">${cells}<td class="frete-row-actions">
       <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">↕</button>
@@ -1704,6 +1704,43 @@ function renderFreteConsultTable(key, table) {
       </table>
     </div>
   </section>`;
+}
+
+function freteColumnType(colIndex) {
+  return colIndex < 2 ? 'text' : 'accounting';
+}
+
+function formatFreteCellValue(value, colIndex) {
+  const raw = String(value || '').trim();
+  if (freteColumnType(colIndex) === 'text') return raw;
+  return formatFreteAccounting(raw);
+}
+
+function formatFreteAccounting(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '--') return raw;
+  const amount = parseFreteCurrency(raw);
+  if (!Number.isFinite(amount)) return raw;
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function parseFreteCurrency(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '--') return NaN;
+  const cleaned = raw.replace(/[^\d,.-]/g, '');
+  if (!cleaned) return NaN;
+  const normalized = cleaned.includes(',')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : /^-?(\d{1,3}\.)+\d{3}$/.test(cleaned)
+      ? cleaned.replace(/\./g, '')
+      : cleaned;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
 }
 
 function freteOriginTone(origin) {
@@ -1776,7 +1813,7 @@ function consultarFreteValor() {
 
   result.innerHTML = matches.map(item => `<div class="frete-result-pill frete-result-${escapeAttr(item.tone)}">
     <span>${escapeHtml(item.title)}</span>
-    <strong>${escapeHtml(item.value)}</strong>
+    <strong>${escapeHtml(formatFreteCellValue(item.value, colIndex))}</strong>
   </div>`).join('');
 }
 
@@ -1874,12 +1911,13 @@ document.addEventListener('focusout', e => {
 async function commitFreteConsultEdit(cell) {
   if (!isAdmin()) return;
   const previous = cell.dataset.value || '';
-  const next = cell.textContent.trim();
+  const col = Number(cell.dataset.col);
+  const next = formatFreteCellValue(cell.textContent, col);
+  cell.textContent = next;
   if (next === previous) return;
 
   const table = cell.dataset.table;
   const row = Number(cell.dataset.row);
-  const col = Number(cell.dataset.col);
   if (!state.freteConsultas[table]?.rows?.[row]) return;
 
   state.freteConsultas[table].rows[row][col] = next;
