@@ -3223,6 +3223,38 @@ body.reports-page-active .reports-modal .modal-footer {
   text-transform: uppercase;
 }
 
+.frete-sort-btn {
+  width: 100%;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-transform: inherit;
+}
+
+.frete-sort-btn em {
+  min-width: 25px;
+  color: var(--text-dim);
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.frete-sort-btn:hover,
+.frete-sort-btn.is-active {
+  color: var(--accent);
+}
+
+.frete-sort-btn.is-active em {
+  color: var(--accent);
+}
+
 .frete-consult-table td[contenteditable="true"] {
   cursor: text;
   outline: none;

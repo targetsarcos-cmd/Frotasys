@@ -19,6 +19,7 @@ const state = {
   configOptions: {},
   configColors: {},
   tableSort: { field: '', direction: 'asc' },
+  freteSort: {},
   freteConsultas: {},
   listaEspera: [],
   lembrete: { data: '', texto: '' },
@@ -1680,7 +1681,7 @@ function renderFreteQueryPanel() {
 }
 
 function renderFreteConsultTable(key, table) {
-  const header = `${FRETE_COLUMNS.map(col => `<th>${escapeHtml(col)}</th>`).join('')}<th>AÇÕES</th>`;
+  const header = `${FRETE_COLUMNS.map((col, colIndex) => renderFreteConsultHeader(key, col, colIndex)).join('')}<th>AÇÕES</th>`;
   const rows = table.rows.map((row, rowIndex) => {
     const rowTone = freteOriginTone(row[0]);
     const cells = row.map((value, colIndex) => `
@@ -1704,6 +1705,38 @@ function renderFreteConsultTable(key, table) {
       </table>
     </div>
   </section>`;
+}
+
+function renderFreteConsultHeader(tableKey, label, colIndex) {
+  if (colIndex > 1) return `<th>${escapeHtml(label)}</th>`;
+  const sort = state.freteSort?.[tableKey];
+  const isActive = sort?.col === colIndex;
+  const nextDirection = isActive && sort.direction === 'asc' ? 'desc' : 'asc';
+  const indicator = isActive ? (sort.direction === 'asc' ? 'A-Z' : 'Z-A') : '↕';
+  const title = `${label}: ordenar ${nextDirection === 'asc' ? 'A a Z' : 'Z a A'}`;
+  return `<th>
+    <button type="button" class="frete-sort-btn ${isActive ? 'is-active' : ''}" onclick="sortFreteConsultTable('${escapeAttr(tableKey)}', ${colIndex})" title="${escapeAttr(title)}">
+      <span>${escapeHtml(label)}</span>
+      <em>${indicator}</em>
+    </button>
+  </th>`;
+}
+
+async function sortFreteConsultTable(tableKey, colIndex) {
+  if (!isAdmin()) return;
+  const table = state.freteConsultas[tableKey];
+  if (!table?.rows) return;
+  const current = state.freteSort[tableKey];
+  const direction = current?.col === colIndex && current.direction === 'asc' ? 'desc' : 'asc';
+  state.freteSort[tableKey] = { col: colIndex, direction };
+  table.rows.sort((a, b) => {
+    const textA = normalizeOption(a[colIndex]);
+    const textB = normalizeOption(b[colIndex]);
+    const result = textA.localeCompare(textB, 'pt-BR', { sensitivity: 'base' });
+    return direction === 'asc' ? result : -result;
+  });
+  renderFreteConsultas();
+  await saveFreteConsultas();
 }
 
 function freteColumnType(colIndex) {
@@ -4358,19 +4391,23 @@ async function copyViagem(event, id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!viagem) return;
 
-  const text = [
-    `NOME: ${viagem.nome || ''}`,
-    `PLACA: ${viagem.placa || ''}`,
-    `ORIGEM: ${viagem.origem || ''}`,
-    `DESTINO: ${viagem.destino || ''}`,
-    `PESO: ${formatPeso(viagem.peso || '')}`,
-    `DT: ${viagem.dt || ''}`
-  ].join('\n');
+  const rows = [
+    ['NOME', viagem.nome || ''],
+    ['PLACA', viagem.placa || ''],
+    ['ORIGEM', viagem.origem || ''],
+    ['DESTINO', viagem.destino || ''],
+    ['PESO', formatPeso(viagem.peso || '')],
+    ['DT', viagem.dt || '']
+  ];
+  const text = rows.map(([label, value]) => `*${label}*: ${value}`).join('\n');
+  const html = rows
+    .map(([label, value]) => `<div><strong>${escapeHtml(label)}</strong>: ${escapeHtml(value)}</div>`)
+    .join('');
 
   showCopyBubble(event?.currentTarget);
 
   try {
-    await navigator.clipboard.writeText(text);
+    await writeFormattedClipboard(text, html);
   } catch (e) {
     try {
       const textarea = document.createElement('textarea');
@@ -4385,6 +4422,17 @@ async function copyViagem(event, id) {
       console.error('Erro ao copiar viagem', fallbackError);
     }
   }
+}
+
+async function writeFormattedClipboard(text, html) {
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/plain': new Blob([text], { type: 'text/plain' }),
+      'text/html': new Blob([html], { type: 'text/html' })
+    })]);
+    return;
+  }
+  await navigator.clipboard.writeText(text);
 }
 
 function showCopyBubble(button) {
