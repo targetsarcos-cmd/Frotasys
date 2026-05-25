@@ -2430,9 +2430,9 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-card {
   grid-column: span 2;
   height: auto;
-  min-height: 280px;
-  gap: 6px;
-  padding: 8px;
+  min-height: 340px;
+  gap: 4px;
+  padding: 7px;
   overflow: visible;
 }
 
@@ -2494,14 +2494,14 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-summary-head strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 900;
 }
 
 .report-summary-head span {
   overflow: hidden;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2516,7 +2516,7 @@ body.reports-page-active .reports-modal .modal-footer {
   min-height: 0;
   overflow: visible;
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .report-summary-origin {
@@ -2546,22 +2546,23 @@ body.reports-page-active .reports-modal .modal-footer {
   border-collapse: collapse;
   table-layout: fixed;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .report-summary-table th,
 .report-summary-table td {
   border: 1px solid rgba(203, 213, 225, .68);
   min-width: 0;
-  padding: 2px 3px;
+  padding: 0 2px;
+  line-height: 1.05;
   text-align: right;
   white-space: nowrap;
 }
 
 .report-summary-table th:first-child,
 .report-summary-table td:first-child {
-  min-width: 82px;
-  width: 82px;
+  min-width: 86px;
+  width: 86px;
   text-align: left;
   font-weight: 900;
 }
@@ -2579,33 +2580,33 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-table .card-row-falta td,
 .report-summary-table .card-meta-product-row td,
 .report-summary-table .card-total-product-row td {
-  font-size: 10px;
-  line-height: 1.15;
+  font-size: 14px;
+  line-height: 1.05;
 }
 
 .report-summary-table .card-meta-product-row td,
 .report-summary-table .card-total-product-row td {
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .report-summary-toggle {
-  gap: 4px;
+  gap: 3px;
 }
 
 .report-summary-toggle .card-product-arrow {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: 10px;
   box-shadow: none;
 }
 
 .report-summary-bottom {
   display: grid;
-  grid-template-columns: 128px minmax(250px, 1fr) 58px;
+  grid-template-columns: 136px minmax(240px, 1fr) 56px;
   align-items: center;
-  gap: 5px;
-  padding: 5px;
+  gap: 4px;
+  padding: 4px;
   border-top: 1px solid rgba(203, 213, 225, .68);
 }
 
@@ -2613,12 +2614,12 @@ body.reports-page-active .reports-modal .modal-footer {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .report-summary-operation .summary-icon {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   font-size: 19px;
 }
@@ -2626,7 +2627,7 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-operation span {
   display: block;
   color: var(--card-accent);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 850;
 }
 
@@ -2634,7 +2635,7 @@ body.reports-page-active .reports-modal .modal-footer {
   display: block;
   overflow: hidden;
   color: var(--text);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -2651,7 +2652,7 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-summary-kpi {
   min-width: 0;
-  min-height: 34px;
+  min-height: 36px;
   display: grid;
   place-items: center;
   gap: 1px;
@@ -2664,7 +2665,7 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-summary-kpi span {
   color: #34465e;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -2673,7 +2674,7 @@ body.reports-page-active .reports-modal .modal-footer {
   max-width: 100%;
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2695,12 +2696,12 @@ body.reports-page-active .reports-modal .modal-footer {
 .report-summary-percent {
   display: grid;
   justify-items: center;
-  gap: 2px;
+  gap: 1px;
 }
 
 .report-summary-percent strong {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -2709,13 +2710,13 @@ body.reports-page-active .reports-modal .modal-footer {
     conic-gradient(var(--card-accent) calc(var(--percent) * 1%), #f4a1b8 0);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 900;
 }
 
 .report-summary-percent span {
   color: var(--text-dim);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 850;
   text-align: center;
 }
@@ -2750,7 +2751,7 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-type-legend-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   grid-template-areas:
     "line label percent"
     "line value value";
@@ -2762,8 +2763,9 @@ body.reports-page-active .reports-modal .modal-footer {
 
 .report-type-legend-line {
   grid-area: line;
-  height: 2px;
-  border-radius: 999px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
   background: currentColor;
 }
 
