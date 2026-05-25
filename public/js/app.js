@@ -4397,11 +4397,12 @@ async function copyViagem(event, id) {
     ['ORIGEM', viagem.origem || ''],
     ['DESTINO', viagem.destino || ''],
     ['PESO', formatPeso(viagem.peso || '')],
+    ['PRODUTO', viagem.produto || ''],
     ['DT', viagem.dt || '']
   ];
-  const text = rows.map(([label, value]) => `*${label}*: ${value}`).join('\n');
+  const text = rows.map(([label, value]) => `*${label}:* ${value}`).join('\n');
   const html = rows
-    .map(([label, value]) => `<div><strong>${escapeHtml(label)}</strong>: ${escapeHtml(value)}</div>`)
+    .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
     .join('');
 
   showCopyBubble(event?.currentTarget);
