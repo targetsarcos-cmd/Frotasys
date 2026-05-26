@@ -406,7 +406,7 @@ function initUI() {
   document.getElementById('reports-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-btn-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-refresh').addEventListener('click', updateReports);
-  document.getElementById('reports-export-pdf')?.addEventListener('click', exportReportChartsPdf);
+  document.getElementById('reports-export-pdf')?.addEventListener('click', exportReportsPdf);
   document.getElementById('report-summary-copy')?.addEventListener('pointerdown', prepareReportSummaryCopyImage);
   document.getElementById('report-summary-copy')?.addEventListener('click', copyReportSummaryAsImage);
   ['report-start-date', 'report-end-date', 'report-operation'].forEach(id => {
@@ -1016,13 +1016,18 @@ async function updateReports() {
   }
 }
 
-async function exportReportChartsPdf() {
+async function exportReportsPdf() {
   const start = document.getElementById('report-start-date')?.value;
   const end = document.getElementById('report-end-date')?.value;
   const pdfBtn = document.getElementById('reports-export-pdf');
+  const reportArea = document.querySelector('.reports-grid');
 
   if (!isValidDateRange(start, end)) {
     setReportsStatus('Informe um período válido de até 366 dias.', true);
+    return;
+  }
+  if (!window.html2canvas || !reportArea) {
+    setReportsStatus('Não foi possível preparar a imagem do relatório.', true);
     return;
   }
 
@@ -1031,22 +1036,29 @@ async function exportReportChartsPdf() {
     pdfBtn.disabled = true;
     pdfBtn.textContent = 'Gerando...';
   }
-  setReportsStatus('Gerando PDF dos gráficos...');
+  setReportsStatus('Gerando PDF do relatório...');
 
   try {
     if (!state.reportData) await updateReports();
-    await new Promise(resolve => requestAnimationFrame(resolve));
-    const images = reportChartCanvases().map(canvasToPdfImage).filter(Boolean);
+    await waitForReportPaint();
+    const canvas = await window.html2canvas(reportArea, {
+      backgroundColor: '#f6f8fb',
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
+      logging: false,
+      windowWidth: Math.max(document.documentElement.clientWidth, reportArea.scrollWidth)
+    });
+    const images = splitCanvasForPdfImages(canvas);
     if (!images.length) {
-      setReportsStatus('Nenhum gráfico disponível para exportar.', true);
+      setReportsStatus('Nenhum conteúdo disponível para exportar.', true);
       return;
     }
     const blob = buildImagesPdfBlob(images);
-    downloadBlob(blob, `relatorios_graficos_${formatDateForFilename(start)}_${formatDateForFilename(end)}.pdf`);
-    setReportsStatus('PDF dos gráficos gerado.');
+    downloadBlob(blob, `relatorios_${formatDateForFilename(start)}_${formatDateForFilename(end)}.pdf`);
+    setReportsStatus('PDF do relatório gerado.');
   } catch (error) {
-    console.error('Erro ao exportar gráficos:', error);
-    setReportsStatus('Erro ao exportar os gráficos.', true);
+    console.error('Erro ao exportar relatório:', error);
+    setReportsStatus('Erro ao exportar o relatório.', true);
   } finally {
     if (pdfBtn) {
       pdfBtn.disabled = false;
@@ -1055,10 +1067,35 @@ async function exportReportChartsPdf() {
   }
 }
 
-function reportChartCanvases() {
-  return ['chart-report-tipo', 'chart-report-destino', 'chart-report-registro', 'chart-report-evolucao']
-    .map(id => document.getElementById(id))
-    .filter(canvas => canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0);
+function waitForReportPaint() {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function splitCanvasForPdfImages(canvas) {
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const margin = 30;
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
+  const sliceHeight = Math.max(1, Math.floor(canvas.width * (maxHeight / maxWidth)));
+  const images = [];
+
+  for (let y = 0; y < canvas.height; y += sliceHeight) {
+    const height = Math.min(sliceHeight, canvas.height - y);
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = height;
+    const ctx = pageCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+    ctx.drawImage(canvas, 0, y, canvas.width, height, 0, 0, canvas.width, height);
+    const image = canvasToPdfImage(pageCanvas);
+    if (image) images.push(image);
+  }
+
+  return images;
 }
 
 function canvasToPdfImage(canvas) {
