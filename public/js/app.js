@@ -2303,7 +2303,22 @@ function renderTable(secao) {
     return;
   }
 
-  tbody.innerHTML = rows.map(v => {
+  const completedRows = rows.filter(isViagemConcluida);
+  const pendingRows = rows.filter(v => !isViagemConcluida(v));
+  const separator = completedRows.length && pendingRows.length
+    ? `<tr class="table-completion-separator" aria-hidden="true"><td colspan="${FIELDS.length + 1}"></td></tr>`
+    : '';
+
+  tbody.innerHTML = [
+    ...completedRows.map(renderTableRow),
+    separator,
+    ...pendingRows.map(renderTableRow)
+  ].join('');
+  updateStickyColumnWidths(document.getElementById(`table-${secao}`));
+  updateTableScrollControls(secao);
+}
+
+function renderTableRow(v) {
     const originClass = originSlug(v.origem);
     const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
     const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
@@ -2319,9 +2334,6 @@ function renderTable(secao) {
         </div>
       </td>
     </tr>`;
-  }).join('');
-  updateStickyColumnWidths(document.getElementById(`table-${secao}`));
-  updateTableScrollControls(secao);
 }
 
 const tableScrollSyncing = {};
