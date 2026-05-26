@@ -1038,10 +1038,6 @@ body.reports-page-active .main {
   vertical-align: middle;
 }
 
-.data-table th[data-field="placa"],
-.data-table td[data-field="placa"],
-.data-table th[data-field="nome"],
-.data-table td[data-field="nome"],
 .data-table th[data-field="dt"],
 .data-table td[data-field="dt"],
 .data-table th[data-field="cte"],
@@ -1171,17 +1167,26 @@ body.reports-page-active .main {
 }
 
 .cell-tipo .table-select {
-  min-width: 108px;
+  min-width: 86px;
+  padding-right: 17px;
+  padding-left: 8px;
 }
 
 .cell-produto .table-select {
-  min-width: 112px;
+  min-width: 74px;
+  padding-right: 17px;
+  padding-left: 8px;
+}
+
+.cell-status .table-select {
+  min-width: 92px;
+  padding-right: 17px;
+  padding-left: 8px;
 }
 
 .cell-carroceria .table-select,
 .cell-kanguru .table-select,
-.cell-pamcard .table-select,
-.cell-status .table-select {
+.cell-pamcard .table-select {
   min-width: 118px;
 }
 
@@ -2720,6 +2725,9 @@ body.reports-page-active .reports-modal .modal-footer {
   background: #f8fafc;
   color: #243855;
   font-weight: 900;
+  height: 24px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .report-summary-table .card-row-meta td,
