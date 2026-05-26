@@ -19,9 +19,6 @@ const state = {
   configOptions: {},
   configColors: {},
   tableSort: { field: '', direction: 'asc' },
-  tableLayout: { order: [], widths: {} },
-  tableColumnDragField: '',
-  tableColumnDragJustDropped: false,
   freteSort: {},
   freteConsultas: {},
   listaEspera: [],
@@ -325,23 +322,19 @@ function handleWsMessage(msg) {
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
-  } else if (type === 'table_layout_atualizado') {
-    state.tableLayout = normalizeTableLayout(payload);
-    renderAll();
   }
 }
 
 // ─── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadAll() {
-  const [viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete, tableLayout] = await Promise.all([
+  const [viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete] = await Promise.all([
     apiFetch(`/api/viagens?data=${state.currentDate}`),
     apiFetch(`/api/metas?data=${state.currentDate}`),
     apiFetch('/api/operacoes'),
     apiFetch('/api/config-options'),
     apiFetch('/api/config-colors'),
     apiFetch('/api/lista-espera'),
-    apiFetch('/api/lembretes').catch(() => null),
-    apiFetch('/api/table-layout').catch(() => null)
+    apiFetch('/api/lembretes').catch(() => null)
   ]);
   state.viagens = viagens || [];
   state.metas = metas || [];
@@ -350,7 +343,6 @@ async function loadAll() {
   state.operacoes = normalizeOperacoes(operacoes);
   state.listaEspera = normalizeListaEspera(listaEspera);
   state.lembrete = normalizeLembrete(lembrete);
-  state.tableLayout = normalizeTableLayout(tableLayout);
   clearReminderStatus();
   renderAll();
 }
@@ -2274,11 +2266,11 @@ const FIELDS = [
   { key: 'carroceria', label: 'CARROCERIA', select: true },
   { key: 'kanguru', label: 'KANGURU', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
-  { key: 'status', label: 'STATUS', select: true },
-  { key: 'usuario', label: 'USUÁRIO' },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'descarga', label: 'DESCARGA', quick: true, dateTime: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
+  { key: 'status', label: 'STATUS', select: true },
+  { key: 'usuario', label: 'USUÁRIO' },
   { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'produto', label: 'PRODUTO', select: true },
   { key: 'origem', label: 'ORIGEM', select: true },
@@ -2296,95 +2288,16 @@ const FIELDS = [
   { key: 'data', label: 'DATA', quick: true, date: true }
 ];
 
-function tableFields() {
-  const byKey = new Map(FIELDS.map(field => [field.key, field]));
-  return normalizeTableLayout(state.tableLayout).order
-    .map(key => byKey.get(key))
-    .filter(Boolean);
-}
-
-function normalizeTableLayout(layout = {}) {
-  const requestedOrder = Array.isArray(layout?.order) ? layout.order : [];
-  const order = [];
-  requestedOrder.forEach(key => {
-    const safeKey = String(key || '').trim();
-    if (FIELDS.some(field => field.key === safeKey) && !order.includes(safeKey)) order.push(safeKey);
-  });
-  FIELDS.forEach(field => {
-    if (!order.includes(field.key)) order.push(field.key);
-  });
-
-  const widths = {};
-  const rawWidths = layout?.widths && typeof layout.widths === 'object' ? layout.widths : {};
-  FIELDS.forEach(field => {
-    const width = Math.round(Number(rawWidths[field.key]) || 0);
-    if (width >= 72 && width <= 420) widths[field.key] = width;
-  });
-
-  return { order, widths };
-}
-
-function tableStickyKeys() {
-  return tableFields().slice(0, 3).map(field => field.key);
-}
-
-function tableStickyClass(key) {
-  const index = tableStickyKeys().indexOf(key);
-  return index === -1 ? '' : `is-sticky-col-${index + 1}`;
-}
-
-function defaultTableColumnWidth(key) {
-  const defaults = {
-    placa: 132,
-    nome: 142,
-    tipo: 136,
-    carroceria: 142,
-    kanguru: 132,
-    pamcard: 142,
-    status: 142,
-    usuario: 116,
-    agendamento: 150,
-    descarga: 150,
-    telefone: 150,
-    frete: 126,
-    produto: 112,
-    origem: 136,
-    destino: 136,
-    peso: 92,
-    dt: 116,
-    cte: 110,
-    manifesto: 118,
-    contrato: 118,
-    nota: 122,
-    num_pedagio: 112,
-    vlr_pedagio: 118,
-    horas: 92,
-    obs: 180,
-    data: 112
-  };
-  return defaults[key] || 112;
-}
-
-function tableColumnWidth(key) {
-  return state.tableLayout?.widths?.[key] || defaultTableColumnWidth(key);
-}
-
-function tableColumnStyle(key) {
-  const width = tableColumnWidth(key);
-  return `width:${width}px;min-width:${width}px;max-width:${width}px`;
-}
-
 function renderTable(secao) {
   renderTableHeader(secao);
   const tbody = document.getElementById(`tbody-${secao}`);
-  const fields = tableFields();
   const rows = filteredRows(secao);
   const count = document.getElementById(`count-${secao}`);
 
   if (count) count.textContent = `${rows.length} ${rows.length === 1 ? 'registro' : 'registros'}`;
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="${fields.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${FIELDS.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
     updateStickyColumnWidths(document.getElementById(`table-${secao}`));
     updateTableScrollControls(secao);
     return;
@@ -2393,19 +2306,19 @@ function renderTable(secao) {
   const completedRows = rows.filter(isViagemConcluida);
   const pendingRows = rows.filter(v => !isViagemConcluida(v));
   const separator = completedRows.length && pendingRows.length
-    ? `<tr class="table-completion-separator" aria-hidden="true"><td colspan="${fields.length + 1}"></td></tr>`
+    ? `<tr class="table-completion-separator" aria-hidden="true"><td colspan="${FIELDS.length + 1}"></td></tr>`
     : '';
 
   tbody.innerHTML = [
-    ...completedRows.map(v => renderTableRow(v, fields)),
+    ...completedRows.map(renderTableRow),
     separator,
-    ...pendingRows.map(v => renderTableRow(v, fields))
+    ...pendingRows.map(renderTableRow)
   ].join('');
   updateStickyColumnWidths(document.getElementById(`table-${secao}`));
   updateTableScrollControls(secao);
 }
 
-function renderTableRow(v, fields = tableFields()) {
+function renderTableRow(v) {
     const originClass = originSlug(v.origem);
     const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
     const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
@@ -2525,43 +2438,30 @@ function syncTableScrollFromBottom(secao) {
 function updateStickyColumnWidths(table) {
   if (!table) return;
 
-  const sticky = tableStickyKeys();
-  const widths = sticky.map(key => tableColumnWidth(key));
-  table.style.setProperty('--sticky-col-1-width', `${widths[0] || 0}px`);
-  table.style.setProperty('--sticky-col-2-width', `${widths[1] || 0}px`);
-  table.style.setProperty('--sticky-col-3-width', `${widths[2] || 0}px`);
+  const measureField = (field, minWidth) => {
+    const cells = [...table.querySelectorAll(`th[data-field="${field}"], td[data-field="${field}"]`)];
+    return cells.reduce((width, cell) => Math.max(width, Math.ceil(cell.scrollWidth)), minWidth);
+  };
+
+  table.style.setProperty('--sticky-placa-width', `${measureField('placa', 132)}px`);
+  table.style.setProperty('--sticky-nome-width', `${measureField('nome', 142)}px`);
+  table.style.setProperty('--sticky-tipo-width', `${measureField('tipo', 136)}px`);
 }
 
 function renderTableHeader(secao) {
   const table = document.getElementById(`table-${secao}`);
   const headRow = table?.querySelector('thead tr');
   if (!headRow) return;
-  const fields = tableFields();
 
-  headRow.innerHTML = `${fields.map(field => {
+  headRow.innerHTML = `${FIELDS.map(field => {
     const active = state.tableSort.field === field.key ? 'is-sorted' : '';
     const arrow = active ? (state.tableSort.direction === 'asc' ? ' ↑' : ' ↓') : '';
     const label = `${field.label}${arrow}`;
-    const adminAttrs = isAdmin()
-      ? `draggable="true" ondragstart="startTableColumnDrag(event,'${escapeAttr(field.key)}')" ondragover="handleTableColumnDragOver(event)" ondrop="dropTableColumn(event,'${escapeAttr(field.key)}')" ondragend="endTableColumnDrag(event)"`
-      : '';
-    return `<th class="${active} ${tableStickyClass(field.key)}" data-field="${escapeAttr(field.key)}" style="${tableColumnStyle(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}" ${adminAttrs}>
-      <span class="table-th-content">
-        <span>${escapeHtml(label)}</span>
-        ${isAdmin() ? '<em class="table-column-drag-mark" title="Arrastar coluna">⋮⋮</em>' : ''}
-      </span>
-      ${isAdmin() ? `<span class="table-column-resize" onpointerdown="startTableColumnResize(event,'${escapeAttr(field.key)}')" title="Ajustar largura"></span>` : ''}
-    </th>`;
+    return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
   }).join('')}<th class="col-actions"></th>`;
 
   headRow.querySelectorAll('th[data-field]').forEach(th => {
-    th.onclick = event => {
-      if (state.tableColumnDragJustDropped || event.target.closest('.table-column-resize, .table-column-drag-mark')) {
-        state.tableColumnDragJustDropped = false;
-        return;
-      }
-      sortTableBy(th.dataset.field);
-    };
+    th.onclick = () => sortTableBy(th.dataset.field);
   });
 }
 
@@ -2590,7 +2490,7 @@ function renderCell(v, field) {
   if (field.select) {
     const cls = field.key === 'origem' ? originSlug(raw) : field.key === 'status' ? statusSlug(raw) : field.key === 'tipo' ? tipoSlug(raw) : '';
     const style = selectColorStyle(field.key, raw);
-    return `<td class="cell-select cell-${field.key} ${tableStickyClass(field.key)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" style="${tableColumnStyle(field.key)}">
+    return `<td class="cell-select cell-${field.key}" data-field="${field.key}" data-id="${escapeAttr(v._id)}">
       <select class="table-select ${cls}" style="${escapeAttr(style)}" data-field="${field.key}" data-id="${escapeAttr(v._id)}" onchange="updateInlineSelect(this)" ${canEditViagemField(v, field.key) ? '' : 'disabled'}>
         ${renderOptions(getSelectOptions(field.key), raw)}
       </select>
@@ -2607,7 +2507,7 @@ function renderCell(v, field) {
 
   if (field.key === 'placa') {
     const canPromote = v.secao === 'agenciando' && canEditViagem(v);
-    return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell ${tableStickyClass(field.key)}" style="${tableColumnStyle(field.key)}">
+    return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell">
       <span class="placa-content">
         <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'Já está faturado'}">↑</button>
         <span>${escapeHtml(display)}</span>
@@ -2618,7 +2518,7 @@ function renderCell(v, field) {
   let cls = field.quick && canEditViagemField(v, field.key) ? 'quick-edit' : '';
   if (field.key === 'agendamento' && v.agendamentoVerde) cls += ' has-agendamento';
   const title = field.key === 'telefone' && phoneList(raw).length > 1 ? ` title="${escapeAttr(raw)}"` : '';
-  return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${`${cls} ${tableStickyClass(field.key)}`.trim()}" style="${tableColumnStyle(field.key)}"${title}>${escapeHtml(display)}</td>`;
+  return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${cls.trim()}"${title}>${escapeHtml(display)}</td>`;
 }
 
 function renderOptions(options, selected) {
@@ -2997,93 +2897,6 @@ function sortTableBy(fieldKey) {
   };
   renderTable('arcos');
   renderTable('agenciando');
-}
-
-function startTableColumnDrag(event, fieldKey) {
-  if (!isAdmin()) return;
-  state.tableColumnDragField = fieldKey;
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', fieldKey);
-  event.currentTarget.classList.add('is-column-dragging');
-}
-
-function handleTableColumnDragOver(event) {
-  if (!isAdmin() || !state.tableColumnDragField) return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-  event.currentTarget.classList.add('is-column-drop-target');
-}
-
-async function dropTableColumn(event, targetField) {
-  if (!isAdmin() || !state.tableColumnDragField) return;
-  event.preventDefault();
-  document.querySelectorAll('.is-column-drop-target').forEach(el => el.classList.remove('is-column-drop-target'));
-  const sourceField = state.tableColumnDragField;
-  state.tableColumnDragField = '';
-  state.tableColumnDragJustDropped = true;
-  setTimeout(() => { state.tableColumnDragJustDropped = false; }, 0);
-  if (sourceField === targetField) return;
-
-  const order = tableFields().map(field => field.key);
-  const sourceIndex = order.indexOf(sourceField);
-  const targetIndex = order.indexOf(targetField);
-  if (sourceIndex === -1 || targetIndex === -1) return;
-  order.splice(sourceIndex, 1);
-  order.splice(targetIndex, 0, sourceField);
-  state.tableLayout = normalizeTableLayout({ ...state.tableLayout, order });
-  renderTable('arcos');
-  renderTable('agenciando');
-  await saveTableLayout();
-}
-
-function endTableColumnDrag(event) {
-  state.tableColumnDragField = '';
-  event.currentTarget?.classList.remove('is-column-dragging');
-  document.querySelectorAll('.is-column-drop-target').forEach(el => el.classList.remove('is-column-drop-target'));
-}
-
-function startTableColumnResize(event, fieldKey) {
-  if (!isAdmin()) return;
-  event.preventDefault();
-  event.stopPropagation();
-  const startX = event.clientX;
-  const startWidth = tableColumnWidth(fieldKey);
-  const move = moveEvent => {
-    const nextWidth = Math.min(420, Math.max(72, Math.round(startWidth + moveEvent.clientX - startX)));
-    state.tableLayout = normalizeTableLayout({
-      ...state.tableLayout,
-      widths: { ...(state.tableLayout.widths || {}), [fieldKey]: nextWidth }
-    });
-    applyTableColumnWidth(fieldKey, nextWidth);
-    updateStickyColumnWidths(document.getElementById('table-arcos'));
-    updateStickyColumnWidths(document.getElementById('table-agenciando'));
-    updateAllTableScrollControls();
-  };
-  const up = async () => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    renderTable('arcos');
-    renderTable('agenciando');
-    await saveTableLayout();
-  };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up, { once: true });
-}
-
-function applyTableColumnWidth(fieldKey, width) {
-  document.querySelectorAll(`.data-table th[data-field="${fieldKey}"], .data-table td[data-field="${fieldKey}"]`).forEach(cell => {
-    cell.style.width = `${width}px`;
-    cell.style.minWidth = `${width}px`;
-    cell.style.maxWidth = `${width}px`;
-  });
-}
-
-async function saveTableLayout() {
-  const saved = await apiFetch('/api/table-layout', {
-    method: 'PUT',
-    body: JSON.stringify(state.tableLayout)
-  });
-  if (saved) state.tableLayout = normalizeTableLayout(saved);
 }
 
 function sortRows(rows) {

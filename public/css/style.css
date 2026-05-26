@@ -851,9 +851,9 @@ body.reports-page-active .main {
 }
 
 .data-table {
-  --sticky-col-1-width: 132px;
-  --sticky-col-2-width: 142px;
-  --sticky-col-3-width: 136px;
+  --sticky-placa-width: 132px;
+  --sticky-nome-width: 142px;
+  --sticky-tipo-width: 136px;
   width: max-content;
   min-width: 100%;
   border-collapse: separate;
@@ -890,101 +890,62 @@ body.reports-page-active .main {
   color: #000;
 }
 
-.data-table th[data-field],
-.data-table td[data-field] {
-  position: static;
-  left: auto;
-  z-index: auto;
-  box-shadow: none;
-}
-
-.data-table th.is-sticky-col-1,
-.data-table td.is-sticky-col-1 {
+.data-table th[data-field="placa"],
+.data-table td[data-field="placa"] {
   position: sticky;
   left: 0;
+  min-width: var(--sticky-placa-width);
+  width: var(--sticky-placa-width);
+  max-width: var(--sticky-placa-width);
   z-index: 3;
   background: var(--surface);
 }
 
-.data-table th.is-sticky-col-2,
-.data-table td.is-sticky-col-2 {
+.data-table th[data-field="nome"],
+.data-table td[data-field="nome"] {
   position: sticky;
-  left: var(--sticky-col-1-width);
+  left: var(--sticky-placa-width);
+  min-width: var(--sticky-nome-width);
+  width: var(--sticky-nome-width);
+  max-width: var(--sticky-nome-width);
   z-index: 3;
   background: var(--surface);
 }
 
-.data-table th.is-sticky-col-3,
-.data-table td.is-sticky-col-3 {
+.data-table th[data-field="tipo"],
+.data-table td[data-field="tipo"] {
   position: sticky;
-  left: calc(var(--sticky-col-1-width) + var(--sticky-col-2-width));
+  left: calc(var(--sticky-placa-width) + var(--sticky-nome-width));
+  min-width: var(--sticky-tipo-width);
+  width: var(--sticky-tipo-width);
+  max-width: var(--sticky-tipo-width);
   z-index: 3;
   background: var(--surface);
   box-shadow: 10px 0 18px rgba(15, 23, 42, .08);
 }
 
-.data-table thead th.is-sticky-col-1,
-.data-table thead th.is-sticky-col-2,
-.data-table thead th.is-sticky-col-3 {
+.data-table thead th[data-field="placa"],
+.data-table thead th[data-field="nome"],
+.data-table thead th[data-field="tipo"] {
   background: #fff200;
   z-index: 5;
 }
 
-.data-table thead th.is-sticky-col-1 {
+.data-table thead th[data-field="placa"] {
   border-top-left-radius: 8px;
 }
 
-.data-table thead th.is-sticky-col-3 {
+.data-table thead th[data-field="tipo"] {
   border-top-right-radius: 8px;
 }
 
-.data-table thead th.is-sticky-col-1:hover,
-.data-table thead th.is-sticky-col-2:hover,
-.data-table thead th.is-sticky-col-3:hover,
-.data-table thead th.is-sticky-col-1.is-sorted,
-.data-table thead th.is-sticky-col-2.is-sorted,
-.data-table thead th.is-sticky-col-3.is-sorted {
+.data-table thead th[data-field="placa"]:hover,
+.data-table thead th[data-field="nome"]:hover,
+.data-table thead th[data-field="tipo"]:hover,
+.data-table thead th[data-field="placa"].is-sorted,
+.data-table thead th[data-field="nome"].is-sorted,
+.data-table thead th[data-field="tipo"].is-sorted {
   background: #ffe35a;
-}
-
-.table-th-content {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding-right: 9px;
-}
-
-.table-column-drag-mark {
-  color: rgba(15, 23, 42, .48);
-  cursor: grab;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-style: normal;
-  letter-spacing: -2px;
-}
-
-.table-column-resize {
-  position: absolute;
-  top: 0;
-  right: -3px;
-  z-index: 8;
-  width: 8px;
-  height: 100%;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.table-column-resize:hover,
-.data-table thead th.is-column-drop-target .table-column-resize {
-  background: rgba(37, 99, 235, .18);
-}
-
-.data-table thead th.is-column-dragging {
-  opacity: .62;
-}
-
-.data-table thead th.is-column-drop-target {
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .data-table tbody tr {

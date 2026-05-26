@@ -33,15 +33,8 @@ const CONFIG_SEED_MARKERS = {
 };
 const WAITLIST_FIELD = '__lista_espera';
 const FRETE_CONSULT_FIELD = '__frete_consultas';
-const TABLE_LAYOUT_FIELD = '__table_layout';
 const LEMBRETE_FIELD = '__lembrete_diario';
 const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
-const TABLE_COLUMN_KEYS = [
-  'placa', 'nome', 'tipo', 'carroceria', 'kanguru', 'pamcard', 'status', 'usuario',
-  'agendamento', 'descarga', 'telefone', 'frete', 'produto', 'origem', 'destino',
-  'peso', 'dt', 'cte', 'manifesto', 'contrato', 'nota', 'num_pedagio',
-  'vlr_pedagio', 'horas', 'obs', 'data'
-];
 const DEFAULT_FRETE_CONSULTAS = {
   terceiros: {
     title: 'TERCEIROS',
@@ -457,46 +450,6 @@ async function saveFreteConsultasConfig(tables) {
     value: 'Consulta frete',
     normalized: FRETE_CONSULT_FIELD,
     tables: normalized,
-    ordem: existing?.ordem || 1
-  };
-  if (existing) return updateDoc(TABLES.configOptions, existing._id, payload);
-  return insertDoc(TABLES.configOptions, payload);
-}
-
-function normalizeTableLayout(layout = {}) {
-  const requestedOrder = Array.isArray(layout.order) ? layout.order : [];
-  const order = [];
-  requestedOrder.forEach(key => {
-    const safeKey = String(key || '').trim();
-    if (TABLE_COLUMN_KEYS.includes(safeKey) && !order.includes(safeKey)) order.push(safeKey);
-  });
-  TABLE_COLUMN_KEYS.forEach(key => {
-    if (!order.includes(key)) order.push(key);
-  });
-
-  const widths = {};
-  const rawWidths = layout.widths && typeof layout.widths === 'object' ? layout.widths : {};
-  TABLE_COLUMN_KEYS.forEach(key => {
-    const width = Math.round(Number(rawWidths[key]) || 0);
-    if (width >= 72 && width <= 420) widths[key] = width;
-  });
-
-  return { order, widths };
-}
-
-async function tableLayoutConfig() {
-  const doc = await findOne(TABLES.configOptions, item => item.field === TABLE_LAYOUT_FIELD);
-  return normalizeTableLayout(doc?.layout || {});
-}
-
-async function saveTableLayoutConfig(layout) {
-  const normalized = normalizeTableLayout(layout);
-  const existing = await findOne(TABLES.configOptions, item => item.field === TABLE_LAYOUT_FIELD);
-  const payload = {
-    field: TABLE_LAYOUT_FIELD,
-    value: 'Layout tabela principal',
-    normalized: TABLE_LAYOUT_FIELD,
-    layout: normalized,
     ordem: existing?.ordem || 1
   };
   if (existing) return updateDoc(TABLES.configOptions, existing._id, payload);
@@ -1438,27 +1391,6 @@ app.put('/api/frete-consultas', requireAdmin, async (req, res) => {
     const saved = await saveFreteConsultasConfig(req.body?.tables || req.body || {});
     const payload = saved.tables || await freteConsultasConfig();
     broadcast({ type: 'frete_consultas_atualizada', payload });
-    res.json(payload);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ─── LAYOUT DA TABELA PRINCIPAL ───────────────────────────────────────────────
-
-app.get('/api/table-layout', async (req, res) => {
-  try {
-    res.json(await tableLayoutConfig());
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.put('/api/table-layout', requireAdmin, async (req, res) => {
-  try {
-    const saved = await saveTableLayoutConfig(req.body || {});
-    const payload = saved.layout || await tableLayoutConfig();
-    broadcast({ type: 'table_layout_atualizado', payload });
     res.json(payload);
   } catch (e) {
     res.status(500).json({ error: e.message });
