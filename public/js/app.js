@@ -406,6 +406,8 @@ function initUI() {
   document.getElementById('reports-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-btn-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-refresh').addEventListener('click', updateReports);
+  document.getElementById('reports-export-excel')?.addEventListener('click', () => downloadReportsExport('xlsx'));
+  document.getElementById('reports-export-pdf')?.addEventListener('click', () => downloadReportsExport('pdf'));
   document.getElementById('report-summary-copy')?.addEventListener('pointerdown', prepareReportSummaryCopyImage);
   document.getElementById('report-summary-copy')?.addEventListener('click', copyReportSummaryAsImage);
   ['report-start-date', 'report-end-date', 'report-operation'].forEach(id => {
@@ -415,6 +417,11 @@ function initUI() {
   });
   document.getElementById('reports-overlay').addEventListener('click', e => {
     if (!document.body.classList.contains('reports-page-active') && e.target === document.getElementById('reports-overlay')) closeReportsModal();
+  });
+  document.getElementById('history-close')?.addEventListener('click', closeHistoryModal);
+  document.getElementById('history-btn-close')?.addEventListener('click', closeHistoryModal);
+  document.getElementById('history-overlay')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('history-overlay')) closeHistoryModal();
   });
   document.getElementById('btn-lista-espera').addEventListener('click', openListaEsperaModal);
   document.getElementById('waitlist-close').addEventListener('click', closeListaEsperaModal);
@@ -554,6 +561,7 @@ function initUI() {
       closeSearchModal();
       closeFreteConsultModal();
       closeReportsModal();
+      closeHistoryModal();
       closeListaEsperaModal();
       closeEventWarning();
       closeMetaGoalDialog();
@@ -922,6 +930,60 @@ function closeReportsModal() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function openHistoryModal(id) {
+  const viagem = state.viagens.find(item => item._id === id);
+  if (!viagem) return;
+  const title = document.getElementById('history-title');
+  if (title) title.textContent = `Histórico da Viagem - ${viagem.placa || 'Sem placa'}`;
+  renderViagemHistory(viagem);
+  document.getElementById('history-overlay')?.classList.remove('hidden');
+}
+
+function closeHistoryModal() {
+  document.getElementById('history-overlay')?.classList.add('hidden');
+}
+
+function renderViagemHistory(viagem) {
+  const container = document.getElementById('history-list');
+  if (!container) return;
+  const history = Array.isArray(viagem.historico) ? [...viagem.historico] : [];
+  if (!history.length) {
+    container.innerHTML = '<div class="history-empty">Nenhuma alteração registrada para esta viagem.</div>';
+    return;
+  }
+
+  container.innerHTML = history
+    .sort((a, b) => String(b.dataHora || '').localeCompare(String(a.dataHora || '')))
+    .map(item => {
+      const isCreate = item.tipo === 'CRIACAO';
+      const when = formatHistoryDateTime(item.dataHora);
+      const user = item.usuario || item.email || 'Usuário';
+      return `<article class="history-item ${isCreate ? 'is-create' : ''}">
+        <div class="history-item-head">
+          <strong>${escapeHtml(isCreate ? 'Cadastro criado' : (item.label || item.campo || 'ALTERAÇÃO'))}</strong>
+          <span>${escapeHtml(when)}</span>
+        </div>
+        <div class="history-user">${escapeHtml(user)}</div>
+        ${isCreate ? '' : `<div class="history-values">
+          <div><span>Antes</span><strong>${escapeHtml(item.anterior || '-')}</strong></div>
+          <div><span>Depois</span><strong>${escapeHtml(item.atual || '-')}</strong></div>
+        </div>`}
+      </article>`;
+    }).join('');
+}
+
+function formatHistoryDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || '');
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 async function updateReports() {
   const start = document.getElementById('report-start-date')?.value;
   const end = document.getElementById('report-end-date')?.value;
@@ -952,6 +1014,58 @@ async function updateReports() {
   } finally {
     button.disabled = false;
     button.textContent = 'Atualizar';
+  }
+}
+
+async function downloadReportsExport(format) {
+  const start = document.getElementById('report-start-date')?.value;
+  const end = document.getElementById('report-end-date')?.value;
+  const operation = document.getElementById('report-operation')?.value || '';
+  const excelBtn = document.getElementById('reports-export-excel');
+  const pdfBtn = document.getElementById('reports-export-pdf');
+  const targetBtn = format === 'pdf' ? pdfBtn : excelBtn;
+
+  if (!isValidDateRange(start, end)) {
+    setReportsStatus('Informe um período válido de até 366 dias.', true);
+    return;
+  }
+
+  [excelBtn, pdfBtn].forEach(btn => { if (btn) btn.disabled = true; });
+  const previousText = targetBtn?.textContent || '';
+  if (targetBtn) targetBtn.textContent = 'Gerando...';
+  setReportsStatus(`Gerando arquivo ${format === 'pdf' ? 'PDF' : 'Excel'}...`);
+
+  try {
+    const token = await FrotasysAuth.getAccessToken();
+    const params = new URLSearchParams({ start, end, operation, format });
+    const res = await fetch(`/api/reports/export?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+
+    if (!res.ok) {
+      const message = await responseErrorMessage(res);
+      setReportsStatus(message || 'Não foi possível exportar o relatório.', true);
+      return;
+    }
+
+    const blob = await res.blob();
+    const fallbackExt = format === 'pdf' ? 'pdf' : 'xlsx';
+    const filename = filenameFromDisposition(res.headers.get('Content-Disposition')) || `relatorios_${formatDateForFilename(start)}_${formatDateForFilename(end)}.${fallbackExt}`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setReportsStatus(`Arquivo ${format === 'pdf' ? 'PDF' : 'Excel'} gerado.`);
+  } catch (error) {
+    console.error('Erro ao exportar relatório:', error);
+    setReportsStatus('Erro ao exportar o relatório.', true);
+  } finally {
+    [excelBtn, pdfBtn].forEach(btn => { if (btn) btn.disabled = false; });
+    if (targetBtn) targetBtn.textContent = previousText;
   }
 }
 
@@ -2329,6 +2443,7 @@ function renderTableRow(v) {
       <td>
         <div class="row-actions">
           <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
+          <button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Histórico" aria-label="Histórico"><span class="table-history-icon" aria-hidden="true"></span></button>
           ${canEditViagem(v) ? `<button class="btn-row table-action-icon" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar" aria-label="Editar"><span class="table-edit-icon" aria-hidden="true"></span></button>` : ''}
           ${canDeleteViagem(v) ? `<button class="btn-row table-action-icon danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''}
         </div>

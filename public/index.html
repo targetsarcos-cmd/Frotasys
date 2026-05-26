@@ -7,7 +7,7 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260526-linha-em-edicao-azul">
+<link rel="stylesheet" href="css/style.css?v=20260526-historico-export-relatorios">
 </head>
 <body>
 <div class="mobile-blocker" aria-live="polite">
@@ -476,7 +476,11 @@
           <span>OPERAÇÃO</span>
           <select id="report-operation"></select>
         </label>
-        <button type="button" class="btn-primary reports-refresh" id="reports-refresh">Atualizar</button>
+        <div class="reports-filter-actions">
+          <button type="button" class="btn-primary reports-refresh" id="reports-refresh">Atualizar</button>
+          <button type="button" class="btn-cancel reports-export-btn" id="reports-export-excel">Excel</button>
+          <button type="button" class="btn-cancel reports-export-btn" id="reports-export-pdf">PDF</button>
+        </div>
       </section>
       <div class="reports-status" id="reports-status"></div>
       <section class="reports-grid">
@@ -527,6 +531,21 @@
     </div>
     <div class="modal-footer">
       <button type="button" class="btn-cancel" id="reports-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-overlay" class="modal-overlay hidden">
+  <div class="modal history-modal">
+    <div class="modal-header">
+      <span id="history-title">Histórico da Viagem</span>
+      <button class="modal-close" id="history-close" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body history-body">
+      <div class="history-list" id="history-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" id="history-btn-close">Fechar</button>
     </div>
   </div>
 </div>
@@ -726,6 +745,6 @@
 <script src="/vendor/html2canvas/html2canvas.min.js"></script>
 <script src="/vendor/chart.js/chart.umd.js"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260526-evento-status-usuario"></script>
+<script src="js/app.js?v=20260526-historico-export-relatorios"></script>
 </body>
 </html>
