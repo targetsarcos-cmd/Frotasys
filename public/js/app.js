@@ -4153,6 +4153,15 @@ function shouldDeferBlurCommit(event, element) {
 }
 
 function runBlurCommit(event, element, commit) {
+  if (
+    activeInlineEdit?.input === element &&
+    !event?.relatedTarget &&
+    Date.now() - (activeInlineEdit.openedAt || 0) < 250
+  ) {
+    activeInlineEdit.shouldRefocus = true;
+    restoreActiveInlineEditFocus();
+    return;
+  }
   if (shouldDeferBlurCommit(event, element)) return;
   if (!event?.relatedTarget) {
     setTimeout(() => {
@@ -4265,10 +4274,14 @@ function startInlineEdit(td) {
     value: inputValue,
     selectionStart: null,
     selectionEnd: null,
-    shouldRefocus: false
+    shouldRefocus: false,
+    openedAt: Date.now()
   };
   inp.focus();
   inp.select();
+  ['pointerdown', 'mousedown', 'click'].forEach(eventName => {
+    inp.addEventListener(eventName, event => event.stopPropagation());
+  });
   if (field === 'telefone') {
     inp.oninput = () => { inp.value = maskPhoneListInput(inp.value); };
   }

@@ -1184,10 +1184,28 @@ body.reports-page-active .main {
   padding-left: 8px;
 }
 
-.cell-carroceria .table-select,
-.cell-kanguru .table-select,
+.cell-origem .table-select {
+  min-width: 96px;
+  padding-right: 17px;
+  padding-left: 8px;
+}
+
+.cell-carroceria .table-select {
+  min-width: 106px;
+  padding-right: 17px;
+  padding-left: 8px;
+}
+
+.cell-kanguru .table-select {
+  min-width: 104px;
+  padding-right: 17px;
+  padding-left: 8px;
+}
+
 .cell-pamcard .table-select {
-  min-width: 118px;
+  min-width: 108px;
+  padding-right: 17px;
+  padding-left: 8px;
 }
 
 .table-select:focus {
