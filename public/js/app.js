@@ -406,8 +406,7 @@ function initUI() {
   document.getElementById('reports-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-btn-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-refresh').addEventListener('click', updateReports);
-  document.getElementById('reports-export-excel')?.addEventListener('click', () => downloadReportsExport('xlsx'));
-  document.getElementById('reports-export-pdf')?.addEventListener('click', () => downloadReportsExport('pdf'));
+  document.getElementById('reports-export-pdf')?.addEventListener('click', exportReportChartsPdf);
   document.getElementById('report-summary-copy')?.addEventListener('pointerdown', prepareReportSummaryCopyImage);
   document.getElementById('report-summary-copy')?.addEventListener('click', copyReportSummaryAsImage);
   ['report-start-date', 'report-end-date', 'report-operation'].forEach(id => {
@@ -1017,56 +1016,161 @@ async function updateReports() {
   }
 }
 
-async function downloadReportsExport(format) {
+async function exportReportChartsPdf() {
   const start = document.getElementById('report-start-date')?.value;
   const end = document.getElementById('report-end-date')?.value;
-  const operation = document.getElementById('report-operation')?.value || '';
-  const excelBtn = document.getElementById('reports-export-excel');
   const pdfBtn = document.getElementById('reports-export-pdf');
-  const targetBtn = format === 'pdf' ? pdfBtn : excelBtn;
 
   if (!isValidDateRange(start, end)) {
     setReportsStatus('Informe um período válido de até 366 dias.', true);
     return;
   }
 
-  [excelBtn, pdfBtn].forEach(btn => { if (btn) btn.disabled = true; });
-  const previousText = targetBtn?.textContent || '';
-  if (targetBtn) targetBtn.textContent = 'Gerando...';
-  setReportsStatus(`Gerando arquivo ${format === 'pdf' ? 'PDF' : 'Excel'}...`);
+  const previousText = pdfBtn?.textContent || '';
+  if (pdfBtn) {
+    pdfBtn.disabled = true;
+    pdfBtn.textContent = 'Gerando...';
+  }
+  setReportsStatus('Gerando PDF dos gráficos...');
 
   try {
-    const token = await FrotasysAuth.getAccessToken();
-    const params = new URLSearchParams({ start, end, operation, format });
-    const res = await fetch(`/api/reports/export?${params.toString()}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-
-    if (!res.ok) {
-      const message = await responseErrorMessage(res);
-      setReportsStatus(message || 'Não foi possível exportar o relatório.', true);
+    if (!state.reportData) await updateReports();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const images = reportChartCanvases().map(canvasToPdfImage).filter(Boolean);
+    if (!images.length) {
+      setReportsStatus('Nenhum gráfico disponível para exportar.', true);
       return;
     }
-
-    const blob = await res.blob();
-    const fallbackExt = format === 'pdf' ? 'pdf' : 'xlsx';
-    const filename = filenameFromDisposition(res.headers.get('Content-Disposition')) || `relatorios_${formatDateForFilename(start)}_${formatDateForFilename(end)}.${fallbackExt}`;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setReportsStatus(`Arquivo ${format === 'pdf' ? 'PDF' : 'Excel'} gerado.`);
+    const blob = buildImagesPdfBlob(images);
+    downloadBlob(blob, `relatorios_graficos_${formatDateForFilename(start)}_${formatDateForFilename(end)}.pdf`);
+    setReportsStatus('PDF dos gráficos gerado.');
   } catch (error) {
-    console.error('Erro ao exportar relatório:', error);
-    setReportsStatus('Erro ao exportar o relatório.', true);
+    console.error('Erro ao exportar gráficos:', error);
+    setReportsStatus('Erro ao exportar os gráficos.', true);
   } finally {
-    [excelBtn, pdfBtn].forEach(btn => { if (btn) btn.disabled = false; });
-    if (targetBtn) targetBtn.textContent = previousText;
+    if (pdfBtn) {
+      pdfBtn.disabled = false;
+      pdfBtn.textContent = previousText;
+    }
   }
+}
+
+function reportChartCanvases() {
+  return ['chart-report-tipo', 'chart-report-destino', 'chart-report-registro', 'chart-report-evolucao']
+    .map(id => document.getElementById(id))
+    .filter(canvas => canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0);
+}
+
+function canvasToPdfImage(canvas) {
+  const width = canvas.width;
+  const height = canvas.height;
+  if (!width || !height) return null;
+  const prepared = document.createElement('canvas');
+  prepared.width = width;
+  prepared.height = height;
+  const ctx = prepared.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(canvas, 0, 0);
+  const dataUrl = prepared.toDataURL('image/jpeg', 0.92);
+  return {
+    width,
+    height,
+    bytes: base64ToBytes(dataUrl.split(',')[1] || '')
+  };
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function asciiBytes(text) {
+  return new TextEncoder().encode(text);
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  parts.forEach(part => {
+    result.set(part, offset);
+    offset += part.length;
+  });
+  return result;
+}
+
+function pdfObjectBytes(id, contentParts) {
+  const parts = [asciiBytes(`${id} 0 obj\n`)];
+  if (Array.isArray(contentParts)) parts.push(...contentParts);
+  else parts.push(asciiBytes(String(contentParts)));
+  parts.push(asciiBytes('\nendobj\n'));
+  return concatBytes(parts);
+}
+
+function buildImagesPdfBlob(images) {
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const margin = 30;
+  const objects = [null, null, null];
+  const pageRefs = [];
+
+  images.forEach((image, index) => {
+    const imageId = objects.length;
+    objects.push([
+      asciiBytes(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.bytes.length} >>\nstream\n`),
+      image.bytes,
+      asciiBytes('\nendstream')
+    ]);
+
+    const maxWidth = pageWidth - margin * 2;
+    const maxHeight = pageHeight - margin * 2;
+    const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    const x = (pageWidth - drawWidth) / 2;
+    const y = (pageHeight - drawHeight) / 2;
+    const imageName = `Im${index + 1}`;
+    const content = `q\n${drawWidth.toFixed(2)} 0 0 ${drawHeight.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm\n/${imageName} Do\nQ`;
+    const contentId = objects.length;
+    objects.push(`<< /Length ${asciiBytes(content).length} >>\nstream\n${content}\nendstream`);
+
+    const pageId = objects.length;
+    pageRefs.push(`${pageId} 0 R`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /${imageName} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+  });
+
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = `<< /Type /Pages /Kids [${pageRefs.join(' ')}] /Count ${pageRefs.length} >>`;
+
+  const parts = [asciiBytes('%PDF-1.4\n')];
+  const offsets = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    offsets[id] = parts.reduce((sum, part) => sum + part.length, 0);
+    const content = Array.isArray(objects[id]) ? objects[id] : String(objects[id]);
+    parts.push(pdfObjectBytes(id, content));
+  }
+
+  const xrefOffset = parts.reduce((sum, part) => sum + part.length, 0);
+  let xref = `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) xref += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+  xref += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  parts.push(asciiBytes(xref));
+
+  return new Blob([concatBytes(parts)], { type: 'application/pdf' });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function buildReportsData(viagens, metas, filters) {
