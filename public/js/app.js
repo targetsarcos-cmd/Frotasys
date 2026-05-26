@@ -1125,7 +1125,10 @@ function base64ToBytes(base64) {
 }
 
 function asciiBytes(text) {
-  return new TextEncoder().encode(text);
+  if (window.TextEncoder) return new TextEncoder().encode(text);
+  const bytes = new Uint8Array(String(text).length);
+  for (let i = 0; i < bytes.length; i += 1) bytes[i] = String(text).charCodeAt(i) & 0xff;
+  return bytes;
 }
 
 function concatBytes(parts) {
@@ -1200,14 +1203,22 @@ function buildImagesPdfBlob(images) {
 }
 
 function downloadBlob(blob, filename) {
+  if (navigator.msSaveOrOpenBlob) {
+    navigator.msSaveOrOpenBlob(blob, filename);
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 30000);
 }
 
 function buildReportsData(viagens, metas, filters) {
