@@ -1015,6 +1015,17 @@ body.reports-page-active .main {
   background: #fecaca;
 }
 
+.data-table tbody tr:focus-within td,
+.data-table tbody tr:focus-within td[data-field="placa"],
+.data-table tbody tr:focus-within td[data-field="nome"],
+.data-table tbody tr:focus-within td[data-field="tipo"] {
+  background: #eaf3ff;
+}
+
+.data-table tbody tr:focus-within {
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, .22);
+}
+
 .data-table tbody tr.dragging {
   opacity: .45;
 }
