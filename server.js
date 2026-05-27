@@ -1267,8 +1267,19 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     delete patch.historico;
     if (patch.descarga !== undefined) patch.descarga = normalizeDescargaDateTime(patch.descarga);
     if (isViagemBloqueada(current)) {
+      const isAdminUndoContrato = req.userProfile?.role === 'admin' &&
+        Object.prototype.hasOwnProperty.call(patch, 'conclusaoContrato') &&
+        !normalizeContratoConclusao(patch.conclusaoContrato);
+      if (isAdminUndoContrato) {
+        patch.conclusaoContrato = '';
+        patch.status = '';
+        patch.usuario = '';
+      }
       const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
-      if (invalidFields.length) {
+      const blockedFields = isAdminUndoContrato
+        ? invalidFields.filter(field => !['conclusaoContrato', 'status', 'usuario'].includes(field))
+        : invalidFields;
+      if (blockedFields.length) {
         return res.status(403).json({ error: 'Viagem concluída. Somente DESCARGA pode ser editada.' });
       }
       const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);

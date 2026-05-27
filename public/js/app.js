@@ -4843,7 +4843,7 @@ function showContratoMenu(e, cell) {
 
   document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
-  document.getElementById('contrato-desfazer').style.display = 'none';
+  document.getElementById('contrato-desfazer').style.display = isContratoField && concluida && isAdmin() ? '' : 'none';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
