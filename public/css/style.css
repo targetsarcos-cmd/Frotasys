@@ -1015,6 +1015,20 @@ body.reports-page-active .main {
   background: #fecaca;
 }
 
+.data-table tbody tr.is-marcado-amarelo td,
+.data-table tbody tr.is-marcado-amarelo td[data-field="placa"],
+.data-table tbody tr.is-marcado-amarelo td[data-field="nome"],
+.data-table tbody tr.is-marcado-amarelo td[data-field="tipo"] {
+  background: #fef3c7;
+}
+
+.data-table tbody tr.is-marcado-amarelo:hover td,
+.data-table tbody tr.is-marcado-amarelo:hover td[data-field="placa"],
+.data-table tbody tr.is-marcado-amarelo:hover td[data-field="nome"],
+.data-table tbody tr.is-marcado-amarelo:hover td[data-field="tipo"] {
+  background: #fde68a;
+}
+
 .data-table tbody tr:focus-within td,
 .data-table tbody tr:focus-within td[data-field="placa"],
 .data-table tbody tr:focus-within td[data-field="nome"],

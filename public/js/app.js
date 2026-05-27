@@ -100,7 +100,7 @@ const DESKTOP_MIN_WIDTH = 760;
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas'];
-const LOCKED_EDITABLE_FIELDS = ['descarga'];
+const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
   cte: 'CT-E',
@@ -538,6 +538,7 @@ function initUI() {
   document.getElementById('ctx-edit').addEventListener('click', () => {
     if (state.ctxTargetId) editViagem(state.ctxTargetId);
   });
+  document.getElementById('ctx-yellow').addEventListener('click', toggleLinhaAmarela);
   document.getElementById('agendamento-mark').addEventListener('click', toggleAgendamentoVerde);
   document.getElementById('agendamento-edit').addEventListener('click', () => {
     const id = state.agendamentoTargetId;
@@ -2599,9 +2600,10 @@ function renderTableRow(v) {
     const originClass = originSlug(v.origem);
     const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
     const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
+    const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
     const cells = FIELDS.map(f => renderCell(v, f)).join('');
 
-    return `<tr data-id="${escapeHtml(v._id)}" class="origin-row ${originClass} ${completeClass} ${semCadastroClass}" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
+    return `<tr data-id="${escapeHtml(v._id)}" class="origin-row ${originClass} ${completeClass} ${semCadastroClass} ${yellowClass}" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
       ${cells}
       <td>
         <div class="row-actions">
@@ -4379,6 +4381,7 @@ function cancelInlineEdit() {
 }
 
 function normalizeFieldValue(field, value) {
+  if (field === 'marcadoAmarelo') return Boolean(value);
   if (field === 'descarga') return normalizeDescargaDateTime(value);
   if (TIME_FIELDS.includes(field)) return normalizeHours(value);
   if (field === 'telefone') return normalizePhoneList(value);
@@ -4779,6 +4782,15 @@ async function deleteViagem(id) {
   renderAll();
 }
 
+async function toggleLinhaAmarela() {
+  const id = state.ctxTargetId;
+  hideCtxMenu();
+  if (!id || !canEditViagens()) return;
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!viagem) return;
+  await updateViagemField(id, 'marcadoAmarelo', !viagem.marcadoAmarelo);
+}
+
 // ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
 function showCtxMenu(e, id, mode = 'row') {
   e.preventDefault();
@@ -4786,9 +4798,12 @@ function showCtxMenu(e, id, mode = 'row') {
   const viagem = state.viagens.find(v => v._id === id);
   const copyItem = document.getElementById('ctx-copy');
   const editItem = document.getElementById('ctx-edit');
+  const yellowItem = document.getElementById('ctx-yellow');
   copyItem.style.display = mode === 'placa' ? '' : 'none';
   editItem.style.display = mode === 'placa' ? 'none' : canEditViagem(viagem) ? '' : 'none';
-  if (copyItem.style.display === 'none' && editItem.style.display === 'none') return;
+  yellowItem.style.display = mode === 'placa' || !canEditViagens() || !viagem ? 'none' : '';
+  yellowItem.textContent = viagem?.marcadoAmarelo ? 'Remover amarelo' : 'Marcar amarelo';
+  if (copyItem.style.display === 'none' && editItem.style.display === 'none' && yellowItem.style.display === 'none') return;
   const menu = document.getElementById('ctx-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 160)}px`;
   menu.style.top = `${Math.min(e.clientY, window.innerHeight - 90)}px`;
