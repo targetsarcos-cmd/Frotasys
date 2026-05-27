@@ -168,7 +168,6 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'agendamento', label: 'AGENDAMENTO' },
   { key: 'descarga', label: 'DESCARGA' },
   { key: 'telefone', label: 'TELEFONE' },
-  { key: 'frete', label: 'EVENTO' },
   { key: 'origem', label: 'ORIGEM' },
   { key: 'destino', label: 'DESTINO' },
   { key: 'peso', label: 'PESO' },
@@ -442,10 +441,6 @@ function initUI() {
   document.getElementById('search-modal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('search-modal-overlay')) closeSearchModal();
   });
-  document.getElementById('event-warning-ok').addEventListener('click', closeEventWarning);
-  document.getElementById('event-warning-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('event-warning-overlay')) closeEventWarning();
-  });
   document.getElementById('meta-goal-ok').addEventListener('click', closeMetaGoalDialog);
   document.getElementById('meta-goal-overlay').addEventListener('click', e => {
     if (e.target === document.getElementById('meta-goal-overlay')) closeMetaGoalDialog();
@@ -573,7 +568,6 @@ function initUI() {
       closeReportsModal();
       closeHistoryModal();
       closeListaEsperaModal();
-      closeEventWarning();
       closeMetaGoalDialog();
       closeSettingsModal();
       closeUsersModal();
@@ -599,12 +593,12 @@ function isViagemConcluida(viagem) {
 }
 
 function canEditViagem(viagem) {
-  return canEditViagens() && !isViagemConcluida(viagem);
+  return isAdmin() || (canEditViagens() && !isViagemConcluida(viagem));
 }
 
 function canEditViagemField(viagem, field) {
   if (!canEditViagens()) return false;
-  if (isAdmin() && field === 'conclusaoContrato') return true;
+  if (isAdmin()) return true;
   if (!isViagemConcluida(viagem)) return true;
   return LOCKED_EDITABLE_FIELDS.includes(field);
 }
@@ -942,6 +936,7 @@ function closeReportsModal() {
 }
 
 function openHistoryModal(id) {
+  if (!isAdmin()) return;
   const viagem = state.viagens.find(item => item._id === id);
   if (!viagem) return;
   const title = document.getElementById('history-title');
@@ -2238,17 +2233,6 @@ async function commitFreteConsultEdit(cell) {
   updateFreteQueryDestinations();
 }
 
-function showEventWarning(eventText = '') {
-  const overlay = document.getElementById('event-warning-overlay');
-  document.getElementById('event-warning-text').textContent = eventText || 'Evento informado.';
-  overlay.classList.remove('hidden');
-  document.getElementById('event-warning-ok').focus();
-}
-
-function closeEventWarning() {
-  document.getElementById('event-warning-overlay').classList.add('hidden');
-}
-
 function scheduleMetaGoalAlert({ origem, destino, meta, realizado }) {
   if (meta <= 0 || realizado < meta) return;
   const key = metaGoalAlertKey(origem, destino);
@@ -2547,7 +2531,6 @@ const FIELDS = [
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'descarga', label: 'DESCARGA', quick: true, dateTime: true },
   { key: 'telefone', label: 'TELEFONE', quick: true },
-  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'status', label: 'STATUS', select: true },
   { key: 'usuario', label: 'USUÁRIO' },
   { key: 'produto', label: 'PRODUTO', select: true },
@@ -2608,7 +2591,7 @@ function renderTableRow(v) {
       <td>
         <div class="row-actions">
           <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
-          <button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Histórico" aria-label="Histórico"><span class="table-history-icon" aria-hidden="true"></span></button>
+          ${isAdmin() ? `<button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Histórico" aria-label="Histórico"><span class="table-history-icon" aria-hidden="true"></span></button>` : ''}
           ${canEditViagem(v) ? `<button class="btn-row table-action-icon" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar" aria-label="Editar"><span class="table-edit-icon" aria-hidden="true"></span></button>` : ''}
           ${canDeleteViagem(v) ? `<button class="btn-row table-action-icon danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''}
         </div>
@@ -4353,8 +4336,6 @@ async function updateViagemField(id, field, value, options = {}) {
     body: JSON.stringify({ [field]: nextValue })
   });
   if (updated) {
-    const eventText = String(updated.frete || '').trim();
-    const shouldWarnEvent = field === 'cte' && String(nextValue || '').trim() && eventText;
     const idx = state.viagens.findIndex(v => v._id === id);
     if (idx !== -1) state.viagens[idx] = updated;
     if (!options.skipUndo && isUndoField(field) && previousValue !== nextValue) {
@@ -4367,7 +4348,6 @@ async function updateViagemField(id, field, value, options = {}) {
       });
     }
     renderAll();
-    if (shouldWarnEvent) setTimeout(() => showEventWarning(eventText), 0);
   }
   return updated;
 }
@@ -4487,7 +4467,7 @@ function openModal(viagem = null) {
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
   document.querySelectorAll('#modal-overlay .hidden-on-new').forEach(el => el.classList.toggle('is-hidden', !viagem));
   document.querySelectorAll('#modal-overlay .bulk-only').forEach(el => el.classList.toggle('is-hidden', !!viagem));
-  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','descarga','telefone','frete','origem','destino','peso','obs'];
+  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','descarga','telefone','origem','destino','peso','obs'];
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
     if (!el) return;
@@ -4639,7 +4619,6 @@ async function saveViagem() {
     descarga: normalizeDescargaDateTime(v('f-descarga')),
     agendamento: normalizeHours(v('f-agendamento')),
     telefone: normalizePhoneList(v('f-telefone')),
-    frete: v('f-frete'),
     origem: v('f-origem'),
     destino: v('f-destino'),
     peso: v('f-peso'),

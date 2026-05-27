@@ -99,7 +99,7 @@ const UNIQUE_VIAGEM_FIELDS = [
 ];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
-const LOCKED_EDITABLE_FIELDS = ['descarga'];
+const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
 const VIAGEM_HISTORY_LIMIT = 500;
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
@@ -112,7 +112,6 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'agendamento', header: 'AGENDAMENTO', width: 14 },
   { key: 'descarga', header: 'DESCARGA', width: 18 },
   { key: 'telefone', header: 'TELEFONE', width: 18 },
-  { key: 'frete', header: 'FRETE', width: 18 },
   { key: 'produto', header: 'PRODUTO', width: 14 },
   { key: 'origem', header: 'ORIGEM', width: 14 },
   { key: 'destino', header: 'DESTINO', width: 14 },
@@ -136,7 +135,6 @@ const VIAGEM_FIELD_LABELS = {
   agendamento: 'AGENDAMENTO',
   descarga: 'DESCARGA',
   telefone: 'TELEFONE',
-  frete: 'EVENTO',
   produto: 'PRODUTO',
   origem: 'ORIGEM',
   destino: 'DESTINO',
@@ -152,7 +150,8 @@ const VIAGEM_FIELD_LABELS = {
   obs: 'OBSERVACAO',
   data: 'DATA',
   secao: 'SECAO',
-  conclusaoContrato: 'CONCLUSAO CONTRATO'
+  conclusaoContrato: 'CONCLUSAO CONTRATO',
+  marcadoAmarelo: 'MARCAÇÃO AMARELA'
 };
 
 app.use(cors());
@@ -660,7 +659,6 @@ function exportFillFor(columnKey, value) {
   if (columnKey === 'tipo' && normalized === 'CARRETEIRO') return 'c93434';
   if (columnKey === 'tipo' && normalized) return 'b7791f';
   if (columnKey === 'pamcard' && normalized) return 'f4b400';
-  if (columnKey === 'frete' && normalized) return 'fff200';
   return '';
 }
 
@@ -1225,6 +1223,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const payload = { ...req.body };
     normalizeViagemDocumentNumbers(payload);
     delete payload.usuario;
+    if (payload.marcadoAmarelo !== undefined) payload.marcadoAmarelo = Boolean(payload.marcadoAmarelo);
     if (payload.conclusaoContrato !== undefined) {
       payload.conclusaoContrato = normalizeContratoConclusao(payload.conclusaoContrato);
       if (payload.conclusaoContrato && !hasDocumentosCompletos(payload)) {
@@ -1235,6 +1234,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     if (isViagemBloqueada(payload)) {
       payload.status = 'CONCLUIDO';
       payload.usuario = '';
+      payload.marcadoAmarelo = false;
     } else if (payload.status !== undefined && normalizeUniqueValue(payload.status)) {
       payload.usuario = profileDisplayName(req.userProfile);
     }
@@ -1265,8 +1265,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     normalizeViagemDocumentNumbers(patch);
     delete patch.usuario;
     delete patch.historico;
+    if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
     if (patch.descarga !== undefined) patch.descarga = normalizeDescargaDateTime(patch.descarga);
     if (isViagemBloqueada(current)) {
+      const isAdminUser = req.userProfile?.role === 'admin';
       const isAdminUndoContrato = req.userProfile?.role === 'admin' &&
         Object.prototype.hasOwnProperty.call(patch, 'conclusaoContrato') &&
         !normalizeContratoConclusao(patch.conclusaoContrato);
@@ -1275,23 +1277,24 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         patch.status = '';
         patch.usuario = '';
       }
-      const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
-      const blockedFields = isAdminUndoContrato
-        ? invalidFields.filter(field => !['conclusaoContrato', 'status', 'usuario'].includes(field))
-        : invalidFields;
-      if (blockedFields.length) {
-        return res.status(403).json({ error: 'Viagem concluída. Somente DESCARGA pode ser editada.' });
+      if (!isAdminUser) {
+        const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
+        const blockedFields = isAdminUndoContrato
+          ? invalidFields.filter(field => !['conclusaoContrato', 'status', 'usuario'].includes(field))
+          : invalidFields;
+        if (blockedFields.length) {
+          return res.status(403).json({ error: 'Viagem concluída. Somente DESCARGA e marcação amarela podem ser editadas.' });
+        }
+        const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
+        if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
+        const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+        broadcast({ type: 'viagem_atualizada', payload: updated });
+        return res.json(updated);
       }
-      const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
-      if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
-      const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
-      broadcast({ type: 'viagem_atualizada', payload: updated });
-      return res.json(updated);
     }
 
     if (patch.conclusaoContrato !== undefined) {
       patch.conclusaoContrato = normalizeContratoConclusao(patch.conclusaoContrato);
-      if (!patch.conclusaoContrato) delete patch.conclusaoContrato;
     }
     const statusWasSent = Object.prototype.hasOwnProperty.call(req.body, 'status');
     const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
@@ -1303,6 +1306,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
       patch.usuario = '';
+      if (!isViagemBloqueada(current)) {
+        patch.marcadoAmarelo = false;
+        nextData.marcadoAmarelo = false;
+      }
       nextData.status = 'CONCLUIDO';
       nextData.usuario = '';
     } else if (normalizeContratoConclusao(nextData.conclusaoContrato) && !hasDocumentosCompletos(nextData)) {
