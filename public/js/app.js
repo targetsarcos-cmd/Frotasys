@@ -509,6 +509,16 @@ function initUI() {
       return;
     }
 
+    const statusCell = e.target.closest('td[data-field="status"]');
+    if (statusCell) {
+      const viagem = state.viagens.find(item => item._id === statusCell.dataset.id);
+      if (isAdmin() && isViagemConcluida(viagem)) {
+        e.stopPropagation();
+        showContratoMenu(e, statusCell);
+        return;
+      }
+    }
+
     const documentCell = e.target.closest('td[data-field="dt"]:not(.cell-select), td[data-field="cte"]:not(.cell-select), td[data-field="manifesto"]:not(.cell-select), td[data-field="contrato"]:not(.cell-select), td[data-field="nota"]:not(.cell-select), td[data-field="num_pedagio"]:not(.cell-select)');
     if (documentCell) {
       e.stopPropagation();
@@ -593,6 +603,7 @@ function canEditViagem(viagem) {
 
 function canEditViagemField(viagem, field) {
   if (!canEditViagens()) return false;
+  if (isAdmin() && field === 'conclusaoContrato') return true;
   if (!isViagemConcluida(viagem)) return true;
   return LOCKED_EDITABLE_FIELDS.includes(field);
 }
@@ -4834,16 +4845,20 @@ function showContratoMenu(e, cell) {
   if (!viagem) return;
   const field = cell.dataset.field;
   const isContratoField = field === 'contrato';
+  const isStatusField = field === 'status';
   const concluida = isViagemConcluida(viagem);
+  const canUndoConclusao = concluida && isAdmin() && (isContratoField || isStatusField);
 
   hideCtxMenu();
   hideAgendamentoMenu();
   state.contratoTargetId = cell.dataset.id;
   state.contratoTargetField = field;
 
+  document.getElementById('contrato-copy').style.display = isStatusField ? 'none' : '';
   document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
-  document.getElementById('contrato-desfazer').style.display = isContratoField && concluida && isAdmin() ? '' : 'none';
+  document.getElementById('contrato-desfazer').style.display = canUndoConclusao ? '' : 'none';
+  document.getElementById('contrato-desfazer').textContent = isStatusField ? 'Tirar de concluído' : 'Desfazer';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
