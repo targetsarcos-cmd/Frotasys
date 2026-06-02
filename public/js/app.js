@@ -487,6 +487,12 @@ function initUI() {
     btn.classList.add('active');
     renderAll();
   });
+  document.addEventListener('pointerdown', e => {
+    if (e.target.matches('input, select, button')) return;
+    const td = e.target.closest('td[data-field]:not(.cell-select)');
+    if (!td || !td.classList.contains('quick-edit')) return;
+    startInlineEdit(td);
+  });
   document.addEventListener('click', e => {
     if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
@@ -4438,6 +4444,7 @@ function startInlineEdit(td) {
     }
   };
   inp.onblur = event => {
+    if (activeInlineEdit?.input !== inp) return;
     updateActiveInlineEditSnapshot(inp);
     runBlurCommit(event, inp, () => {
       if (activeInlineCell === td) commitInlineEdit(td, id, field, inp.value);
