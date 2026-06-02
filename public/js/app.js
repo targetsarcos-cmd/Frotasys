@@ -2621,90 +2621,13 @@ function updateTableScrollControls(secao) {
   }
   if (scrollArea && !scrollArea.dataset.scrollSyncReady) {
     scrollArea.dataset.scrollSyncReady = 'true';
-    scrollArea.addEventListener('scroll', () => {
-      syncTableScrollFromBottom(secao);
-      syncStickyTableHeader(secao);
-    });
+    scrollArea.addEventListener('scroll', () => syncTableScrollFromBottom(secao));
   }
-  syncStickyTableHeader(secao);
 }
 
 function updateAllTableScrollControls() {
   updateTableScrollControls('arcos');
   updateTableScrollControls('agenciando');
-}
-
-window.addEventListener('scroll', () => updateStickyTableHeaders(), { passive: true });
-window.addEventListener('resize', () => updateStickyTableHeaders());
-
-function updateStickyTableHeaders() {
-  syncStickyTableHeader('arcos');
-  syncStickyTableHeader('agenciando');
-}
-
-function syncStickyTableHeader(secao) {
-  const table = document.getElementById(`table-${secao}`);
-  const scrollArea = table?.closest('.table-scroll-area');
-  const thead = table?.querySelector('thead');
-  if (!table || !scrollArea || !thead) return;
-
-  const clone = ensureStickyTableHeaderClone(secao);
-  const appHeaderHeight = getAppHeaderHeight();
-  const headerRect = thead.getBoundingClientRect();
-  const tableRect = table.getBoundingClientRect();
-  const areaRect = scrollArea.getBoundingClientRect();
-  const headerHeight = Math.ceil(headerRect.height || thead.offsetHeight || 0);
-  const shouldShow = headerRect.top <= appHeaderHeight &&
-    tableRect.bottom > appHeaderHeight + headerHeight &&
-    areaRect.bottom > appHeaderHeight + headerHeight;
-
-  if (!shouldShow || !headerHeight) {
-    clone.classList.add('hidden');
-    table.classList.remove('has-fixed-header');
-    return;
-  }
-
-  buildStickyTableHeaderClone(table, clone);
-  table.classList.add('has-fixed-header');
-  clone.classList.remove('hidden');
-  clone.style.left = `${Math.round(areaRect.left)}px`;
-  clone.style.width = `${Math.round(areaRect.width)}px`;
-  clone.style.height = `${headerHeight}px`;
-  clone.firstElementChild.style.width = `${Math.ceil(table.scrollWidth)}px`;
-  clone.firstElementChild.style.transform = `translateX(${-scrollArea.scrollLeft}px)`;
-}
-
-function ensureStickyTableHeaderClone(secao) {
-  let clone = document.querySelector(`.table-sticky-header-clone[data-table="${secao}"]`);
-  if (!clone) {
-    clone = document.createElement('div');
-    clone.className = 'table-sticky-header-clone hidden';
-    clone.dataset.table = secao;
-    document.body.appendChild(clone);
-  }
-  return clone;
-}
-
-function buildStickyTableHeaderClone(table, clone) {
-  const sourceHead = table.querySelector('thead');
-  if (!sourceHead) return;
-  const widths = [...table.querySelectorAll('thead th')].map(th => Math.ceil(th.getBoundingClientRect().width));
-  const tableClone = document.createElement('table');
-  const colgroup = document.createElement('colgroup');
-  widths.forEach(width => {
-    const col = document.createElement('col');
-    col.style.width = `${width}px`;
-    colgroup.appendChild(col);
-  });
-  tableClone.appendChild(colgroup);
-  tableClone.appendChild(sourceHead.cloneNode(true));
-  clone.replaceChildren(tableClone);
-}
-
-function getAppHeaderHeight() {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--app-header-height').trim();
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : 64;
 }
 
 function scrollTableToEdge(secao, direction) {
@@ -2750,7 +2673,6 @@ function setTableScrollLeft(secao, left) {
   if (topScroll) topScroll.scrollLeft = topLeft;
   if (document.scrollingElement) document.scrollingElement.scrollLeft = left;
   tableScrollSyncing[secao] = false;
-  syncStickyTableHeader(secao);
 }
 
 function syncTableScrollFromTop(secao) {
@@ -4214,13 +4136,11 @@ window.addEventListener('blur', () => {
 window.addEventListener('focus', () => {
   windowLostFocus = false;
   restoreDeferredEditingFocus();
-  updateStickyTableHeaders();
 });
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     restoreDeferredEditingFocus();
-    updateStickyTableHeaders();
   }
 });
 
