@@ -4436,6 +4436,10 @@ function startInlineEdit(td) {
       e.preventDefault();
       commitInlineEdit(td, id, field, inp.value);
     }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      moveInlineEditWithTab(td, id, field, inp.value, e.shiftKey ? -1 : 1);
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       td.textContent = formatCellValue(field, cur);
@@ -4450,6 +4454,29 @@ function startInlineEdit(td) {
       if (activeInlineCell === td) commitInlineEdit(td, id, field, inp.value);
     });
   };
+}
+
+async function moveInlineEditWithTab(td, id, field, value, direction) {
+  const nextTarget = findAdjacentInlineEditCell(td, direction);
+  await commitInlineEdit(td, id, field, value);
+  if (!nextTarget) return;
+
+  requestAnimationFrame(() => {
+    const nextCell = document.querySelector(
+      `td.quick-edit[data-id="${CSS.escape(nextTarget.id)}"][data-field="${CSS.escape(nextTarget.field)}"]`
+    );
+    if (nextCell) startInlineEdit(nextCell);
+  });
+}
+
+function findAdjacentInlineEditCell(td, direction) {
+  const row = td.closest('tr');
+  if (!row) return null;
+  const cells = [...row.querySelectorAll('td.quick-edit[data-id][data-field]')]
+    .filter(cell => cell.dataset.field !== 'usuario');
+  const index = cells.indexOf(td);
+  const nextCell = cells[index + direction];
+  return nextCell ? { id: nextCell.dataset.id, field: nextCell.dataset.field } : null;
 }
 
 async function commitInlineEdit(td, id, field, value) {
