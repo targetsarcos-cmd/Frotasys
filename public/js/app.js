@@ -42,6 +42,7 @@ const state = {
   summaryCopyRenderPromise: null,
   userProfile: null,
   undoAction: null,
+  pendingInlineRender: false,
   ws: null
 };
 
@@ -277,7 +278,7 @@ function handleWsMessage(msg) {
   if (type === 'viagem_criada') {
     if (payload.data === state.currentDate && !state.viagens.some(v => v._id === payload._id)) {
       state.viagens.push(payload);
-      renderAll();
+      renderAllUnlessInlineEditing();
     }
   } else if (type === 'viagem_atualizada') {
     const idx = state.viagens.findIndex(v => v._id === payload._id);
@@ -286,10 +287,10 @@ function handleWsMessage(msg) {
     } else if (payload.data === state.currentDate) {
       state.viagens.push(payload);
     }
-    renderAll();
+    renderAllUnlessInlineEditing();
   } else if (type === 'viagem_removida') {
     state.viagens = state.viagens.filter(v => v._id !== payload._id);
-    renderAll();
+    renderAllUnlessInlineEditing();
   } else if (type === 'meta_atualizada') {
     const idx = state.metas.findIndex(m => m._id === payload._id);
     if (idx !== -1) state.metas[idx] = payload;
@@ -323,6 +324,21 @@ function handleWsMessage(msg) {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
   }
+}
+
+function renderAllUnlessInlineEditing() {
+  if (activeInlineEdit?.input?.isConnected) {
+    state.pendingInlineRender = true;
+    return;
+  }
+  state.pendingInlineRender = false;
+  renderAll();
+}
+
+function flushPendingInlineRender() {
+  if (!state.pendingInlineRender || activeInlineEdit?.input?.isConnected) return;
+  state.pendingInlineRender = false;
+  renderAll();
 }
 
 // ─── DATA LOADING ─────────────────────────────────────────────────────────────
@@ -4445,6 +4461,7 @@ function startInlineEdit(td) {
       td.textContent = formatCellValue(field, cur);
       activeInlineCell = null;
       activeInlineEdit = null;
+      flushPendingInlineRender();
     }
   };
   inp.onblur = event => {
@@ -4501,6 +4518,7 @@ async function commitInlineEdit(td, id, field, value) {
     td.dataset.raw = previous;
     td.textContent = formatCellValue(field, previous);
   }
+  flushPendingInlineRender();
 }
 
 async function updateViagemField(id, field, value, options = {}) {
@@ -4527,7 +4545,10 @@ async function updateViagemField(id, field, value, options = {}) {
         at: Date.now()
       });
     }
-    if (!options.skipRender) renderAll();
+    if (!options.skipRender) {
+      state.pendingInlineRender = false;
+      renderAll();
+    }
   }
   return updated;
 }
@@ -4538,6 +4559,7 @@ function cancelInlineEdit() {
   if (v) activeInlineCell.textContent = formatCellValue(activeInlineCell.dataset.field, v[activeInlineCell.dataset.field] || '');
   activeInlineCell = null;
   activeInlineEdit = null;
+  flushPendingInlineRender();
 }
 
 function normalizeFieldValue(field, value) {
