@@ -2660,10 +2660,12 @@ function syncStickyTableHeader(secao) {
 
   if (!shouldShow || !headerHeight) {
     clone.classList.add('hidden');
+    table.classList.remove('has-fixed-header');
     return;
   }
 
   buildStickyTableHeaderClone(table, clone);
+  table.classList.add('has-fixed-header');
   clone.classList.remove('hidden');
   clone.style.left = `${Math.round(areaRect.left)}px`;
   clone.style.width = `${Math.round(areaRect.width)}px`;

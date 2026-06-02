@@ -880,6 +880,10 @@ body.reports-page-active .main {
   z-index: 20;
 }
 
+.data-table.has-fixed-header thead th {
+  visibility: hidden;
+}
+
 .table-sticky-header-clone {
   position: fixed;
   top: var(--app-header-height);
