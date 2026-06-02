@@ -4458,15 +4458,26 @@ function startInlineEdit(td) {
 
 async function moveInlineEditWithTab(td, id, field, value, direction) {
   const nextTarget = findAdjacentInlineEditCell(td, direction);
-  await commitInlineEdit(td, id, field, value);
-  if (!nextTarget) return;
+  const normalized = normalizeFieldValue(field, value);
+  const previous = state.viagens.find(item => item._id === id)?.[field] || td.dataset.raw || '';
 
-  requestAnimationFrame(() => {
+  activeInlineCell = null;
+  activeInlineEdit = null;
+  td.dataset.raw = normalized;
+  td.textContent = formatCellValue(field, normalized);
+
+  if (nextTarget) {
     const nextCell = document.querySelector(
       `td.quick-edit[data-id="${CSS.escape(nextTarget.id)}"][data-field="${CSS.escape(nextTarget.field)}"]`
     );
     if (nextCell) startInlineEdit(nextCell);
-  });
+  }
+
+  const updated = await updateViagemField(id, field, normalized, { skipRender: true });
+  if (!updated) {
+    td.dataset.raw = previous;
+    td.textContent = formatCellValue(field, previous);
+  }
 }
 
 function findAdjacentInlineEditCell(td, direction) {
@@ -4516,7 +4527,7 @@ async function updateViagemField(id, field, value, options = {}) {
         at: Date.now()
       });
     }
-    renderAll();
+    if (!options.skipRender) renderAll();
   }
   return updated;
 }
