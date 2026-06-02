@@ -2549,7 +2549,6 @@ const FIELDS = [
   { key: 'nome', label: 'NOME', quick: true },
   { key: 'tipo', label: 'TIPO', select: true },
   { key: 'carroceria', label: 'CARROCERIA', select: true },
-  { key: 'kanguru', label: 'KANGURU', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'descarga', label: 'DESCARGA', quick: true, dateTime: true },
