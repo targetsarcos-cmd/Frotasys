@@ -4400,6 +4400,7 @@ function startInlineEdit(td) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagemField(viagem, field)) return;
   const cur = normalizeFieldValue(field, td.dataset.raw ?? td.textContent.trim());
+  lockInlineEditCellWidth(td);
   activeInlineCell = td;
 
   const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : field === 'descarga' ? 'datetime-local' : 'text';
@@ -4457,6 +4458,7 @@ function startInlineEdit(td) {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
+      unlockInlineEditCellWidth(td);
       td.textContent = formatCellValue(field, cur);
       activeInlineCell = null;
       activeInlineEdit = null;
@@ -4480,6 +4482,7 @@ async function moveInlineEditWithTab(td, id, field, value, direction) {
   activeInlineCell = null;
   activeInlineEdit = null;
   td.dataset.raw = normalized;
+  unlockInlineEditCellWidth(td);
   td.textContent = formatCellValue(field, normalized);
 
   if (nextTarget) {
@@ -4506,6 +4509,20 @@ function findAdjacentInlineEditCell(td, direction) {
   return nextCell ? { id: nextCell.dataset.id, field: nextCell.dataset.field } : null;
 }
 
+function lockInlineEditCellWidth(td) {
+  const width = Math.ceil(td.getBoundingClientRect().width);
+  if (!width) return;
+  td.style.width = `${width}px`;
+  td.style.minWidth = `${width}px`;
+  td.style.maxWidth = `${width}px`;
+}
+
+function unlockInlineEditCellWidth(td) {
+  td.style.width = '';
+  td.style.minWidth = '';
+  td.style.maxWidth = '';
+}
+
 async function commitInlineEdit(td, id, field, value) {
   activeInlineCell = null;
   activeInlineEdit = null;
@@ -4513,6 +4530,7 @@ async function commitInlineEdit(td, id, field, value) {
   const viagem = state.viagens.find(item => item._id === id);
   const previous = viagem ? (viagem[field] || '') : (td.dataset.raw || '');
   const updated = await updateViagemField(id, field, normalized);
+  unlockInlineEditCellWidth(td);
   if (!updated) {
     td.dataset.raw = previous;
     td.textContent = formatCellValue(field, previous);
@@ -4555,6 +4573,7 @@ async function updateViagemField(id, field, value, options = {}) {
 function cancelInlineEdit() {
   if (!activeInlineCell) return;
   const v = state.viagens.find(item => item._id === activeInlineCell.dataset.id);
+  unlockInlineEditCellWidth(activeInlineCell);
   if (v) activeInlineCell.textContent = formatCellValue(activeInlineCell.dataset.field, v[activeInlineCell.dataset.field] || '');
   activeInlineCell = null;
   activeInlineEdit = null;
