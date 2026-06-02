@@ -4239,12 +4239,6 @@ function shouldDeferBlurCommit(event, element) {
 }
 
 function runBlurCommit(event, element, commit) {
-  if (activeInlineEdit?.input === element && shouldKeepInlineSelection(activeInlineEdit.field) && !event?.relatedTarget) {
-    updateActiveInlineEditSnapshot(element);
-    activeInlineEdit.shouldRefocus = true;
-    restoreActiveInlineEditFocus();
-    return;
-  }
   if (
     activeInlineEdit?.input === element &&
     !event?.relatedTarget &&
