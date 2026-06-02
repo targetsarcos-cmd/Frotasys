@@ -100,6 +100,7 @@ const DESKTOP_MIN_WIDTH = 760;
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas'];
+const STABLE_INLINE_SELECTION_FIELDS = ['peso', 'dt', 'cte', 'manifesto', 'contrato', 'nota', 'num_pedagio', 'vlr_pedagio', 'horas'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
@@ -4125,6 +4126,11 @@ let deferredFocusElement = null;
 
 window.addEventListener('blur', () => {
   windowLostFocus = true;
+  if (activeInlineEdit?.input?.isConnected) {
+    deferredFocusElement = activeInlineEdit.input;
+    updateActiveInlineEditSnapshot(activeInlineEdit.input);
+    activeInlineEdit.shouldRefocus = true;
+  }
 });
 
 window.addEventListener('focus', () => {
@@ -4186,6 +4192,11 @@ function restoreDeferredEditingFocus() {
 function updateActiveInlineEditSnapshot(input) {
   if (!activeInlineEdit || activeInlineEdit.input !== input) return;
   activeInlineEdit.value = input.value;
+  if (shouldKeepInlineSelection(activeInlineEdit.field)) {
+    activeInlineEdit.selectionStart = 0;
+    activeInlineEdit.selectionEnd = input.value.length;
+    return;
+  }
   try {
     activeInlineEdit.selectionStart = input.selectionStart;
     activeInlineEdit.selectionEnd = input.selectionEnd;
@@ -4200,6 +4211,11 @@ function restoreActiveInlineEditFocus() {
   if (!edit?.input?.isConnected) return;
   edit.shouldRefocus = false;
   edit.input.focus();
+  if (shouldKeepInlineSelection(edit.field)) {
+    selectStableInlineEditText(edit.input);
+    deferredFocusElement = null;
+    return;
+  }
   try {
     if (edit.selectionStart !== null && edit.selectionEnd !== null) {
       edit.input.setSelectionRange(edit.selectionStart, edit.selectionEnd);
@@ -4208,6 +4224,31 @@ function restoreActiveInlineEditFocus() {
     edit.input.select();
   }
   deferredFocusElement = null;
+}
+
+function shouldKeepInlineSelection(field) {
+  return STABLE_INLINE_SELECTION_FIELDS.includes(field);
+}
+
+function selectStableInlineEditText(input) {
+  if (!input?.isConnected) return;
+  if (input.type === 'number') {
+    input.select();
+    return;
+  }
+  input.setSelectionRange(0, input.value.length);
+}
+
+function scheduleStableInlineSelection(input, field) {
+  if (!shouldKeepInlineSelection(field)) return;
+  const select = () => {
+    if (activeInlineEdit?.input !== input) return;
+    selectStableInlineEditText(input);
+    updateActiveInlineEditSnapshot(input);
+  };
+  select();
+  requestAnimationFrame(select);
+  setTimeout(select, 0);
 }
 
 function placeCaretAtEnd(element) {
@@ -4274,10 +4315,20 @@ function startInlineEdit(td) {
     openedAt: Date.now()
   };
   inp.focus();
-  inp.select();
+  if (shouldKeepInlineSelection(field)) {
+    scheduleStableInlineSelection(inp, field);
+  } else {
+    inp.select();
+  }
   ['pointerdown', 'mousedown', 'click'].forEach(eventName => {
     inp.addEventListener(eventName, event => event.stopPropagation());
   });
+  inp.addEventListener('mouseup', event => {
+    if (!shouldKeepInlineSelection(field) || Date.now() - (activeInlineEdit?.openedAt || 0) > 500) return;
+    event.preventDefault();
+    scheduleStableInlineSelection(inp, field);
+  });
+  inp.addEventListener('focus', () => scheduleStableInlineSelection(inp, field));
   if (field === 'telefone') {
     inp.oninput = () => { inp.value = maskPhoneListInput(inp.value); };
   }
