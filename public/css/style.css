@@ -774,8 +774,7 @@ body.reports-page-active .main {
 
 .table-scroll-area {
   min-width: 0;
-  max-height: calc(100vh - 238px);
-  overflow: auto;
+  overflow-x: auto;
 }
 
 .table-scroll-main {
@@ -879,6 +878,46 @@ body.reports-page-active .main {
   position: sticky;
   top: 0;
   z-index: 20;
+}
+
+.data-table.has-fixed-header thead th {
+  visibility: hidden;
+}
+
+.table-sticky-header-clone {
+  position: fixed;
+  z-index: 90;
+  overflow: hidden;
+  pointer-events: none;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #fff200;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .10);
+}
+
+.table-sticky-header-clone.hidden {
+  display: none;
+}
+
+.table-sticky-header-clone table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.table-sticky-header-clone thead th {
+  position: static !important;
+  top: auto !important;
+  background: #fff200;
+  color: #000;
+  font-weight: 700;
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 .data-table thead th[data-field] {
