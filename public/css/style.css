@@ -1113,6 +1113,25 @@ body.reports-page-active .main {
   color: rgb(255, 0, 0);
 }
 
+.data-table th[data-field="peso"],
+.data-table td[data-field="peso"] { min-width: 82px; }
+.data-table th[data-field="dt"],
+.data-table td[data-field="dt"] { min-width: 96px; }
+.data-table th[data-field="cte"],
+.data-table td[data-field="cte"],
+.data-table th[data-field="manifesto"],
+.data-table td[data-field="manifesto"],
+.data-table th[data-field="contrato"],
+.data-table td[data-field="contrato"] { min-width: 78px; }
+.data-table th[data-field="nota"],
+.data-table td[data-field="nota"],
+.data-table th[data-field="num_pedagio"],
+.data-table td[data-field="num_pedagio"] { min-width: 96px; }
+.data-table th[data-field="vlr_pedagio"],
+.data-table td[data-field="vlr_pedagio"] { min-width: 86px; }
+.data-table th[data-field="horas"],
+.data-table td[data-field="horas"] { min-width: 66px; }
+
 .placa-content {
   display: flex;
   align-items: center;

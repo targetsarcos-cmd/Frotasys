@@ -4230,6 +4230,17 @@ let activeInlineCell = null;
 let activeInlineEdit = null;
 let windowLostFocus = false;
 let deferredFocusElement = null;
+const INLINE_EDIT_CELL_MIN_WIDTHS = {
+  peso: 82,
+  dt: 96,
+  cte: 78,
+  manifesto: 78,
+  contrato: 78,
+  nota: 96,
+  num_pedagio: 96,
+  vlr_pedagio: 86,
+  horas: 66
+};
 
 window.addEventListener('blur', () => {
   windowLostFocus = true;
@@ -4541,7 +4552,10 @@ function findAdjacentInlineEditCell(td, direction) {
 }
 
 function lockInlineEditCellWidth(td) {
-  const width = Math.ceil(td.getBoundingClientRect().width);
+  const width = Math.max(
+    Math.ceil(td.getBoundingClientRect().width),
+    INLINE_EDIT_CELL_MIN_WIDTHS[td.dataset.field] || 0
+  );
   if (!width) return;
   td.style.width = `${width}px`;
   td.style.minWidth = `${width}px`;
