@@ -1226,6 +1226,8 @@ body.reports-page-active .main {
 .data-table td[data-field="vlr_pedagio"] input { width: 92px; max-width: 92px; }
 .data-table td[data-field="horas"] input { width: 68px; max-width: 68px; }
 
+.data-table td[data-field="peso"] input::-webkit-outer-spin-button,
+.data-table td[data-field="peso"] input::-webkit-inner-spin-button,
 .data-table td[data-field="vlr_pedagio"] input::-webkit-outer-spin-button,
 .data-table td[data-field="vlr_pedagio"] input::-webkit-inner-spin-button {
   appearance: none;
