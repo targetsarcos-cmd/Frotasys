@@ -2678,7 +2678,7 @@ function syncStickyTableHeader(secao) {
   const tableRect = table.getBoundingClientRect();
   const areaRect = scrollArea.getBoundingClientRect();
   const headerHeight = Math.ceil(headerRect.height || thead.offsetHeight || 0);
-  const fixedTop = Math.max(appHeaderHeight, Math.round(areaRect.top));
+  const fixedTop = appHeaderHeight;
   const shouldShow = headerRect.top <= fixedTop &&
     tableRect.bottom > fixedTop + headerHeight &&
     areaRect.bottom > fixedTop + headerHeight;
@@ -2715,6 +2715,8 @@ function buildStickyTableHeaderClone(table, clone) {
   const sourceHead = table.querySelector('thead');
   if (!sourceHead) return;
   const widths = [...table.querySelectorAll('thead th')].map(th => Math.ceil(th.getBoundingClientRect().width));
+  const signature = `${table.id}:${widths.join(',')}:${sourceHead.textContent}`;
+  if (clone.dataset.signature === signature) return;
   const tableClone = document.createElement('table');
   const colgroup = document.createElement('colgroup');
   widths.forEach(width => {
@@ -2724,6 +2726,7 @@ function buildStickyTableHeaderClone(table, clone) {
   });
   tableClone.appendChild(colgroup);
   tableClone.appendChild(sourceHead.cloneNode(true));
+  clone.dataset.signature = signature;
   clone.replaceChildren(tableClone);
 }
 
