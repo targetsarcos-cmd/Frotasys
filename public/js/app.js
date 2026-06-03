@@ -506,8 +506,11 @@ function initUI() {
   document.addEventListener('pointerdown', e => {
     if (e.target.matches('input, select, button')) return;
     const td = e.target.closest('td[data-field]:not(.cell-select)');
-    if (!td || !td.classList.contains('quick-edit')) return;
-    startInlineEdit(td);
+    if (td && td.classList.contains('quick-edit')) {
+      startInlineEdit(td);
+      return;
+    }
+    saveAndCloseActiveInlineEdit();
   });
   document.addEventListener('click', e => {
     if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
@@ -4393,7 +4396,7 @@ function startInlineEdit(td) {
     activeInlineEdit.input.focus();
     return;
   }
-  if (activeInlineCell) cancelInlineEdit();
+  if (activeInlineCell) saveAndCloseActiveInlineEdit();
   const field = td.dataset.field;
   if (field === 'usuario') return;
   const id = td.dataset.id;
@@ -4497,6 +4500,31 @@ async function moveInlineEditWithTab(td, id, field, value, direction) {
     td.dataset.raw = previous;
     td.textContent = formatCellValue(field, previous);
   }
+}
+
+async function saveAndCloseActiveInlineEdit() {
+  const edit = activeInlineEdit;
+  if (!edit?.td || !edit?.input?.isConnected) {
+    if (activeInlineCell) cancelInlineEdit();
+    return;
+  }
+  const { td, input, id, field } = edit;
+  const normalized = normalizeFieldValue(field, input.value);
+  const viagem = state.viagens.find(item => item._id === id);
+  const previous = viagem ? (viagem[field] || '') : (td.dataset.raw || '');
+
+  activeInlineCell = null;
+  activeInlineEdit = null;
+  td.dataset.raw = normalized;
+  unlockInlineEditCellWidth(td);
+  td.textContent = formatCellValue(field, normalized);
+
+  const updated = await updateViagemField(id, field, normalized, { skipRender: true });
+  if (!updated) {
+    td.dataset.raw = previous;
+    td.textContent = formatCellValue(field, previous);
+  }
+  flushPendingInlineRender();
 }
 
 function findAdjacentInlineEditCell(td, direction) {
