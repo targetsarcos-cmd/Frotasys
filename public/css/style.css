@@ -1114,11 +1114,11 @@ body.reports-page-active .main {
 }
 
 .data-table th[data-field="peso"],
-.data-table td[data-field="peso"] { min-width: 82px; }
+.data-table td[data-field="peso"] { min-width: 106px; }
 .data-table th[data-field="dt"],
-.data-table td[data-field="dt"] { min-width: 96px; }
+.data-table td[data-field="dt"] { min-width: 124px; }
 .data-table th[data-field="cte"],
-.data-table td[data-field="cte"],
+.data-table td[data-field="cte"] { min-width: 104px; }
 .data-table th[data-field="manifesto"],
 .data-table td[data-field="manifesto"],
 .data-table th[data-field="contrato"],
@@ -1126,11 +1126,11 @@ body.reports-page-active .main {
 .data-table th[data-field="nota"],
 .data-table td[data-field="nota"],
 .data-table th[data-field="num_pedagio"],
-.data-table td[data-field="num_pedagio"] { min-width: 96px; }
+.data-table td[data-field="num_pedagio"] { min-width: 124px; }
 .data-table th[data-field="vlr_pedagio"],
-.data-table td[data-field="vlr_pedagio"] { min-width: 86px; }
+.data-table td[data-field="vlr_pedagio"] { min-width: 116px; }
 .data-table th[data-field="horas"],
-.data-table td[data-field="horas"] { min-width: 66px; }
+.data-table td[data-field="horas"] { min-width: 92px; }
 
 .placa-content {
   display: flex;
@@ -1216,15 +1216,22 @@ body.reports-page-active .main {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
 }
 
-.data-table td[data-field="peso"] input { width: 74px; max-width: 74px; }
-.data-table td[data-field="dt"] input { width: 88px; max-width: 88px; }
-.data-table td[data-field="cte"] input,
+.data-table td[data-field="peso"] input { width: 82px; max-width: 82px; }
+.data-table td[data-field="dt"] input { width: 100px; max-width: 100px; }
+.data-table td[data-field="cte"] input { width: 80px; max-width: 80px; }
 .data-table td[data-field="manifesto"] input,
 .data-table td[data-field="contrato"] input { width: 70px; max-width: 70px; }
 .data-table td[data-field="nota"] input,
-.data-table td[data-field="num_pedagio"] input { width: 88px; max-width: 88px; }
-.data-table td[data-field="vlr_pedagio"] input { width: 78px; max-width: 78px; }
-.data-table td[data-field="horas"] input { width: 58px; max-width: 58px; }
+.data-table td[data-field="num_pedagio"] input { width: 100px; max-width: 100px; }
+.data-table td[data-field="vlr_pedagio"] input { width: 92px; max-width: 92px; }
+.data-table td[data-field="horas"] input { width: 68px; max-width: 68px; }
+
+.data-table td[data-field="vlr_pedagio"] input::-webkit-outer-spin-button,
+.data-table td[data-field="vlr_pedagio"] input::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 .cell-select {
   min-width: max-content;

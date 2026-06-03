@@ -4231,15 +4231,15 @@ let activeInlineEdit = null;
 let windowLostFocus = false;
 let deferredFocusElement = null;
 const INLINE_EDIT_CELL_MIN_WIDTHS = {
-  peso: 82,
-  dt: 96,
-  cte: 78,
+  peso: 106,
+  dt: 124,
+  cte: 104,
   manifesto: 78,
   contrato: 78,
-  nota: 96,
-  num_pedagio: 96,
-  vlr_pedagio: 86,
-  horas: 66
+  nota: 124,
+  num_pedagio: 124,
+  vlr_pedagio: 116,
+  horas: 92
 };
 
 window.addEventListener('blur', () => {
