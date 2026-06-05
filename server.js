@@ -393,6 +393,7 @@ function normalizeWaitlistItem(data = {}) {
     origem: normalizeUniqueValue(data.origem),
     data: String(data.data || '').trim(),
     hora: String(data.hora || '').trim(),
+    obs: String(data.obs || '').trim(),
     ordem: Number(data.ordem) || 0
   };
 }
@@ -407,6 +408,7 @@ function waitlistDocToFrontend(doc = {}) {
     origem: doc.origem || '',
     data: doc.data || '',
     hora: doc.hora || '',
+    obs: doc.obs || '',
     ordem: Number(doc.ordem) || 0,
     createdAt: doc.createdAt || '',
     updatedAt: doc.updatedAt || ''
@@ -1024,6 +1026,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       nome: item.nome || '',
       tipo: normalizeTipo(item.tipo),
       origem: item.origem || '',
+      obs: item.obs || '',
       secao: 'agenciando',
       data: String(req.body?.data || '').trim() || new Date().toISOString().slice(0, 10)
     });

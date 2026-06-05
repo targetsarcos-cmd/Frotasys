@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="/icons/favicon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0f766e">
-<link rel="stylesheet" href="css/style.css?v=20260603-input-numeros-5">
+<link rel="stylesheet" href="css/style.css?v=20260605-waitlist-obs">
 </head>
 <body>
 <div class="mobile-blocker" aria-live="polite">
@@ -575,6 +575,10 @@
           <label>HORA</label>
           <input type="time" id="waitlist-hora">
         </div>
+        <div class="form-group">
+          <label>OBSERVAÇÃO</label>
+          <input type="text" id="waitlist-obs" placeholder="Observação">
+        </div>
         <button type="submit" class="btn-primary" id="waitlist-add">Adicionar</button>
       </form>
       <div class="waitlist-table-wrap">
@@ -588,6 +592,7 @@
               <th>ORIGEM</th>
               <th>DATA</th>
               <th>HORA</th>
+              <th>OBSERVAÇÃO</th>
               <th></th>
             </tr>
           </thead>
@@ -724,6 +729,6 @@
 <script src="/vendor/html2canvas/html2canvas.min.js"></script>
 <script src="/vendor/chart.js/chart.umd.js"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260603-input-min-width-2"></script>
+<script src="js/app.js?v=20260605-waitlist-obs"></script>
 </body>
 </html>

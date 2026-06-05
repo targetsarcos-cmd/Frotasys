@@ -1712,6 +1712,7 @@ function normalizeListaEspera(items = []) {
     origem: String(item.origem || '').trim().toUpperCase(),
     data: String(item.data || '').trim(),
     hora: String(item.hora || '').trim(),
+    obs: String(item.obs || '').trim(),
     ordem: Number(item.ordem) || index + 1
   })).sort(compareListaEsperaItems);
 }
@@ -1733,7 +1734,7 @@ function renderListaEspera() {
   if (!tbody) return;
 
   if (!state.listaEspera.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
     return;
   }
 
@@ -1754,6 +1755,7 @@ function renderListaEspera() {
       </td>
       <td><input type="date" data-field="data" value="${escapeAttr(item.data)}"></td>
       <td><input type="time" data-field="hora" value="${escapeAttr(item.hora)}"></td>
+      <td contenteditable="true" spellcheck="false" data-field="obs" data-value="${escapeAttr(item.obs)}">${escapeHtml(item.obs)}</td>
       <td>
         <div class="waitlist-actions">
           <button type="button" class="btn-row waitlist-generate" data-action="generate">Gerar Viagem</button>
@@ -1774,7 +1776,8 @@ async function addListaEsperaItem(event) {
     tipo: normalizeTipo(v('waitlist-tipo')),
     origem: v('waitlist-origem').toUpperCase(),
     data: v('waitlist-data'),
-    hora: v('waitlist-hora')
+    hora: v('waitlist-hora'),
+    obs: v('waitlist-obs')
   };
 
   if (!payload.placa && !payload.nome) {
