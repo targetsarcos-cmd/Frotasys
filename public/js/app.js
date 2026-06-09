@@ -4951,7 +4951,8 @@ async function copyViagem(event, id) {
     ['DESTINO', viagem.destino || ''],
     ['PESO', formatPeso(viagem.peso || '')],
     ['PRODUTO', viagem.produto || ''],
-    ['DT', viagem.dt || '']
+    ['DT', viagem.dt || ''],
+    ['AGENDAMENTO', normalizeHours(viagem.agendamento || '')]
   ];
   const text = rows.map(([label, value]) => `*${label}:* ${value}`).join('\n');
   const html = rows
