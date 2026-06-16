@@ -1059,9 +1059,10 @@ async function updateReports() {
 
   try {
     const params = new URLSearchParams({ dataInicio: start, dataFim: end });
+    const metaParams = new URLSearchParams({ dataInicio: start, dataFim: end });
     const [viagens, metas] = await Promise.all([
       apiFetch(`/api/viagens/search?${params.toString()}`),
-      apiFetch('/api/metas')
+      apiFetch(`/api/metas?${metaParams.toString()}`)
     ]);
     const report = buildReportsData(Array.isArray(viagens) ? viagens : [], Array.isArray(metas) ? metas : [], { start, end, operation });
     renderReports(report);
@@ -2390,13 +2391,6 @@ async function fetchCarregamentosSearch(filters = {}) {
     dataInicio = '',
     dataFim = ''
   } = filters;
-  const normalizedTerm = normalizeSearchTerm(term);
-  const normalizedDt = normalizeSearchTerm(dt);
-  const normalizedCte = normalizeSearchTerm(cte);
-  const normalizedNota = normalizeSearchTerm(nota);
-  const normalizedContrato = normalizeSearchTerm(contrato);
-  const normalizedNome = normalizeNameSearchTerm(nome);
-  const normalizedPlaca = normalizeNameSearchTerm(placa);
   const params = new URLSearchParams();
   if (term) params.set('q', term);
   if (dt) params.set('dt', dt);
@@ -2413,31 +2407,10 @@ async function fetchCarregamentosSearch(filters = {}) {
     const data = await apiFetch(searchUrl);
     if (Array.isArray(data)) return data;
   } catch (e) {
-    console.warn('Busca dedicada indisponível, usando busca local.', e);
+    console.warn('Busca dedicada indisponível.', e);
   }
 
-  const allViagens = await apiFetch('/api/viagens');
-  if (!Array.isArray(allViagens)) return [];
-  return allViagens
-    .filter(viagem => {
-      if (dataInicio && String(viagem.data || '') < dataInicio) return false;
-      if (dataFim && String(viagem.data || '') > dataFim) return false;
-      const dtValue = normalizeSearchTerm(viagem.dt);
-      const nota = normalizeSearchTerm(viagem.nota);
-      const contratoValue = normalizeSearchTerm(viagem.contrato);
-      const cte = normalizeSearchTerm(viagem.cte);
-      const nomeValue = normalizeNameSearchTerm(viagem.nome);
-      const placaValue = normalizeNameSearchTerm(viagem.placa);
-      if (normalizedTerm && nota !== normalizedTerm && cte !== normalizedTerm) return false;
-      if (normalizedDt && dtValue !== normalizedDt) return false;
-      if (normalizedCte && cte !== normalizedCte) return false;
-      if (normalizedNota && nota !== normalizedNota) return false;
-      if (normalizedContrato && contratoValue !== normalizedContrato) return false;
-      if (normalizedNome && !nomeValue.includes(normalizedNome)) return false;
-      if (normalizedPlaca && !placaValue.includes(normalizedPlaca)) return false;
-      return true;
-    })
-    .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return [];
 }
 
 function normalizeSearchTerm(value) {

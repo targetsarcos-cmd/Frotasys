@@ -102,6 +102,9 @@ const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO']
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
 const VIAGEM_HISTORY_LIMIT = 500;
 const VIAGEM_MAX_FUTURE_DAYS = 3;
+const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
+const DEFAULT_RANGE_LIMIT = 200;
+const VIAGENS_SEARCH_LIMIT = 200;
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -196,18 +199,72 @@ function legacyNedbToSupabase(doc = {}) {
 }
 
 async function selectDocs(table) {
-  const { data, error } = await supabase.from(table).select('*');
+  const { data, error } = await supabase.from(table).select(SUPABASE_DOC_SELECT);
   if (error) throw error;
   return (data || []).map(supabaseToFrontend);
 }
 
-async function countDocs(table, predicate = () => true) {
-  const docs = await selectDocs(table);
+function applyJsonFilters(query, filters = {}) {
+  return Object.entries(filters || {}).reduce((acc, [key, value]) => {
+    if (value === undefined || value === null || value === '') return acc;
+    return acc.eq(`dados->>${key}`, value);
+  }, query);
+}
+
+async function selectDocsByJson(table, filters = {}, options = {}) {
+  let query = supabase.from(table).select(SUPABASE_DOC_SELECT);
+  query = applyJsonFilters(query, filters);
+
+  if (options.gte) {
+    Object.entries(options.gte).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query = query.gte(`dados->>${key}`, value);
+    });
+  }
+  if (options.lte) {
+    Object.entries(options.lte).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query = query.lte(`dados->>${key}`, value);
+    });
+  }
+  if (options.ilike) {
+    Object.entries(options.ilike).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query = query.ilike(`dados->>${key}`, `%${value}%`);
+    });
+  }
+  if (options.order) {
+    options.order.forEach(({ key, ascending = true, json = true }) => {
+      query = query.order(json ? `dados->>${key}` : key, { ascending });
+    });
+  }
+  if (options.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(supabaseToFrontend);
+}
+
+async function selectJsonTextValues(table, key) {
+  const { data, error } = await supabase
+    .from(table)
+    .select(`${key}:dados->>${key}`)
+    .not(`dados->>${key}`, 'is', null);
+  if (error) throw error;
+  return (data || []).map(row => row[key]).filter(Boolean);
+}
+
+async function countDocs(table, predicate = null, filters = {}) {
+  if (!predicate) {
+    let query = supabase.from(table).select('id', { count: 'exact', head: true });
+    query = applyJsonFilters(query, filters);
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
+  }
+  const docs = Object.keys(filters || {}).length ? await selectDocsByJson(table, filters) : await selectDocs(table);
   return docs.filter(predicate).length;
 }
 
 async function findOneById(table, id) {
-  const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+  const { data, error } = await supabase.from(table).select(SUPABASE_DOC_SELECT).eq('id', id).maybeSingle();
   if (error) throw error;
   return data ? supabaseToFrontend(data) : null;
 }
@@ -224,7 +281,7 @@ async function insertDoc(table, data) {
     createdAt: data.createdAt || now,
     updatedAt: data.updatedAt || now
   });
-  const { data: inserted, error } = await supabase.from(table).insert(payload).select('*').single();
+  const { data: inserted, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT).single();
   if (error) throw error;
   return supabaseToFrontend(inserted);
 }
@@ -236,7 +293,7 @@ async function insertDocs(table, docs) {
     createdAt: doc.createdAt || now,
     updatedAt: doc.updatedAt || now
   }));
-  const { data, error } = await supabase.from(table).insert(payload).select('*');
+  const { data, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT);
   if (error) throw error;
   return (data || []).map(supabaseToFrontend);
 }
@@ -253,7 +310,7 @@ async function updateDoc(table, id, patch) {
     .from(table)
     .update(frontendToSupabase(next))
     .eq('id', id)
-    .select('*')
+    .select(SUPABASE_DOC_SELECT)
     .single();
   if (error) throw error;
   return supabaseToFrontend(data);
@@ -834,8 +891,8 @@ async function findDuplicateViagemFields(data, currentId = null) {
 
   if (filledFields.length === 0) return null;
 
-  const docs = await selectDocs(TABLES.viagens);
   for (const field of filledFields) {
+    const docs = await selectDocsByJson(TABLES.viagens, { [field.key]: data[field.key] }, { limit: 2 });
     const duplicate = docs.find(doc => {
       if (currentId && doc._id === currentId) return false;
       return comparableUniqueValue(field.key, doc[field.key]) === field.value;
@@ -1047,7 +1104,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       .from(TABLES.configOptions)
       .delete()
       .eq('id', req.params.id)
-      .select('*');
+      .select(SUPABASE_DOC_SELECT);
     if (removeError) throw removeError;
     if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
 
@@ -1169,7 +1226,11 @@ app.get('/api/viagens', async (req, res) => {
     const query = {};
     if (data) query.data = data;
     if (secao) query.secao = secao;
-    const docs = sortDocs((await selectDocs(TABLES.viagens)).filter(doc => matchesQuery(doc, query)), { createdAt: 1 });
+    const hasFilters = Object.keys(query).length > 0;
+    const docs = sortDocs(
+      await selectDocsByJson(TABLES.viagens, query, hasFilters ? {} : { limit: DEFAULT_RANGE_LIMIT }),
+      { createdAt: 1 }
+    );
     res.json(docs);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1189,7 +1250,36 @@ app.get('/api/viagens/search', async (req, res) => {
     const dataFim = String(req.query.dataFim || '').trim();
     if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !dataInicio && !dataFim) return res.json([]);
 
-    const docs = await selectDocs(TABLES.viagens);
+    const query = {};
+    const options = {};
+    if (dataInicio) options.gte = { data: dataInicio };
+    if (dataFim) options.lte = { data: dataFim };
+    if (nomeTerm) options.ilike = { ...(options.ilike || {}), nome };
+    if (placaTerm) options.ilike = { ...(options.ilike || {}), placa };
+
+    if (!dataInicio && !dataFim && !nomeTerm && !placaTerm) {
+      if (dtTerm && req.query.dt) options.ilike = { ...(options.ilike || {}), dt: req.query.dt };
+      if (notaTerm && req.query.nota) query.nota = formatDocumentNumber(req.query.nota, 'nota');
+      if (contratoTerm && req.query.contrato) query.contrato = formatDocumentNumber(req.query.contrato, 'contrato');
+      if (cteTerm && req.query.cte) query.cte = formatDocumentNumber(req.query.cte, 'cte');
+    }
+
+    let docs;
+    if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm) {
+      const notaValue = formatDocumentNumber(term, 'nota');
+      const cteValue = formatDocumentNumber(term, 'cte');
+      const [notaDocs, cteDocs] = await Promise.all([
+        selectDocsByJson(TABLES.viagens, { nota: notaValue }, { limit: VIAGENS_SEARCH_LIMIT }),
+        selectDocsByJson(TABLES.viagens, { cte: cteValue }, { limit: VIAGENS_SEARCH_LIMIT })
+      ]);
+      docs = [...new Map([...notaDocs, ...cteDocs].map(doc => [doc._id, doc])).values()];
+    } else {
+      docs = await selectDocsByJson(TABLES.viagens, query, {
+        ...options,
+        limit: dataInicio || dataFim ? undefined : VIAGENS_SEARCH_LIMIT
+      });
+    }
+
     const matches = docs
       .filter(doc => {
         const data = String(doc.data || '').trim();
@@ -1236,8 +1326,10 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Selecione um período de até 366 dias.' });
     }
 
-    const docs = (await selectDocs(TABLES.viagens))
-      .filter(doc => String(doc.data || '') >= inicio && String(doc.data || '') <= fim);
+    const docs = await selectDocsByJson(TABLES.viagens, {}, {
+      gte: { data: inicio },
+      lte: { data: fim }
+    });
     const workbook = buildViagensWorkbook(docs, dates);
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `viagens_${formatDateSheetName(inicio)}_${formatDateSheetName(fim)}.xlsx`;
@@ -1400,9 +1492,12 @@ app.delete('/api/viagens/:id', async (req, res) => {
 
 app.get('/api/metas', async (req, res) => {
   try {
-    const { data } = req.query;
+    const { data, dataInicio, dataFim } = req.query;
     const query = data ? { data } : {};
-    const docs = (await selectDocs(TABLES.metas)).filter(doc => matchesQuery(doc, query));
+    const options = {};
+    if (!data && dataInicio) options.gte = { data: dataInicio };
+    if (!data && dataFim) options.lte = { data: dataFim };
+    const docs = await selectDocsByJson(TABLES.metas, query, options);
     res.json(docs);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1412,7 +1507,7 @@ app.get('/api/metas', async (req, res) => {
 app.post('/api/metas', requireAdmin, async (req, res) => {
   try {
     const { data, destino, valor, tipo, produto } = req.body;
-    const existingDocs = (await selectDocs(TABLES.metas)).filter(doc => doc.data === data && doc.destino === destino && doc.tipo === tipo);
+    const existingDocs = await selectDocsByJson(TABLES.metas, { data, destino, tipo });
     const productKey = String(produto || '').trim().toUpperCase();
     const existing = existingDocs.find(doc => String(doc.produto || '').trim().toUpperCase() === productKey);
     let result;
@@ -1685,8 +1780,7 @@ app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) =
 
 app.get('/api/datas', async (req, res) => {
   try {
-    const docs = await selectDocs(TABLES.viagens);
-    const datas = [...new Set(docs.map(d => d.data))].filter(Boolean).sort();
+    const datas = [...new Set(await selectJsonTextValues(TABLES.viagens, 'data'))].sort();
     res.json(datas);
   } catch (e) {
     res.status(500).json({ error: e.message });
