@@ -1089,7 +1089,7 @@ body.reports-page-active .main {
 }
 
 .data-table td {
-  padding: 7px 12px;
+  padding: 4px 12px;
   border-bottom: 1px solid #edf1f6;
   white-space: nowrap;
   color: #000;
@@ -1252,7 +1252,7 @@ body.reports-page-active .main {
 .table-select {
   width: max-content;
   min-width: 122px;
-  height: 26px;
+  height: 24px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);

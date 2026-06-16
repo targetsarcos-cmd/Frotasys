@@ -103,6 +103,7 @@ const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas'];
 const STABLE_INLINE_SELECTION_FIELDS = ['peso', 'dt', 'cte', 'manifesto', 'contrato', 'nota', 'num_pedagio', 'vlr_pedagio', 'horas'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
+const VIAGEM_MAX_FUTURE_DAYS = 3;
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
   cte: 'CT-E',
@@ -195,6 +196,31 @@ function localDateStr(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function maxAllowedViagemDate() {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + VIAGEM_MAX_FUTURE_DAYS);
+  return localDateStr(date);
+}
+
+function viagemDateValidationMessage(value) {
+  const data = String(value || '').trim();
+  if (!data) return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return 'Informe uma data válida para a viagem.';
+  const maxDate = maxAllowedViagemDate();
+  if (data > maxDate) {
+    return `Não é permitido lançar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data máxima: ${formatDateBR(maxDate)}.`;
+  }
+  return '';
+}
+
+function canSaveViagemDate(value) {
+  const message = viagemDateValidationMessage(value);
+  if (!message) return true;
+  alert(message);
+  return false;
 }
 
 function weekdayLabel(dateValue) {
@@ -1895,6 +1921,7 @@ async function deleteListaEsperaItem(id) {
 
 async function gerarViagemListaEspera(id, button) {
   if (!canEditViagens()) return;
+  if (!canSaveViagemDate(state.currentDate)) return;
   button.disabled = true;
   button.textContent = 'Gerando...';
   const result = await apiFetch(`/api/lista-espera/${id}/gerar-viagem`, {
@@ -4427,7 +4454,8 @@ function startInlineEdit(td) {
   const inputValue = field === 'descarga' ? descargaToInputValue(cur) : cur;
   const step = field === 'peso' ? '0.001' : field === 'vlr_pedagio' ? '0.01' : '';
   const placeholder = inputPlaceholder(field);
-  td.innerHTML = `<input type="${inputType}" value="${escapeAttr(inputValue)}" ${step ? `step="${step}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
+  const max = field === 'data' ? maxAllowedViagemDate() : '';
+  td.innerHTML = `<input type="${inputType}" value="${escapeAttr(inputValue)}" ${step ? `step="${step}"` : ''} ${max ? `max="${max}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
   const inp = td.querySelector('input');
   activeInlineEdit = {
     td,
@@ -4592,6 +4620,7 @@ async function updateViagemField(id, field, value, options = {}) {
     renderAll();
     return null;
   }
+  if (field === 'data' && !canSaveViagemDate(value)) return null;
   const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
   const nextValue = normalizeFieldValue(field, value);
   const updated = await apiFetch(`/api/viagens/${id}`, {
@@ -4894,6 +4923,8 @@ async function saveViagem() {
     data: state.currentDate
   };
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
+
+  if (!canSaveViagemDate(data.data)) return;
 
   if (!data.origem) {
     alert('Informe ORIGEM para salvar a viagem.');

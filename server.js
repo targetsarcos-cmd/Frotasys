@@ -101,6 +101,7 @@ const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
 const VIAGEM_HISTORY_LIMIT = 500;
+const VIAGEM_MAX_FUTURE_DAYS = 3;
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -625,6 +626,31 @@ function isIsoDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === text;
 }
 
+function localDateStr(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function maxViagemDate() {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + VIAGEM_MAX_FUTURE_DAYS);
+  return localDateStr(date);
+}
+
+function viagemDateValidationError(value) {
+  const data = String(value || '').trim();
+  if (!data) return '';
+  if (!isIsoDate(data)) return 'Informe uma data válida para a viagem.';
+  const maxDate = maxViagemDate();
+  if (data > maxDate) {
+    return `Não é permitido lançar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data máxima: ${formatDateBR(maxDate)}.`;
+  }
+  return '';
+}
+
 function datesBetween(start, end) {
   const dates = [];
   const cursor = new Date(`${start}T00:00:00Z`);
@@ -1013,6 +1039,10 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
     const item = await findOneById(TABLES.configOptions, req.params.id);
     if (!item || item.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
 
+    const viagemData = String(req.body?.data || '').trim() || localDateStr();
+    const dateError = viagemDateValidationError(viagemData);
+    if (dateError) return res.status(400).json({ error: dateError });
+
     const { data: removedRows, error: removeError } = await supabase
       .from(TABLES.configOptions)
       .delete()
@@ -1028,7 +1058,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       origem: item.origem || '',
       obs: item.obs || '',
       secao: 'agenciando',
-      data: String(req.body?.data || '').trim() || new Date().toISOString().slice(0, 10)
+      data: viagemData
     });
 
     const lista = await waitlistDocs();
@@ -1225,6 +1255,8 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
     normalizeViagemDocumentNumbers(payload);
+    const dateError = viagemDateValidationError(payload.data);
+    if (dateError) return res.status(400).json({ error: dateError });
     delete payload.usuario;
     if (payload.marcadoAmarelo !== undefined) payload.marcadoAmarelo = Boolean(payload.marcadoAmarelo);
     if (payload.conclusaoContrato !== undefined) {
@@ -1266,6 +1298,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
     const patch = { ...req.body };
     normalizeViagemDocumentNumbers(patch);
+    if (Object.prototype.hasOwnProperty.call(patch, 'data')) {
+      const dateError = viagemDateValidationError(patch.data);
+      if (dateError) return res.status(400).json({ error: dateError });
+    }
     delete patch.usuario;
     delete patch.historico;
     if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
