@@ -369,22 +369,15 @@ function flushPendingInlineRender() {
 
 // ─── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadAll() {
-  const [viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete] = await Promise.all([
-    apiFetch(`/api/viagens?data=${state.currentDate}`),
-    apiFetch(`/api/metas?data=${state.currentDate}`),
-    apiFetch('/api/operacoes'),
-    apiFetch('/api/config-options'),
-    apiFetch('/api/config-colors'),
-    apiFetch('/api/lista-espera'),
-    apiFetch('/api/lembretes').catch(() => null)
-  ]);
-  state.viagens = viagens || [];
-  state.metas = metas || [];
-  state.configOptions = normalizeConfigOptions(configOptions);
-  state.configColors = mergeConfigColors(configColors);
-  state.operacoes = normalizeOperacoes(operacoes);
-  state.listaEspera = normalizeListaEspera(listaEspera);
-  state.lembrete = normalizeLembrete(lembrete);
+  const data = await apiFetch(`/api/app-state?data=${state.currentDate}`);
+  if (!data) return;
+  state.viagens = data.viagens || [];
+  state.metas = data.metas || [];
+  state.configOptions = normalizeConfigOptions(data.configOptions);
+  state.configColors = mergeConfigColors(data.configColors);
+  state.operacoes = normalizeOperacoes(data.operacoes);
+  state.listaEspera = normalizeListaEspera(data.listaEspera);
+  state.lembrete = normalizeLembrete(data.lembrete);
   clearReminderStatus();
   renderAll();
 }

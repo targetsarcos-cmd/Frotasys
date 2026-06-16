@@ -105,6 +105,7 @@ const VIAGEM_MAX_FUTURE_DAYS = 3;
 const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
 const DEFAULT_RANGE_LIMIT = 200;
 const VIAGENS_SEARCH_LIMIT = 200;
+const APP_CACHE_TTL_MS = 45 * 1000;
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -163,6 +164,34 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/vendor/html2canvas', express.static(path.join(__dirname, 'node_modules', 'html2canvas', 'dist')));
 app.use('/vendor/chart.js', express.static(path.join(__dirname, 'node_modules', 'chart.js', 'dist')));
+
+app.use('/api', (req, res, next) => {
+  const started = Date.now();
+  res.on('finish', () => {
+    const elapsed = Date.now() - started;
+    if (elapsed > 3000) {
+      console.warn(`[slow-api] ${req.method} ${req.originalUrl} ${res.statusCode} ${elapsed}ms`);
+    }
+  });
+  next();
+});
+
+const appCache = new Map();
+
+async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
+  const now = Date.now();
+  const cached = appCache.get(key);
+  if (cached && cached.expires > now) return cached.value;
+  const value = await loader();
+  appCache.set(key, { value, expires: now + ttl });
+  return value;
+}
+
+function invalidateCache(prefix = '') {
+  for (const key of appCache.keys()) {
+    if (!prefix || key.startsWith(prefix)) appCache.delete(key);
+  }
+}
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -283,6 +312,7 @@ async function insertDoc(table, data) {
   });
   const { data: inserted, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT).single();
   if (error) throw error;
+  invalidateCache();
   return supabaseToFrontend(inserted);
 }
 
@@ -295,6 +325,7 @@ async function insertDocs(table, docs) {
   }));
   const { data, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT);
   if (error) throw error;
+  invalidateCache();
   return (data || []).map(supabaseToFrontend);
 }
 
@@ -313,6 +344,7 @@ async function updateDoc(table, id, patch) {
     .select(SUPABASE_DOC_SELECT)
     .single();
   if (error) throw error;
+  invalidateCache();
   return supabaseToFrontend(data);
 }
 
@@ -328,6 +360,7 @@ async function updateWhere(table, predicate, patchFactory) {
 async function deleteDoc(table, id) {
   const { error } = await supabase.from(table).delete().eq('id', id);
   if (error) throw error;
+  invalidateCache();
 }
 
 async function deleteWhere(table, predicate) {
@@ -474,8 +507,10 @@ function waitlistDocToFrontend(doc = {}) {
 }
 
 async function waitlistDocs() {
+  return cachedValue('waitlist', async () => {
   const docs = (await selectDocs(TABLES.configOptions)).filter(doc => doc.field === WAITLIST_FIELD);
   return docs.map(waitlistDocToFrontend).sort(compareWaitlistItems);
+  });
 }
 
 function compareWaitlistItems(a, b) {
@@ -491,15 +526,18 @@ function waitlistPositionValue(item = {}) {
 }
 
 async function configOptionsGrouped() {
+  return cachedValue('config-options-grouped', async () => {
   await ensureDefaultConfigOptions();
   const docs = sortDocs(await selectDocs(TABLES.configOptions), { field: 1, ordem: 1, value: 1 });
   return CONFIG_FIELDS.reduce((acc, field) => {
     acc[field] = docs.filter(doc => doc.field === field).map(doc => doc.value);
     return acc;
   }, {});
+  });
 }
 
 async function configColorsGrouped() {
+  return cachedValue('config-colors-grouped', async () => {
   await ensureDefaultConfigOptions();
   const docs = await selectDocs(TABLES.configOptions);
   return CONFIG_COLOR_FIELDS.reduce((acc, field) => {
@@ -511,6 +549,7 @@ async function configColorsGrouped() {
       });
     return acc;
   }, {});
+  });
 }
 
 function normalizeFreteConsultas(saved = {}) {
@@ -528,8 +567,10 @@ function normalizeFreteConsultas(saved = {}) {
 }
 
 async function freteConsultasConfig() {
+  return cachedValue('frete-consultas', async () => {
   const doc = await findOne(TABLES.configOptions, item => item.field === FRETE_CONSULT_FIELD);
   return normalizeFreteConsultas(doc?.tables || doc?.freteConsultas || {});
+  });
 }
 
 async function saveFreteConsultasConfig(tables) {
@@ -555,6 +596,7 @@ function lembreteDocToFrontend(doc = {}) {
 }
 
 async function lembreteGlobal() {
+  return cachedValue('lembrete-global', async () => {
   const docs = (await selectDocs(TABLES.configOptions))
     .filter(item => item.field === LEMBRETE_FIELD)
     .sort((a, b) => {
@@ -563,6 +605,7 @@ async function lembreteGlobal() {
       return bGlobal - aGlobal || String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''));
     });
   return lembreteDocToFrontend(docs[0]);
+  });
 }
 
 async function saveLembrete(texto) {
@@ -1001,6 +1044,32 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
+app.get('/api/app-state', async (req, res) => {
+  try {
+    const data = String(req.query.data || '').trim();
+    const viagemFilters = data ? { data } : {};
+    const metaFilters = data ? { data } : {};
+
+    const viagens = sortDocs(
+      await selectDocsByJson(TABLES.viagens, viagemFilters, data ? {} : { limit: DEFAULT_RANGE_LIMIT }),
+      { createdAt: 1 }
+    );
+    const metas = await selectDocsByJson(TABLES.metas, metaFilters);
+    const operacoes = await cachedValue('operacoes-list', async () => {
+      await ensureDefaultOperacoes();
+      return sortDocs(await selectDocs(TABLES.operacoes), { ordem: 1, origem: 1 });
+    });
+    const configOptions = await configOptionsGrouped();
+    const configColors = await configColorsGrouped();
+    const listaEspera = await waitlistDocs();
+    const lembrete = await lembreteGlobal();
+
+    res.json({ viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── LEMBRETES API ────────────────────────────────────────────────────────────
 
 app.get('/api/lembretes', async (req, res) => {
@@ -1107,6 +1176,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       .select(SUPABASE_DOC_SELECT);
     if (removeError) throw removeError;
     if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
+    invalidateCache();
 
     const viagem = await insertDoc(TABLES.viagens, {
       placa: item.placa || '',
@@ -1249,6 +1319,15 @@ app.get('/api/viagens/search', async (req, res) => {
     const dataInicio = String(req.query.dataInicio || '').trim();
     const dataFim = String(req.query.dataFim || '').trim();
     if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !dataInicio && !dataFim) return res.json([]);
+    if ((dataInicio && !isIsoDate(dataInicio)) || (dataFim && !isIsoDate(dataFim))) {
+      return res.status(400).json({ error: 'Informe datas válidas para a busca.' });
+    }
+    if (dataInicio && dataFim) {
+      if (dataInicio > dataFim) return res.status(400).json({ error: 'A data inicial não pode ser maior que a data final.' });
+      if (datesBetween(dataInicio, dataFim).length > 366) {
+        return res.status(400).json({ error: 'Selecione um período de até 366 dias.' });
+      }
+    }
 
     const query = {};
     const options = {};
@@ -1274,9 +1353,10 @@ app.get('/api/viagens/search', async (req, res) => {
       ]);
       docs = [...new Map([...notaDocs, ...cteDocs].map(doc => [doc._id, doc])).values()];
     } else {
+      const hasBoundedRange = Boolean(dataInicio && dataFim);
       docs = await selectDocsByJson(TABLES.viagens, query, {
         ...options,
-        limit: dataInicio || dataFim ? undefined : VIAGENS_SEARCH_LIMIT
+        limit: hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT
       });
     }
 
