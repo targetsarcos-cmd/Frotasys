@@ -4718,7 +4718,7 @@ body.travel-drawer-open .summary-layout {
 .data-table th[data-field="status"],
 .data-table td[data-field="status"] { width: 15%; }
 .data-table .col-actions,
-.data-table td.master-actions { width: 124px; }
+.data-table td.master-actions { width: 174px; }
 
 .data-table tbody td {
   height: 44px;
@@ -4928,6 +4928,24 @@ body.travel-drawer-open .summary-layout {
   display: block;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.table-promote-action,
+.table-demote-action {
+  color: #1d4ed8;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.table-promote-action:hover,
+.table-demote-action:hover {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.table-demote-action {
+  color: #0f766e;
 }
 
 .travel-drawer {

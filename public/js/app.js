@@ -1595,11 +1595,11 @@ function renderReportSummaryCard(card) {
           <tr><th>TIPO</th>${headers}<th>TOTAL</th></tr>
         </thead>
         <tbody>
-          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? 'â–¶' : 'â–¼'}</span><span>META</span></button></td>${cell('meta')}<td>${total('meta')}</td></tr>
+          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '&#9658;' : '&#9660;'}</span><span>META</span></button></td>${cell('meta')}<td>${total('meta')}</td></tr>
           ${metaProductRows}
           <tr class="card-row-fat"><td>FATURADO</td>${cell('fat')}<td>${total('fat')}</td></tr>
           <tr class="card-row-agenc"><td>AGENCIADO</td>${cell('agenc')}<td>${total('agenc')}</td></tr>
-          <tr class="card-row-total"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? 'â–¶' : 'â–¼'}</span><span>TOTAL</span></button></td>${cell('total')}<td>${total('total')}</td></tr>
+          <tr class="card-row-total"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? '&#9658;' : '&#9660;'}</span><span>TOTAL</span></button></td>${cell('total')}<td>${total('total')}</td></tr>
           ${totalProductRows}
           <tr class="card-row-falta"><td>FALTA</td>${cell('falta')}<td>${total('falta')}</td></tr>
         </tbody>
@@ -1609,7 +1609,7 @@ function renderReportSummaryCard(card) {
       <div class="report-summary-operation">
         <div class="summary-icon">${summaryIcon(card.origem)}</div>
         <div>
-          <span>OPERAÃ‡ÃƒO</span>
+          <span>OPERACAO</span>
           <strong>${escapeHtml(card.origem)}</strong>
         </div>
       </div>
@@ -3056,7 +3056,7 @@ function renderTableRow(v) {
       <span class="modern-badge type-chip ${tipoSlug(v.tipo)}" style="${escapeAttr(selectColorStyle('tipo', normalizeTipo(v.tipo)))}">${escapeHtml(normalizeTipo(v.tipo) || '-')}</span>
     </td>
     <td data-field="origem" data-id="${escapeAttr(v._id)}">
-      <div class="route-cell"><strong>${escapeHtml(titleCase(v.origem || '-'))}</strong></div>
+      <div class="route-cell"><strong>${escapeHtml(String(v.origem || '-').toUpperCase())}</strong></div>
     </td>
     <td data-field="destino" data-id="${escapeAttr(v._id)}">
       <div class="route-cell"><strong>${escapeHtml(String(v.destino || '-').toUpperCase())}</strong></div>
@@ -3072,6 +3072,8 @@ function renderTableRow(v) {
         <button class="btn-row table-action-icon" onclick="selectViagem('${escapeAttr(v._id)}')" title="Visualizar" aria-label="Visualizar"><span class="table-view-icon" aria-hidden="true"></span></button>
         ${isAdmin() ? `<button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Historico" aria-label="Historico"><span class="table-history-icon" aria-hidden="true"></span></button>` : ''}
         ${rowWhatsappAction(v)}
+        ${v.secao === 'agenciando' && canEditViagem(v) ? `<button class="btn-row table-action-icon table-promote-action" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : ''}
+        ${v.secao === 'arcos' && canEditViagem(v) ? `<button class="btn-row table-action-icon table-demote-action" onclick="demoteToAgenciado(event,'${escapeAttr(v._id)}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : ''}
         <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
       </div>
     </td>
@@ -4478,13 +4480,13 @@ function renderOriginSummaryCard(operacao) {
           <tr><th>TIPO DE PRODUTO</th>${destinos.map(dest => `<th>${escapeHtml(dest)}</th>`).join('')}<th>TOTAL</th></tr>
         </thead>
         <tbody>
-          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle card-meta-toggle" onclick="toggleCardMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? 'â–¶' : 'â–¼'}</span><span>META</span></button></td>${metaCells.join('')}<td>${formatKg(totals.meta)}</td></tr>
+          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle card-meta-toggle" onclick="toggleCardMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '&#9658;' : '&#9660;'}</span><span>META</span></button></td>${metaCells.join('')}<td>${formatKg(totals.meta)}</td></tr>
           ${metaProductRows}
           <tr class="card-row-fat"><td>FATURADO</td>${fatCells.join('')}<td>${formatKg(totals.fat)}</td></tr>
           <tr class="card-row-agenc"><td>AGENCIADO</td>${agencCells.join('')}<td>${formatKg(totals.agenc)}</td></tr>
-          <tr class="card-row-total"><td><button type="button" class="card-row-toggle card-total-toggle" onclick="toggleCardTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? 'â–¶' : 'â–¼'}</span><span>TOTAL</span></button></td>${totalCells.join('')}<td>${formatKg(totals.total)}</td></tr>
+          <tr class="card-row-total"><td><button type="button" class="card-row-toggle card-total-toggle" onclick="toggleCardTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? '&#9658;' : '&#9660;'}</span><span>TOTAL</span></button></td>${totalCells.join('')}<td>${formatKg(totals.total)}</td></tr>
           ${totalProductRows}
-          <tr class="card-row-falta"><td><span class="row-icon">âŠ–</span>FALTA</td>${faltaCells.join('')}<td>${formatKg(totals.falta)}</td></tr>
+          <tr class="card-row-falta"><td><span class="row-icon">-</span>FALTA</td>${faltaCells.join('')}<td>${formatKg(totals.falta)}</td></tr>
         </tbody>
       </table>
     </div>
@@ -4492,7 +4494,7 @@ function renderOriginSummaryCard(operacao) {
       <div class="summary-operation">
         <div class="summary-icon">${summaryIcon(origem)}</div>
         <div>
-          <span class="summary-card-kicker">OperaÃ§Ã£o</span>
+          <span class="summary-card-kicker">Operacao</span>
           <strong>${escapeHtml(origem)}</strong>
         </div>
       </div>
@@ -4523,10 +4525,10 @@ function renderSummaryKpi(label, value, kind) {
 
 function summaryIcon(origem) {
   const normalized = normalizeOption(origem);
-  if (normalized === 'ARCOS') return 'â—”';
-  if (normalized === 'PEDRO LEOPOLDO') return 'â–¦';
-  if (normalized === 'BARROSO') return 'â—‡';
-  return 'â–¡';
+  if (normalized === 'ARCOS') return 'A';
+  if (normalized === 'PEDRO LEOPOLDO') return 'PL';
+  if (normalized === 'BARROSO') return 'B';
+  return 'OP';
 }
 
 function cardAccentClass(origem) {
@@ -4589,7 +4591,7 @@ function renderProductSummary(rows) {
   const toggle = document.getElementById('btn-product-summary');
   const arrow = toggle?.querySelector('.product-summary-arrow');
 
-  if (arrow) arrow.textContent = state.productSummaryOpen ? 'â–¾' : 'â–¸';
+  if (arrow) arrow.innerHTML = state.productSummaryOpen ? '&#9660;' : '&#9658;';
   productRows.forEach(row => row.classList.toggle('collapsed', !state.productSummaryOpen));
 
   productList().forEach(produto => {
@@ -4922,6 +4924,15 @@ async function promoteToFaturado(event, id) {
   if (!canEditViagem(viagem)) return;
   if (!viagem || viagem.secao === 'arcos') return;
   await updateViagemField(id, 'secao', 'arcos');
+}
+
+async function demoteToAgenciado(event, id) {
+  event.stopPropagation();
+  if (!canEditViagens()) return;
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!canEditViagem(viagem)) return;
+  if (!viagem || viagem.secao === 'agenciando') return;
+  await updateViagemField(id, 'secao', 'agenciando');
 }
 
 function startInlineEdit(td) {
