@@ -1,4 +1,4 @@
-// ─── STATE ────────────────────────────────────────────────────────────────────
+﻿// â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const state = {
   viagens: [],
   metas: [],
@@ -18,7 +18,7 @@ const state = {
   operacoes: [],
   configOptions: {},
   configColors: {},
-  tableSort: { field: '', direction: 'asc' },
+  tableSort: [],
   freteSort: {},
   freteConsultas: {},
   listaEspera: [],
@@ -43,7 +43,14 @@ const state = {
   userProfile: null,
   undoAction: null,
   pendingInlineRender: false,
-  ws: null
+  ws: null,
+  selectedViagemId: null,
+  selectedViagemDetails: null,
+  drawerLoading: false,
+  drawerTab: 'documentos',
+  drawerActiveField: '',
+  drawerDraft: null,
+  drawerSaving: false
 };
 
 const DEFAULT_DESTINOS = ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA'];
@@ -52,7 +59,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'S/ CADASTRO', 'CONCLUIDO'];
+const STATUS = ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'S/ CADASTRO', 'FALTA ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -90,6 +97,8 @@ const DEFAULT_CONFIG_COLORS = {
     CADASTRANDO: '#0f766e',
     'AGUARDANDO CARREGAMENTO': '#b7791f',
     MANIFESTO: '#2563eb',
+    'FALTA ADIANTAMENTO': '#b7791f',
+    'AGENDAR DESCARGA': '#2563eb',
     CONCLUIDO: '#16803f'
   },
   origem: {},
@@ -119,7 +128,7 @@ const DEFAULT_FRETE_CONSULTAS = {
       ['ARCOS', 'SOROCABA', 'R$ 4.650,00', 'R$ 5.082,00', 'R$ 6.250,00', 'R$ 6.400,00'],
       ['ARCOS', 'AMERICANA', 'R$ 3.650,00', 'R$ 4.000,00', 'R$ 4.600,00', 'R$ 5.800,00'],
       ['ARCOS', 'OSASCO', 'R$ 4.040,00', 'R$ 4.400,00', 'R$ 5.000,00', 'R$ 6.200,00'],
-      ['ARCOS', 'RIBEIRÃO P.', 'R$ 2.696,00', 'R$ 3.200,00', 'R$ 3.600,00', 'R$ 4.200,00'],
+      ['ARCOS', 'RIBEIRÃƒO P.', 'R$ 2.696,00', 'R$ 3.200,00', 'R$ 3.600,00', 'R$ 4.200,00'],
       ['ARCOS', 'SJRP', 'R$ 3.800,00', 'R$ 4.480,00', 'R$ 5.320,00', 'R$ 6.720,00'],
       ['BARROSO', 'PINDA', 'R$ 3.730,00', 'R$ 4.066,07', 'R$ 4.548,94', 'R$ 5.135,12'],
       ['BARROSO', 'SJRP', 'R$ 5.167,00', 'R$ 5.667,14', 'R$ 6.303,98', 'R$ 7.132,39'],
@@ -137,7 +146,7 @@ const DEFAULT_FRETE_CONSULTAS = {
       ['ARCOS', 'SOROCABA', '--', '4.518,00', 'R$ 4.848,00', 'R$ 6.022,00'],
       ['ARCOS', 'AMERICANA', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
       ['ARCOS', 'OSASCO', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
-      ['ARCOS', 'RIBEIRÃO P.', '--', '3.300,00', 'R$ 3.600,00', 'R$ 4.500,00'],
+      ['ARCOS', 'RIBEIRÃƒO P.', '--', '3.300,00', 'R$ 3.600,00', 'R$ 4.500,00'],
       ['ARCOS', 'SJRP', '--', '4.350,00', 'R$ 5.000,00', 'R$ 6.000,00'],
       ['BARROSO', 'PINDA', '--', '--', '--', '--'],
       ['BARROSO', 'SJRP', '--', '--', '--', '--'],
@@ -147,12 +156,12 @@ const DEFAULT_FRETE_CONSULTAS = {
       ['PEDRO L', 'SJRP', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
       ['PEDRO L', 'SOROCABA', '', '', 'R$ 5.884,00', 'R$ 6.974,00'],
       ['PEDRO L', 'OSASCO', '', '', 'R$ 5.517,00', 'R$ 6.852,00'],
-      ['PEDRO L', 'MAUÁ', '', '', 'R$ 5.515,00', 'R$ 6.850,00'],
-      ['PEDRO L', 'SÃO J. DOS CAMPOS', '', '', 'R$ 5.541,00', 'R$ 6.879,00'],
+      ['PEDRO L', 'MAUÃ', '', '', 'R$ 5.515,00', 'R$ 6.850,00'],
+      ['PEDRO L', 'SÃƒO J. DOS CAMPOS', '', '', 'R$ 5.541,00', 'R$ 6.879,00'],
       ['PEDRO L', 'MOGI DAS CRUZES', '', '', 'R$ 5.545,00', 'R$ 6.883,00'],
       ['PEDRO L', 'PINDA', '', '', 'R$ 5.333,00', 'R$ 6.619,00'],
-      ['PEDRO L', 'SÃO JOSÉ DO RIO PRETO', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
-      ['PEDRO L', 'SANTO ANDRÉ', '', '', 'R$ 5.514,00', 'R$ 6.848,00']
+      ['PEDRO L', 'SÃƒO JOSÃ‰ DO RIO PRETO', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
+      ['PEDRO L', 'SANTO ANDRÃ‰', '', '', 'R$ 5.514,00', 'R$ 6.848,00']
     ]
   }
 };
@@ -167,7 +176,7 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'kanguru', label: 'KANGURU' },
   { key: 'pamcard', label: 'PAMCARD' },
   { key: 'status', label: 'STATUS' },
-  { key: 'usuario', label: 'USUÁRIO' },
+  { key: 'usuario', label: 'USUÃRIO' },
   { key: 'agendamento', label: 'AGENDAMENTO' },
   { key: 'descarga', label: 'DESCARGA' },
   { key: 'telefone', label: 'TELEFONE' },
@@ -179,10 +188,10 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'manifesto', label: 'MANIFESTO' },
   { key: 'contrato', label: 'CONTRATO' },
   { key: 'nota', label: 'NOTA' },
-  { key: 'num_pedagio', label: 'Nº PEDÁGIO' },
-  { key: 'vlr_pedagio', label: 'VALOR PEDÁGIO' },
+  { key: 'num_pedagio', label: 'NÂº PEDÃGIO' },
+  { key: 'vlr_pedagio', label: 'VALOR PEDÃGIO' },
   { key: 'horas', label: 'HORAS' },
-  { key: 'obs', label: 'OBSERVAÇÃO' },
+  { key: 'obs', label: 'OBSERVAÃ‡ÃƒO' },
   { key: 'data', label: 'DATA' },
   { key: 'createdAt', label: 'CRIADO EM' }
 ];
@@ -208,10 +217,10 @@ function maxAllowedViagemDate() {
 function viagemDateValidationMessage(value) {
   const data = String(value || '').trim();
   if (!data) return '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return 'Informe uma data válida para a viagem.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return 'Informe uma data vÃ¡lida para a viagem.';
   const maxDate = maxAllowedViagemDate();
   if (data > maxDate) {
-    return `Não é permitido lançar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data máxima: ${formatDateBR(maxDate)}.`;
+    return `NÃ£o Ã© permitido lanÃ§ar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data mÃ¡xima: ${formatDateBR(maxDate)}.`;
   }
   return '';
 }
@@ -237,7 +246,7 @@ function renderDateWeekday() {
   if (label) label.textContent = weekdayLabel(state.currentDate);
 }
 
-// ─── INIT ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let appStarted = false;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -276,7 +285,7 @@ async function startApp() {
   loadAll();
 }
 
-// ─── WEBSOCKET ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ WEBSOCKET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${proto}://${location.host}`;
@@ -367,7 +376,7 @@ function flushPendingInlineRender() {
   renderAll();
 }
 
-// ─── DATA LOADING ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ DATA LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadAll() {
   const data = await apiFetch(`/api/app-state?data=${state.currentDate}`);
   if (!data) return;
@@ -378,6 +387,7 @@ async function loadAll() {
   state.operacoes = normalizeOperacoes(data.operacoes);
   state.listaEspera = normalizeListaEspera(data.listaEspera);
   state.lembrete = normalizeLembrete(data.lembrete);
+  state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
   clearReminderStatus();
   renderAll();
 }
@@ -397,7 +407,7 @@ async function apiFetch(url, opts = {}) {
         await FrotasysAuth.signOut();
         return null;
       }
-      alert(data.error || 'Não foi possível salvar.');
+      alert(data.error || 'NÃ£o foi possÃ­vel salvar.');
       return null;
     }
     return data;
@@ -407,7 +417,7 @@ async function apiFetch(url, opts = {}) {
   }
 }
 
-// ─── UI INIT ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ UI INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initUI() {
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;
@@ -522,8 +532,37 @@ function initUI() {
     btn.classList.add('active');
     renderAll();
   });
+  document.getElementById('travel-drawer')?.addEventListener('click', handleDrawerClick);
+  document.getElementById('travel-drawer')?.addEventListener('contextmenu', handleDrawerContextMenu);
+  document.getElementById('travel-drawer')?.addEventListener('input', handleDrawerInput);
+  document.getElementById('travel-drawer')?.addEventListener('change', handleDrawerInput);
+  document.getElementById('travel-drawer')?.addEventListener('change', e => {
+    if (e.target?.dataset?.drawerCommit === 'change') commitActiveDrawerField();
+  });
+  document.getElementById('travel-drawer')?.addEventListener('focusout', e => {
+    if (e.target?.dataset?.drawerCommit === 'blur') {
+      setTimeout(() => {
+        if (!document.getElementById('travel-drawer')?.contains(document.activeElement)) commitActiveDrawerField();
+        else if (!document.activeElement?.dataset?.drawerField) commitActiveDrawerField();
+      }, 0);
+    }
+  });
+  document.getElementById('travel-drawer')?.addEventListener('keydown', e => {
+    if (!e.target?.dataset?.drawerField) return;
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      commitActiveDrawerField();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      state.drawerActiveField = '';
+      state.drawerDraft = null;
+      renderTravelDrawer();
+    }
+  });
   document.addEventListener('pointerdown', e => {
     if (e.target.matches('input, select, button')) return;
+    if (e.target.closest('.master-row')) return;
     const td = e.target.closest('td[data-field]:not(.cell-select)');
     if (td && td.classList.contains('quick-edit')) {
       startInlineEdit(td);
@@ -537,6 +576,7 @@ function initUI() {
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (!e.target.closest('#contrato-menu')) hideContratoMenu();
     if (e.target.matches('input, select, button')) return;
+    if (e.target.closest('.master-row')) return;
     const td = e.target.closest('td[data-field]:not(.cell-select)');
     if (td && td.classList.contains('quick-edit')) startInlineEdit(td);
   });
@@ -634,7 +674,9 @@ function canEditViagens() {
 }
 
 function isViagemConcluida(viagem) {
-  return hasDocumentosCompletos(viagem) && Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
+  return hasDocumentosCompletos(viagem) &&
+    Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato)) &&
+    Boolean(String(viagem?.descarga || '').trim());
 }
 
 function canEditViagem(viagem) {
@@ -675,7 +717,7 @@ function normalizeLembrete(lembrete = {}) {
 }
 
 function stripReminderNumber(line) {
-  return String(line || '').replace(/^\s*\d+°\s*/, '');
+  return String(line || '').replace(/^\s*\d+Â°\s*/, '');
 }
 
 function cleanReminderText(text) {
@@ -796,8 +838,8 @@ function updateUndoButton() {
   const action = state.undoAction;
   button.disabled = !action;
   button.title = action
-    ? `Desfazer última alteração em ${UNDO_FIELD_LABELS[action.field] || action.field}`
-    : 'Desfazer última alteração em DT, CT-E, MANIFESTO ou CONTRATO';
+    ? `Desfazer Ãºltima alteraÃ§Ã£o em ${UNDO_FIELD_LABELS[action.field] || action.field}`
+    : 'Desfazer Ãºltima alteraÃ§Ã£o em DT, CT-E, MANIFESTO ou CONTRATO';
 }
 
 async function undoLastAction() {
@@ -823,7 +865,7 @@ async function loadUsers() {
   const users = await apiFetch('/api/users');
   const tbody = document.getElementById('users-table-body');
   if (!users) {
-    tbody.innerHTML = '<tr><td colspan="4">Não foi possível carregar usuários.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">NÃ£o foi possÃ­vel carregar usuÃ¡rios.</td></tr>';
     return;
   }
   tbody.innerHTML = users.map(user => `
@@ -871,12 +913,12 @@ async function createUserProfile(event) {
   });
 
   button.disabled = false;
-  button.textContent = 'Criar usuário';
+  button.textContent = 'Criar usuÃ¡rio';
 
   if (!created) return;
   form.reset();
   document.getElementById('user-create-ativo').checked = true;
-  message.textContent = 'Usuário criado com sucesso.';
+  message.textContent = 'UsuÃ¡rio criado com sucesso.';
   message.classList.add('success');
   await loadUsers();
 }
@@ -985,7 +1027,7 @@ function openHistoryModal(id) {
   const viagem = state.viagens.find(item => item._id === id);
   if (!viagem) return;
   const title = document.getElementById('history-title');
-  if (title) title.textContent = `Histórico da Viagem - ${viagem.placa || 'Sem placa'}`;
+  if (title) title.textContent = `HistÃ³rico da Viagem - ${viagem.placa || 'Sem placa'}`;
   renderViagemHistory(viagem);
   document.getElementById('history-overlay')?.classList.remove('hidden');
 }
@@ -999,7 +1041,7 @@ function renderViagemHistory(viagem) {
   if (!container) return;
   const history = Array.isArray(viagem.historico) ? [...viagem.historico] : [];
   if (!history.length) {
-    container.innerHTML = '<div class="history-empty">Nenhuma alteração registrada para esta viagem.</div>';
+    container.innerHTML = '<div class="history-empty">Nenhuma alteraÃ§Ã£o registrada para esta viagem.</div>';
     return;
   }
 
@@ -1008,10 +1050,10 @@ function renderViagemHistory(viagem) {
     .map(item => {
       const isCreate = item.tipo === 'CRIACAO';
       const when = formatHistoryDateTime(item.dataHora);
-      const user = item.usuario || item.email || 'Usuário';
+      const user = item.usuario || item.email || 'UsuÃ¡rio';
       return `<article class="history-item ${isCreate ? 'is-create' : ''}">
         <div class="history-item-head">
-          <strong>${escapeHtml(isCreate ? 'Cadastro criado' : (item.label || item.campo || 'ALTERAÇÃO'))}</strong>
+          <strong>${escapeHtml(isCreate ? 'Cadastro criado' : (item.label || item.campo || 'ALTERAÃ‡ÃƒO'))}</strong>
           <span>${escapeHtml(when)}</span>
         </div>
         <div class="history-user">${escapeHtml(user)}</div>
@@ -1042,13 +1084,13 @@ async function updateReports() {
   const button = document.getElementById('reports-refresh');
 
   if (!isValidDateRange(start, end)) {
-    setReportsStatus('Informe um período válido de até 366 dias.', true);
+    setReportsStatus('Informe um perÃ­odo vÃ¡lido de atÃ© 366 dias.', true);
     return;
   }
 
   button.disabled = true;
   button.textContent = 'Atualizando...';
-  setReportsStatus('Carregando dados do período...');
+  setReportsStatus('Carregando dados do perÃ­odo...');
 
   try {
     const params = new URLSearchParams({ dataInicio: start, dataFim: end });
@@ -1061,8 +1103,8 @@ async function updateReports() {
     renderReports(report);
     setReportsStatus(report.rows.length ? '' : 'Nenhuma viagem encontrada para os filtros selecionados.');
   } catch (error) {
-    console.error('Erro ao atualizar relatórios:', error);
-    setReportsStatus('Não foi possível carregar os relatórios.', true);
+    console.error('Erro ao atualizar relatÃ³rios:', error);
+    setReportsStatus('NÃ£o foi possÃ­vel carregar os relatÃ³rios.', true);
   } finally {
     button.disabled = false;
     button.textContent = 'Atualizar';
@@ -1076,11 +1118,11 @@ async function exportReportsPdf() {
   const reportArea = document.querySelector('.reports-grid');
 
   if (!isValidDateRange(start, end)) {
-    setReportsStatus('Informe um período válido de até 366 dias.', true);
+    setReportsStatus('Informe um perÃ­odo vÃ¡lido de atÃ© 366 dias.', true);
     return;
   }
   if (!window.html2canvas || !reportArea) {
-    setReportsStatus('Não foi possível preparar a imagem do relatório.', true);
+    setReportsStatus('NÃ£o foi possÃ­vel preparar a imagem do relatÃ³rio.', true);
     return;
   }
 
@@ -1089,7 +1131,7 @@ async function exportReportsPdf() {
     pdfBtn.disabled = true;
     pdfBtn.textContent = 'Gerando...';
   }
-  setReportsStatus('Gerando PDF do relatório...');
+  setReportsStatus('Gerando PDF do relatÃ³rio...');
 
   try {
     if (!state.reportData) await updateReports();
@@ -1103,15 +1145,15 @@ async function exportReportsPdf() {
     });
     const images = splitCanvasForPdfImages(canvas);
     if (!images.length) {
-      setReportsStatus('Nenhum conteúdo disponível para exportar.', true);
+      setReportsStatus('Nenhum conteÃºdo disponÃ­vel para exportar.', true);
       return;
     }
     const blob = buildImagesPdfBlob(images);
     downloadBlob(blob, `relatorios_${formatDateForFilename(start)}_${formatDateForFilename(end)}.pdf`);
-    setReportsStatus('PDF do relatório gerado.');
+    setReportsStatus('PDF do relatÃ³rio gerado.');
   } catch (error) {
-    console.error('Erro ao exportar relatório:', error);
-    setReportsStatus('Erro ao exportar o relatório.', true);
+    console.error('Erro ao exportar relatÃ³rio:', error);
+    setReportsStatus('Erro ao exportar o relatÃ³rio.', true);
   } finally {
     if (pdfBtn) {
       pdfBtn.disabled = false;
@@ -1446,7 +1488,7 @@ function renderReports(report) {
 function renderReportCharts(report) {
   destroyReportCharts();
   if (!window.Chart) {
-    setReportsStatus('Biblioteca de gráficos indisponível neste navegador.', true);
+    setReportsStatus('Biblioteca de grÃ¡ficos indisponÃ­vel neste navegador.', true);
     return;
   }
 
@@ -1523,8 +1565,8 @@ function renderReportSummary(report) {
   if (period) {
     const start = formatDateBR(report.filters?.start || state.currentDate);
     const end = formatDateBR(report.filters?.end || state.currentDate);
-    const operation = report.filters?.operation ? titleCase(report.filters.operation) : 'Todas as operações';
-    period.textContent = `${start} a ${end} · ${operation}`;
+    const operation = report.filters?.operation ? titleCase(report.filters.operation) : 'Todas as operaÃ§Ãµes';
+    period.textContent = `${start} a ${end} Â· ${operation}`;
   }
 
   const cards = Array.isArray(report.summaryCards) ? report.summaryCards : [];
@@ -1553,11 +1595,11 @@ function renderReportSummaryCard(card) {
           <tr><th>TIPO</th>${headers}<th>TOTAL</th></tr>
         </thead>
         <tbody>
-          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '▶' : '▼'}</span><span>META</span></button></td>${cell('meta')}<td>${total('meta')}</td></tr>
+          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? 'â–¶' : 'â–¼'}</span><span>META</span></button></td>${cell('meta')}<td>${total('meta')}</td></tr>
           ${metaProductRows}
           <tr class="card-row-fat"><td>FATURADO</td>${cell('fat')}<td>${total('fat')}</td></tr>
           <tr class="card-row-agenc"><td>AGENCIADO</td>${cell('agenc')}<td>${total('agenc')}</td></tr>
-          <tr class="card-row-total"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? '▶' : '▼'}</span><span>TOTAL</span></button></td>${cell('total')}<td>${total('total')}</td></tr>
+          <tr class="card-row-total"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? 'â–¶' : 'â–¼'}</span><span>TOTAL</span></button></td>${cell('total')}<td>${total('total')}</td></tr>
           ${totalProductRows}
           <tr class="card-row-falta"><td>FALTA</td>${cell('falta')}<td>${total('falta')}</td></tr>
         </tbody>
@@ -1567,7 +1609,7 @@ function renderReportSummaryCard(card) {
       <div class="report-summary-operation">
         <div class="summary-icon">${summaryIcon(card.origem)}</div>
         <div>
-          <span>OPERAÇÃO</span>
+          <span>OPERAÃ‡ÃƒO</span>
           <strong>${escapeHtml(card.origem)}</strong>
         </div>
       </div>
@@ -1760,7 +1802,7 @@ function renderListaEspera() {
 
   tbody.innerHTML = state.listaEspera.map((item, index) => `
     <tr data-id="${escapeAttr(item._id)}">
-      <td>${index + 1}º</td>
+      <td>${index + 1}Âº</td>
       <td contenteditable="true" spellcheck="false" data-field="placa" data-value="${escapeAttr(item.placa)}">${escapeHtml(item.placa)}</td>
       <td contenteditable="true" spellcheck="false" data-field="nome" data-value="${escapeAttr(item.nome)}">${escapeHtml(item.nome)}</td>
       <td>
@@ -1976,7 +2018,7 @@ function renderFreteQueryPanel() {
   return `<section class="frete-query-card">
     <div class="frete-query-head">
       <div>
-        <strong>Consulta rápida</strong>
+        <strong>Consulta rÃ¡pida</strong>
         <span>Selecione origem, destino e eixo para localizar o valor cadastrado.</span>
       </div>
     </div>
@@ -2004,14 +2046,14 @@ function renderFreteQueryPanel() {
 }
 
 function renderFreteConsultTable(key, table) {
-  const header = `${FRETE_COLUMNS.map((col, colIndex) => renderFreteConsultHeader(key, col, colIndex)).join('')}<th>AÇÕES</th>`;
+  const header = `${FRETE_COLUMNS.map((col, colIndex) => renderFreteConsultHeader(key, col, colIndex)).join('')}<th>AÃ‡Ã•ES</th>`;
   const rows = table.rows.map((row, rowIndex) => {
     const rowTone = freteOriginTone(row[0]);
     const cells = row.map((value, colIndex) => `
       <td contenteditable="true" spellcheck="false" class="frete-cell-${freteColumnType(colIndex)}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-type="${freteColumnType(colIndex)}" data-value="${escapeAttr(formatFreteCellValue(value, colIndex))}">${escapeHtml(formatFreteCellValue(value, colIndex))}</td>
     `).join('');
     return `<tr class="${rowTone}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" ondragover="handleFreteRowDragOver(event)" ondragleave="handleFreteRowDragLeave(event)" ondrop="dropFreteRow(event,'${escapeAttr(key)}',${rowIndex})">${cells}<td class="frete-row-actions">
-      <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">↕</button>
+      <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">â†•</button>
       <button type="button" class="frete-row-delete" onclick="deleteFreteConsultRow('${escapeAttr(key)}', ${rowIndex})" title="Excluir linha">Excluir</button>
     </td></tr>`;
   }).join('');
@@ -2035,7 +2077,7 @@ function renderFreteConsultHeader(tableKey, label, colIndex) {
   const sort = state.freteSort?.[tableKey];
   const isActive = sort?.col === colIndex;
   const nextDirection = isActive && sort.direction === 'asc' ? 'desc' : 'asc';
-  const indicator = isActive ? (sort.direction === 'asc' ? 'A-Z' : 'Z-A') : '↕';
+  const indicator = isActive ? (sort.direction === 'asc' ? 'A-Z' : 'Z-A') : 'â†•';
   const title = `${label}: ordenar ${nextDirection === 'asc' ? 'A a Z' : 'Z a A'}`;
   return `<th>
     <button type="button" class="frete-sort-btn ${isActive ? 'is-active' : ''}" onclick="sortFreteConsultTable('${escapeAttr(tableKey)}', ${colIndex})" title="${escapeAttr(title)}">
@@ -2163,7 +2205,7 @@ function consultarFreteValor() {
   }).filter(item => item.value && item.value !== '--');
 
   if (!matches.length) {
-    result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combinação.</span>';
+    result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combinaÃ§Ã£o.</span>';
     return;
   }
 
@@ -2400,7 +2442,7 @@ async function fetchCarregamentosSearch(filters = {}) {
     const data = await apiFetch(searchUrl);
     if (Array.isArray(data)) return data;
   } catch (e) {
-    console.warn('Busca dedicada indisponível.', e);
+    console.warn('Busca dedicada indisponÃ­vel.', e);
   }
 
   return [];
@@ -2426,7 +2468,7 @@ function normalizeNameSearchTerm(value) {
 
 function renderSearchResult(viagem, index = 0, total = 1) {
   const title = viagem.nota || viagem.cte || viagem.nome || viagem.placa || 'Carregamento';
-  const subtitle = [viagem.origem, viagem.destino].filter(Boolean).join(' → ');
+  const subtitle = [viagem.origem, viagem.destino].filter(Boolean).join(' â†’ ');
   const collapsible = total > 1;
   const collapsed = collapsible && index > 0;
   const cardId = `search-result-${index}`;
@@ -2446,7 +2488,7 @@ function renderSearchResult(viagem, index = 0, total = 1) {
       <div class="search-result-head-actions">
         <em>${escapeHtml(formatSearchValue('data', viagem.data))}</em>
         ${collapsible ? `<button type="button" class="search-result-toggle" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${escapeAttr(cardId)}" title="${collapsed ? 'Exibir resultado' : 'Recolher resultado'}">
-          <span aria-hidden="true">${collapsed ? '▾' : '▴'}</span>
+          <span aria-hidden="true">${collapsed ? 'â–¾' : 'â–´'}</span>
         </button>` : ''}
       </div>
     </div>
@@ -2464,7 +2506,7 @@ function handleSearchResultToggle(event) {
   button.setAttribute('aria-expanded', String(!collapsed));
   button.title = collapsed ? 'Exibir resultado' : 'Recolher resultado';
   const icon = button.querySelector('span');
-  if (icon) icon.textContent = collapsed ? '▾' : '▴';
+  if (icon) icon.textContent = collapsed ? 'â–¾' : 'â–´';
 }
 
 function formatSearchValue(field, value) {
@@ -2517,7 +2559,7 @@ function changeDate(delta) {
   loadAll();
 }
 
-// ─── RENDER ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderAll() {
   syncDynamicSelects();
   renderOriginFilters();
@@ -2525,6 +2567,7 @@ function renderAll() {
   renderReminderNote();
   renderTable('arcos');
   renderTable('agenciando');
+  renderTravelDrawer();
   renderSummary();
   updateUndoButton();
 }
@@ -2543,31 +2586,422 @@ function renderOriginFilters() {
     .join('');
 }
 
+async function selectViagem(id, preferredTab = 'documentos') {
+  const listItem = state.viagens.find(item => item._id === id);
+  if (!listItem) return;
+  state.selectedViagemId = id;
+  state.selectedViagemDetails = listItem;
+  state.drawerActiveField = '';
+  state.drawerDraft = null;
+  state.drawerTab = preferredTab;
+  document.body.classList.add('travel-drawer-open');
+  renderAll();
+  await loadSelectedViagemDetails(id);
+}
+
+async function loadSelectedViagemDetails(id) {
+  state.drawerLoading = true;
+  renderTravelDrawer();
+  const detail = await apiFetch(`/api/viagens/${encodeURIComponent(id)}`);
+  state.drawerLoading = false;
+  if (!detail || state.selectedViagemId !== id) {
+    renderTravelDrawer();
+    return;
+  }
+  state.selectedViagemDetails = detail;
+  if (isViagemConcluida(detail)) {
+    state.drawerActiveField = '';
+    state.drawerDraft = null;
+  }
+  const idx = state.viagens.findIndex(item => item._id === id);
+  if (idx !== -1) state.viagens[idx] = detail;
+  renderAll();
+}
+
+function closeTravelDrawer() {
+  state.selectedViagemId = null;
+  state.selectedViagemDetails = null;
+  state.drawerActiveField = '';
+  state.drawerDraft = null;
+  state.drawerLoading = false;
+  document.body.classList.remove('travel-drawer-open');
+  renderAll();
+}
+
+function selectedViagem() {
+  return state.selectedViagemDetails ||
+    state.viagens.find(item => item._id === state.selectedViagemId) ||
+    null;
+}
+
+function viagemStatusDisplay(viagem) {
+  if (hasDocumentosCompletos(viagem) && !normalizeContratoConclusao(viagem?.conclusaoContrato)) return 'FALTA ADIANTAMENTO';
+  if (hasDocumentosCompletos(viagem) && normalizeContratoConclusao(viagem?.conclusaoContrato) && !String(viagem?.descarga || '').trim()) return 'AGENDAR DESCARGA';
+  if (isViagemConcluida(viagem)) return 'CONCLUIDO';
+  return String(viagem?.status || '').trim() || 'PROGRAMADO';
+}
+
+function statusColorStyle(status) {
+  const normalized = normalizeOption(status);
+  if (normalized === 'FALTA ADIANTAMENTO') return 'color:#92400e;background:#fef3c7;border-color:#f59e0b;';
+  if (normalized === 'AGENDAR DESCARGA') return 'color:#1d4ed8;background:#dbeafe;border-color:#60a5fa;';
+  return selectColorStyle('status', status);
+}
+
+function drawerValue(field) {
+  const source = state.drawerActiveField === field && state.drawerDraft ? state.drawerDraft : selectedViagem();
+  return source?.[field] || '';
+}
+
+function renderTravelDrawer() {
+  const drawer = document.getElementById('travel-drawer');
+  if (!drawer) return;
+  const viagem = selectedViagem();
+  if (!viagem) {
+    document.body.classList.remove('travel-drawer-open');
+    drawer.className = 'travel-drawer';
+    drawer.innerHTML = '';
+    return;
+  }
+
+  drawer.className = 'travel-drawer is-open';
+  const tabs = [
+    ['documentos', 'Documentos'],
+    ['agendamento', 'Agendamento'],
+    ['financeiro', 'Financeiro'],
+    ['gerais', 'Dados Gerais'],
+    ['observacoes', 'Observacoes']
+  ];
+  if (!tabs.some(([key]) => key === state.drawerTab)) state.drawerTab = 'documentos';
+  const status = viagemStatusDisplay(viagem);
+  drawer.innerHTML = `
+    <div class="drawer-head">
+      <div>
+        <div class="drawer-title-row"><h2>Viagem ${escapeHtml(viagem.placa || viagem._id || '-')}</h2><span class="modern-badge status-chip" style="${escapeAttr(statusColorStyle(status))}">${escapeHtml(status)}</span></div>
+      </div>
+      <button type="button" class="drawer-close" data-drawer-action="close" aria-label="Fechar">x</button>
+    </div>
+    <nav class="drawer-tabs">${tabs.map(([key,label]) => `<button type="button" class="${state.drawerTab === key ? 'active' : ''}" data-drawer-tab="${key}">${label}</button>`).join('')}</nav>
+    <div class="drawer-body">${state.drawerLoading ? renderDrawerSkeleton() : renderDrawerTab(viagem)}</div>
+    <div class="drawer-footer">
+      <button type="button" class="btn-cancel" data-drawer-action="close">Fechar</button>
+      ${canEditDrawerViagem(viagem) ? '<span class="drawer-editing-label">Clique em um campo para editar</span>' : '<span class="drawer-locked-label">Viagem concluida bloqueada</span>'}
+    </div>`;
+}
+
+function renderDrawerSkeleton() {
+  return '<div class="drawer-skeleton"><span></span><span></span><span></span><span></span></div>';
+}
+
+function renderDrawerTab(viagem) {
+  if (state.drawerTab === 'documentos') return renderDrawerDocuments();
+  if (state.drawerTab === 'agendamento') return renderDrawerAgendamento();
+  if (state.drawerTab === 'financeiro') return renderDrawerFinanceiro();
+  if (state.drawerTab === 'observacoes') return renderDrawerObservacoes();
+  return renderDrawerGerais();
+}
+
+function renderDrawerGerais() {
+  return `<div class="drawer-card-grid">
+    ${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerField('nota','Nota'), drawerField('num_pedagio','Pedagio')])}
+    ${drawerCard('VEICULO', [drawerField('placa','Placa'), drawerSelect('tipo','Tipo'), drawerField('eixos','Eixos','number'), drawerSelect('status','Status'), drawerSelect('carroceria','Carroceria'), drawerSelect('pamcard','Pamcard')])}
+    ${drawerCard('MOTORISTA', [drawerField('nome','Nome'), drawerPhoneField('telefone','Telefone'), drawerPhoneField('telefone2','Telefone 2'), drawerField('usuario','Usuario', true)])}
+    ${drawerCard('VIAGEM', [drawerSelect('origem','Origem'), drawerSelect('destino','Destino'), drawerSelect('produto','Produto'), drawerField('peso','Peso (kg)','number')])}
+    ${drawerCard('AGENDAMENTO', [drawerField('agendamento','Carga','time'), drawerField('descarga','Descarga','datetime-local')])}
+    ${drawerCard('FINANCEIRO', [
+      drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem())),
+      drawerField('valor_adiantamento','Valor adiantamento'),
+      drawerField('vlr_pedagio','Valor pedagio','number'),
+      drawerAdvanceButton()
+    ])}
+  </div>`;
+}
+
+function renderDrawerDocuments() {
+  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerField('nota','Nota Fiscal'), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')])}</div>`;
+}
+
+function renderDrawerAgendamento() {
+  return `<div class="drawer-card-grid single">${drawerCard('AGENDAMENTO', [drawerField('agendamento','Carga','time'), drawerField('descarga','Descarga','datetime-local')])}</div>`;
+}
+
+function renderDrawerFinanceiro() {
+  return `<div class="drawer-card-grid single">${drawerCard('FINANCEIRO', [
+    drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem())),
+    drawerField('valor_adiantamento','Valor adiantamento'),
+    drawerField('vlr_pedagio','Valor pedagio','number'),
+    drawerAdvanceButton()
+  ])}</div>`;
+}
+
+function freteValueForViagem(viagem = {}) {
+  const eixoColumn = eixoToFreteColumn(viagem.eixos);
+  if (!viagem?.origem || !viagem?.destino || !eixoColumn) return '-';
+  const colIndex = FRETE_COLUMNS.indexOf(eixoColumn);
+  if (colIndex < 0) return '-';
+
+  const entries = Object.entries(state.freteConsultas || {});
+  const preferred = normalizeTipo(viagem.tipo) === 'AGREGADO'
+    ? ['agregados', 'terceiros']
+    : ['terceiros', 'agregados'];
+  const ordered = [
+    ...preferred.map(key => entries.find(([entryKey]) => entryKey === key)).filter(Boolean),
+    ...entries.filter(([key]) => !preferred.includes(key))
+  ];
+
+  for (const [, table] of ordered) {
+    const row = (table.rows || []).find(item =>
+      fretePlaceMatches(item[0], viagem.origem) &&
+      fretePlaceMatches(item[1], viagem.destino)
+    );
+    const value = row ? String(row[colIndex] || '').trim() : '';
+    if (value && value !== '--') return formatFreteCellValue(value, colIndex);
+  }
+  return '-';
+}
+
+function eixoToFreteColumn(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return FRETE_COLUMNS.find(col => col.startsWith(digits)) || '';
+}
+
+function fretePlaceMatches(tableValue, viagemValue) {
+  const tableNorm = normalizeOption(tableValue);
+  const viagemNorm = normalizeOption(viagemValue);
+  if (!tableNorm || !viagemNorm) return false;
+  return tableNorm === viagemNorm || tableNorm.includes(viagemNorm) || viagemNorm.includes(tableNorm);
+}
+
+function renderDrawerHistorico(viagem) {
+  const items = Array.isArray(viagem.historico) ? viagem.historico.slice().reverse() : [];
+  if (!items.length) return '<div class="drawer-empty">Nenhum historico registrado.</div>';
+  return `<div class="drawer-history">${items.map(item => `<div><strong>${escapeHtml(item.label || item.campo || item.field || 'Alteracao')}</strong><span>${escapeHtml(formatDateTimeBR(item.dataHora || item.data || item.at || ''))}</span><p>${escapeHtml(item.usuario || '')} ${escapeHtml(item.atual || item.valorNovo || item.nextValue || '')}</p></div>`).join('')}</div>`;
+}
+
+function renderDrawerObservacoes() {
+  return `<div class="drawer-card-grid single">${drawerCard('OBSERVACOES', [drawerTextarea('obs','Observacoes')])}</div>`;
+}
+
+function drawerCard(title, content) {
+  return `<section class="drawer-card"><h3>${drawerCardIcon(title)}<span>${escapeHtml(title)}</span></h3>${content.join('')}</section>`;
+}
+
+function drawerCardIcon(title) {
+  const key = normalizeOption(title);
+  const icons = {
+    VEICULO: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>',
+    MOTORISTA: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c1.6-4 4.2-6 8-6s6.4 2 8 6"></path></svg>',
+    AGENDAMENTO: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M8 14h3M13 14h3M8 17h3"></path></svg>',
+    VIAGEM: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.1 7-12a7 7 0 0 0-14 0c0 5.9 7 12 7 12z"></path><circle cx="12" cy="9" r="2.5"></circle></svg>',
+    DOCUMENTOS: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h5M9 13h6M9 17h6"></path></svg>',
+    FINANCEIRO: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M17 6.5c-1.1-1-2.8-1.5-5-1.5-3 0-5 1.5-5 3.8 0 5 10 2.2 10 7.4 0 2.2-2 3.8-5 3.8-2.1 0-3.9-.6-5.2-1.8"></path></svg>',
+    OBSERVACOES: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v7M12 7h.01"></path></svg>'
+  };
+  return `<span class="drawer-card-icon">${icons[key] || icons.OBSERVACOES}</span>`;
+}
+
+function drawerField(field, label, type = 'text') {
+  const isActive = state.drawerActiveField === field;
+  const editable = canEditDrawerField(field);
+  const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : drawerValue(field);
+  const display = field === 'peso' ? formatPeso(value) : field === 'descarga' ? formatDescargaDateTime(value) : value;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
+  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'datetime-local' ? 'datetime-local' : 'text';
+  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" autofocus></label>`;
+}
+
+function drawerReadOnlyValue(label, value) {
+  return `<label class="drawer-field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+}
+
+function drawerSelect(field, label) {
+  const value = drawerValue(field);
+  const editable = canEditDrawerField(field);
+  const isActive = state.drawerActiveField === field;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><select data-drawer-field="${escapeAttr(field)}" data-drawer-commit="change" autofocus>${renderOptions(getSelectOptions(field), value)}</select></label>`;
+}
+
+function drawerTextarea(field, label) {
+  const value = drawerValue(field);
+  const editable = canEditDrawerField(field);
+  const isActive = state.drawerActiveField === field;
+  if (!isActive || !editable) return `<label class="drawer-field drawer-textarea ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+  return `<label class="drawer-field drawer-textarea is-editing"><span>${escapeHtml(label)}</span><textarea data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" autofocus>${escapeHtml(value)}</textarea></label>`;
+}
+
+function drawerPhoneField(field = 'telefone', label = 'Telefone') {
+  const phone = drawerValue(field);
+  const editable = canEditDrawerField(field);
+  const isActive = state.drawerActiveField === field;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(phone || '-')}</strong></label>`;
+  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="text" value="${escapeAttr(phone)}" autofocus></label>`;
+}
+
+function drawerAdvanceButton() {
+  const viagem = selectedViagem();
+  if (!hasDocumentosCompletos(viagem)) return '<div class="drawer-hint">Adiantamento liberado apos documentos completos.</div>';
+  const done = Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
+  if (done) return '<button type="button" class="drawer-action-pill is-done" data-drawer-advance-menu="true" title="Botao direito para opcoes">Adiantamento efetuado</button>';
+  if (!canEditDrawerViagem(viagem)) return '<div class="drawer-hint">Adiantamento pendente.</div>';
+  return `<button type="button" class="drawer-action-pill" data-drawer-action="advance">Marcar adiantamento efetuado</button>`;
+}
+
+function whatsappHref(phone) {
+  const digits = String(firstPhone(phone) || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const normalized = digits.length <= 11 ? `55${digits}` : digits;
+  const viagem = selectedViagem();
+  const message = encodeURIComponent(copyViagemText(viagem));
+  return `https://wa.me/${normalized}?text=${message}`;
+}
+
+function rowWhatsappAction(viagem) {
+  const href = whatsappHrefForViagem(viagem);
+  if (!href) return '';
+  return `<a class="btn-row table-action-icon table-whatsapp-action" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="Abrir WhatsApp" aria-label="Abrir WhatsApp"><img src="img/whatsapp.jpg" alt=""></a>`;
+}
+
+function whatsappHrefForViagem(viagem = {}) {
+  const digits = String(firstPhone(viagem.telefone || '') || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const normalized = digits.length <= 11 ? `55${digits}` : digits;
+  const message = encodeURIComponent(copyViagemText(viagem));
+  return `https://wa.me/${normalized}?text=${message}`;
+}
+
+function handleDrawerInput(event) {
+  const field = event.target?.dataset?.drawerField;
+  if (!field || state.drawerActiveField !== field) return;
+  if (!state.drawerDraft) state.drawerDraft = { ...selectedViagem() };
+  if (field === 'telefone' || field === 'telefone2') event.target.value = maskPhoneListInput(event.target.value);
+  state.drawerDraft[field] = event.target.value;
+}
+
+async function handleDrawerClick(event) {
+  const editableField = event.target.closest('[data-drawer-edit-field]')?.dataset.drawerEditField;
+  if (editableField) {
+    activateDrawerField(editableField);
+    return;
+  }
+
+  const tab = event.target.closest('[data-drawer-tab]');
+  if (tab) {
+    state.drawerTab = tab.dataset.drawerTab;
+    renderTravelDrawer();
+    return;
+  }
+  const action = event.target.closest('[data-drawer-action]')?.dataset.drawerAction;
+  if (!action) return;
+  if (action === 'close') return closeTravelDrawer();
+  if (action === 'advance') {
+    await concluirViagemAdiantamento();
+    return;
+  }
+}
+
+function handleDrawerContextMenu(event) {
+  const target = event.target.closest('[data-drawer-advance-menu]');
+  if (!target || !isAdmin()) return;
+  const viagem = selectedViagem();
+  if (!viagem) return;
+  event.preventDefault();
+  state.contratoTargetId = viagem._id;
+  state.contratoTargetField = 'contrato';
+  showContratoMenu(event, { dataset: { id: viagem._id, field: 'contrato' } });
+}
+
+function activateDrawerField(field) {
+  const viagem = selectedViagem();
+  if (!viagem || !canEditDrawerField(field)) return;
+  state.drawerActiveField = field;
+  state.drawerDraft = { ...viagem };
+  renderTravelDrawer();
+  requestAnimationFrame(() => {
+    const input = document.querySelector(`[data-drawer-field="${CSS.escape(field)}"]`);
+    input?.focus();
+    if (input?.select) input.select();
+  });
+}
+
+function canEditDrawerField(field) {
+  const viagem = selectedViagem();
+  if (!canEditDrawerViagem(viagem)) return false;
+  return canEditViagemField(viagem, field) && field !== 'usuario';
+}
+
+function canEditDrawerViagem(viagem) {
+  return Boolean(viagem) && !isViagemConcluida(viagem) && canEditViagem(viagem);
+}
+
+async function commitActiveDrawerField() {
+  const field = state.drawerActiveField;
+  const viagem = selectedViagem();
+  if (!field || !viagem || !state.drawerDraft || state.drawerSaving) return;
+  const next = normalizeFieldValue(field, state.drawerDraft[field] || '');
+  const current = normalizeFieldValue(field, viagem[field] || '');
+  if (next === current) {
+    state.drawerActiveField = '';
+    state.drawerDraft = null;
+    renderTravelDrawer();
+    return;
+  }
+
+  state.drawerSaving = true;
+  const updated = await apiFetch(`/api/viagens/${viagem._id}`, { method: 'PUT', body: JSON.stringify({ [field]: next }) });
+  state.drawerSaving = false;
+  if (!updated) return;
+  state.selectedViagemDetails = updated;
+  const idx = state.viagens.findIndex(item => item._id === viagem._id);
+  if (idx !== -1) state.viagens[idx] = updated;
+  state.drawerActiveField = '';
+  state.drawerDraft = null;
+  renderAll();
+}
+
+async function concluirViagemAdiantamento() {
+  const viagem = selectedViagem();
+  if (!viagem || !hasDocumentosCompletos(viagem)) return;
+  await updateViagemField(viagem._id, 'conclusaoContrato', 'ADIANTAMENTO EFETUADO');
+}
+
+async function saveDrawerViagem() {
+  const viagem = selectedViagem();
+  if (!viagem || !state.drawerDraft || state.drawerSaving) return;
+  const patch = {};
+  const fields = ['placa','nome','tipo','eixos','status','carroceria','pamcard','telefone','telefone2','origem','destino','produto','peso','agendamento','descarga','dt','cte','manifesto','contrato','nota','num_pedagio','valor_adiantamento','vlr_pedagio','obs'];
+  fields.forEach(field => {
+    const next = normalizeFieldValue(field, state.drawerDraft[field] || '');
+    const current = normalizeFieldValue(field, viagem[field] || '');
+    if (next !== current) patch[field] = next;
+  });
+  if (!Object.keys(patch).length) {
+    state.drawerEditing = false;
+    state.drawerDraft = null;
+    renderTravelDrawer();
+    return;
+  }
+  state.drawerSaving = true;
+  const updated = await apiFetch(`/api/viagens/${viagem._id}`, { method: 'PUT', body: JSON.stringify(patch) });
+  state.drawerSaving = false;
+  if (!updated) return;
+  state.selectedViagemDetails = updated;
+  const idx = state.viagens.findIndex(item => item._id === viagem._id);
+  if (idx !== -1) state.viagens[idx] = updated;
+  state.drawerEditing = false;
+  state.drawerDraft = null;
+  renderAll();
+}
+
 const FIELDS = [
   { key: 'placa', label: 'PLACA', quick: true },
-  { key: 'nome', label: 'NOME', quick: true },
+  { key: 'nome', label: 'MOTORISTA', quick: true },
   { key: 'tipo', label: 'TIPO', select: true },
-  { key: 'carroceria', label: 'CARROCERIA', select: true },
-  { key: 'pamcard', label: 'PAMCARD', select: true },
-  { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
-  { key: 'descarga', label: 'DESCARGA', quick: true, dateTime: true },
-  { key: 'telefone', label: 'TELEFONE', quick: true },
-  { key: 'status', label: 'STATUS', select: true },
-  { key: 'usuario', label: 'USUÁRIO' },
-  { key: 'produto', label: 'PRODUTO', select: true },
   { key: 'origem', label: 'ORIGEM', select: true },
   { key: 'destino', label: 'DESTINO', select: true },
-  { key: 'peso', label: 'PESO', quick: true, number: true },
-  { key: 'dt', label: 'DT', quick: true },
-  { key: 'cte', label: 'CT-E', quick: true },
-  { key: 'manifesto', label: 'MANIFESTO', quick: true },
-  { key: 'contrato', label: 'CONTRATO', quick: true },
-  { key: 'nota', label: 'NOTA', quick: true },
-  { key: 'num_pedagio', label: 'Nº PED', quick: true },
-  { key: 'vlr_pedagio', label: 'VLR PED', quick: true, money: true },
-  { key: 'horas', label: 'HORAS', quick: true, time: true },
-  { key: 'obs', label: 'OBSERVAÇÃO', quick: true },
-  { key: 'data', label: 'DATA', quick: true, date: true }
+  { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
+  { key: 'status', label: 'STATUS', select: true }
 ];
 
 function renderTable(secao) {
@@ -2580,7 +3014,6 @@ function renderTable(secao) {
 
   if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="${FIELDS.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
-    updateStickyColumnWidths(document.getElementById(`table-${secao}`));
     updateTableScrollControls(secao);
     return;
   }
@@ -2596,30 +3029,54 @@ function renderTable(secao) {
     separator,
     ...pendingRows.map(renderTableRow)
   ].join('');
-  updateStickyColumnWidths(document.getElementById(`table-${secao}`));
   updateTableScrollControls(secao);
 }
 
 function renderTableRow(v) {
-    const originClass = originSlug(v.origem);
-    const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
-    const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
-    const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
-    const cells = FIELDS.map(f => renderCell(v, f)).join('');
+  const originClass = originSlug(v.origem);
+  const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
+  const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
+  const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
+  const selectedClass = state.selectedViagemId === v._id ? 'is-selected' : '';
+  const status = viagemStatusDisplay(v);
+  const obsIndicator = String(v.obs || '').trim()
+    ? `<button type="button" class="plate-obs-indicator" title="Abrir observacoes" aria-label="Abrir observacoes" onclick="openViagemObservacoes(event,'${escapeAttr(v._id)}')">💬</button>`
+    : '';
 
-    return `<tr data-id="${escapeHtml(v._id)}" class="origin-row ${originClass} ${completeClass} ${semCadastroClass} ${yellowClass}" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
-      ${cells}
-      <td>
-        <div class="row-actions">
-          <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
-          ${isAdmin() ? `<button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Histórico" aria-label="Histórico"><span class="table-history-icon" aria-hidden="true"></span></button>` : ''}
-          ${canEditViagem(v) ? `<button class="btn-row table-action-icon" onclick="editViagem('${escapeAttr(v._id)}')" title="Editar" aria-label="Editar"><span class="table-edit-icon" aria-hidden="true"></span></button>` : ''}
-          ${canDeleteViagem(v) ? `<button class="btn-row table-action-icon danger" onclick="deleteViagem('${escapeAttr(v._id)}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''}
-        </div>
-      </td>
-    </tr>`;
+  return `<tr data-id="${escapeHtml(v._id)}" class="origin-row master-row ${originClass} ${completeClass} ${semCadastroClass} ${yellowClass} ${selectedClass}" onclick="selectViagem('${escapeAttr(v._id)}')" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
+    <td data-field="placa" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.placa || '')}" class="quick-edit placa-cell">
+      <strong class="master-plate">${obsIndicator}${escapeHtml(v.placa || '-')}</strong>
+    </td>
+    <td data-field="nome" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.nome || '')}" class="quick-edit">
+      <div class="driver-cell">
+        <strong>${escapeHtml(String(v.nome || '-').toUpperCase())}</strong>
+      </div>
+    </td>
+    <td data-field="tipo" data-id="${escapeAttr(v._id)}">
+      <span class="modern-badge type-chip ${tipoSlug(v.tipo)}" style="${escapeAttr(selectColorStyle('tipo', normalizeTipo(v.tipo)))}">${escapeHtml(normalizeTipo(v.tipo) || '-')}</span>
+    </td>
+    <td data-field="origem" data-id="${escapeAttr(v._id)}">
+      <div class="route-cell"><strong>${escapeHtml(titleCase(v.origem || '-'))}</strong></div>
+    </td>
+    <td data-field="destino" data-id="${escapeAttr(v._id)}">
+      <div class="route-cell"><strong>${escapeHtml(String(v.destino || '-').toUpperCase())}</strong></div>
+    </td>
+    <td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
+      <span class="modern-badge schedule-chip">${escapeHtml(normalizeHours(v.agendamento || '') || '-')}</span>
+    </td>
+    <td data-field="status" data-id="${escapeAttr(v._id)}">
+      <span class="modern-badge status-chip ${statusSlug(status)}" style="${escapeAttr(statusColorStyle(status))}">${escapeHtml(status)}</span>
+    </td>
+    <td class="master-actions" onclick="event.stopPropagation()">
+      <div class="row-actions">
+        <button class="btn-row table-action-icon" onclick="selectViagem('${escapeAttr(v._id)}')" title="Visualizar" aria-label="Visualizar"><span class="table-view-icon" aria-hidden="true"></span></button>
+        ${isAdmin() ? `<button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Historico" aria-label="Historico"><span class="table-history-icon" aria-hidden="true"></span></button>` : ''}
+        ${rowWhatsappAction(v)}
+        <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
+      </div>
+    </td>
+  </tr>`;
 }
-
 const tableScrollSyncing = {};
 
 function updateTableScrollControls(secao) {
@@ -2802,30 +3259,21 @@ function syncTableScrollFromBottom(secao) {
   setTableScrollLeft(secao, scrollArea.scrollLeft);
 }
 
-function updateStickyColumnWidths(table) {
-  if (!table) return;
-
-  const measureField = (field, minWidth) => {
-    const cells = [...table.querySelectorAll(`th[data-field="${field}"], td[data-field="${field}"]`)];
-    return cells.reduce((width, cell) => Math.max(width, Math.ceil(cell.scrollWidth)), minWidth);
-  };
-
-  table.style.setProperty('--sticky-placa-width', `${measureField('placa', 132)}px`);
-  table.style.setProperty('--sticky-nome-width', `${measureField('nome', 142)}px`);
-  table.style.setProperty('--sticky-tipo-width', `${measureField('tipo', 136)}px`);
-}
-
 function renderTableHeader(secao) {
   const table = document.getElementById(`table-${secao}`);
   const headRow = table?.querySelector('thead tr');
   if (!headRow) return;
 
   headRow.innerHTML = `${FIELDS.map(field => {
-    const active = state.tableSort.field === field.key ? 'is-sorted' : '';
-    const arrow = active ? (state.tableSort.direction === 'asc' ? ' ↑' : ' ↓') : '';
-    const label = `${field.label}${arrow}`;
+    const criteria = normalizeTableSortCriteria();
+    const sortIndex = criteria.findIndex(item => item.field === field.key);
+    const active = sortIndex >= 0 ? 'is-sorted' : '';
+    const sortItem = criteria[sortIndex];
+    const arrow = sortItem ? (sortItem.direction === 'asc' ? ' ↑' : ' ↓') : '';
+    const order = sortIndex > 0 ? ` ${sortIndex + 1}` : '';
+    const label = `${field.label}${arrow}${order}`;
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
-  }).join('')}<th class="col-actions"></th>`;
+  }).join('')}<th class="col-actions">ACOES</th>`;
 
   headRow.querySelectorAll('th[data-field]').forEach(th => {
     th.onclick = () => sortTableBy(th.dataset.field);
@@ -2876,7 +3324,7 @@ function renderCell(v, field) {
     const canPromote = v.secao === 'agenciando' && canEditViagem(v);
     return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell">
       <span class="placa-content">
-        <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'Já está faturado'}">↑</button>
+        <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'JÃ¡ estÃ¡ faturado'}">â†‘</button>
         <span>${escapeHtml(display)}</span>
       </span>
     </td>`;
@@ -3009,7 +3457,7 @@ function setReportOperationOptions() {
   if (!select) return;
   const current = select.value;
   const options = originList();
-  select.innerHTML = `<option value="">Todas as operações</option>${options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('')}`;
+  select.innerHTML = `<option value="">Todas as operaÃ§Ãµes</option>${options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('')}`;
   if (options.includes(current) || current === '') select.value = current;
 }
 
@@ -3044,8 +3492,8 @@ function renderSettingsModal() {
           <span>${escapeHtml(value)}</span>
           ${hasColors ? renderConfigColorPicker(field.key, value) : ''}
           <div class="settings-order-actions">
-            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">↑</button>
-            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">↓</button>
+            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">â†‘</button>
+            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">â†“</button>
           </div>
           <button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>
         </div>`).join('')}
@@ -3076,7 +3524,7 @@ async function exportViagensExcel() {
     return;
   }
   if (start > end) {
-    setExportStatus('A data inicial não pode ser maior que a data final.', true);
+    setExportStatus('A data inicial nÃ£o pode ser maior que a data final.', true);
     return;
   }
 
@@ -3093,7 +3541,7 @@ async function exportViagensExcel() {
 
     if (!res.ok) {
       const message = await responseErrorMessage(res);
-      setExportStatus(message || 'Não foi possível exportar as viagens.', true);
+      setExportStatus(message || 'NÃ£o foi possÃ­vel exportar as viagens.', true);
       return;
     }
 
@@ -3115,6 +3563,49 @@ async function exportViagensExcel() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Exportar Excel';
+  }
+}
+
+async function exportCurrentDateExcel() {
+  const btn = document.getElementById('btn-export-current');
+  const previousText = btn?.textContent || 'Exportar';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Exportando...';
+  }
+
+  try {
+    const token = await FrotasysAuth.getAccessToken();
+    const params = new URLSearchParams({ inicio: state.currentDate, fim: state.currentDate });
+    const res = await fetch(`/api/viagens/export?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+
+    if (!res.ok) {
+      const message = await responseErrorMessage(res);
+      showSummaryToast(message || 'Nao foi possivel exportar as viagens.', 'error');
+      return;
+    }
+
+    const blob = await res.blob();
+    const filename = filenameFromDisposition(res.headers.get('Content-Disposition')) || `viagens_${formatDateForFilename(state.currentDate)}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showSummaryToast('Arquivo Excel gerado.');
+  } catch (e) {
+    console.error('Erro ao exportar viagens:', e);
+    showSummaryToast('Erro ao exportar as viagens.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = previousText;
+    }
   }
 }
 
@@ -3151,19 +3642,19 @@ function renderSettingsOperations() {
   const operations = operationsList();
   container.innerHTML = `<section class="settings-section settings-operations-section">
     <div class="settings-section-head">
-      <strong>OPERAÇÕES</strong>
+      <strong>OPERAÃ‡Ã•ES</strong>
       <span>${operations.length} itens</span>
     </div>
     <div class="settings-operation-actions">
-      <button type="button" class="btn-add-operation" onclick="openOperationModal()">Adicionar operação</button>
+      <button type="button" class="btn-add-operation" onclick="openOperationModal()">Adicionar operaÃ§Ã£o</button>
     </div>
     <div class="settings-operation-list">
       ${operations.map(op => {
         const id = escapeAttr(op._id || op.metaTipo || op.origem);
         const label = escapeHtml(titleCase(op.origem));
         return `<div class="settings-operation-chip">
-          <button type="button" class="settings-operation-edit" onclick="openOperationModal('${id}')" title="Editar operação">${label}</button>
-          <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir operação" aria-label="Excluir operação ${escapeAttr(titleCase(op.origem))}">×</button>
+          <button type="button" class="settings-operation-edit" onclick="openOperationModal('${id}')" title="Editar operaÃ§Ã£o">${label}</button>
+          <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir operaÃ§Ã£o" aria-label="Excluir operaÃ§Ã£o ${escapeAttr(titleCase(op.origem))}">Ã—</button>
         </div>`;
       }).join('')}
     </div>
@@ -3221,7 +3712,7 @@ async function deleteConfigOption(field, value) {
 async function deleteOperation(operationId) {
   const op = findOperation(operationId);
   if (!op?._id) return;
-  if (!confirm(`Excluir a operação "${titleCase(op.origem)}"?`)) return;
+  if (!confirm(`Excluir a operaÃ§Ã£o "${titleCase(op.origem)}"?`)) return;
 
   const removed = await apiFetch(`/api/operacoes/${op._id}`, { method: 'DELETE' });
   if (!removed) return;
@@ -3256,30 +3747,63 @@ function filteredRows(secao) {
 function sortTableBy(fieldKey) {
   const field = FIELDS.find(item => item.key === fieldKey);
   if (!field) return;
-  const sameField = state.tableSort.field === fieldKey;
+  const criteria = normalizeTableSortCriteria();
+  const existing = criteria.find(item => item.field === fieldKey);
+  const isPrimary = criteria[0]?.field === fieldKey;
 
-  state.tableSort = {
-    field: fieldKey,
-    direction: sameField && state.tableSort.direction === 'asc' ? 'desc' : 'asc'
-  };
+  if (isPrimary && existing?.direction === 'desc') {
+    state.tableSort = criteria.filter(item => item.field !== fieldKey);
+    renderTable('arcos');
+    renderTable('agenciando');
+    return;
+  }
+
+  const direction = isPrimary && existing?.direction === 'asc' ? 'desc' : 'asc';
+  state.tableSort = [
+    { field: fieldKey, direction },
+    ...criteria.filter(item => item.field !== fieldKey)
+  ];
   renderTable('arcos');
   renderTable('agenciando');
 }
 
-function sortRows(rows) {
-  const { field, direction } = state.tableSort;
-  if (!field) return rows;
+function openViagemObservacoes(event, id) {
+  event?.stopPropagation();
+  selectViagem(id, 'observacoes');
+}
 
-  const modifier = direction === 'desc' ? -1 : 1;
+function sortRows(rows) {
+  const criteria = normalizeTableSortCriteria();
+  if (!criteria.length) return rows;
+
   return [...rows].sort((a, b) => {
-    const primary = sortValue(a, field).localeCompare(sortValue(b, field), 'pt-BR', {
-      numeric: true,
-      sensitivity: 'base'
-    });
-    if (primary) return primary * modifier;
+    for (const { field, direction } of criteria) {
+      const modifier = direction === 'desc' ? -1 : 1;
+      const result = sortValue(a, field).localeCompare(sortValue(b, field), 'pt-BR', {
+        numeric: true,
+        sensitivity: 'base'
+      });
+      if (result) return result * modifier;
+    }
 
     return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
   });
+}
+
+function normalizeTableSortCriteria() {
+  const raw = Array.isArray(state.tableSort)
+    ? state.tableSort
+    : state.tableSort?.field
+      ? [state.tableSort]
+      : [];
+  const allowed = new Set(FIELDS.map(field => field.key));
+  const seen = new Set();
+  return raw
+    .filter(item => item?.field && allowed.has(item.field) && !seen.has(item.field) && seen.add(item.field))
+    .map(item => ({
+      field: item.field,
+      direction: item.direction === 'desc' ? 'desc' : 'asc'
+    }));
 }
 
 function sortValue(viagem, field) {
@@ -3313,7 +3837,7 @@ async function copySummaryAsImage() {
 
   if (!hasFreshSummaryCopyBlob()) {
     if (!window.html2canvas) {
-      showSummaryToast('Não foi possível gerar a imagem do resumo. Atualize a página e tente novamente.', 'error');
+      showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo. Atualize a pÃ¡gina e tente novamente.', 'error');
       return;
     }
 
@@ -3323,7 +3847,7 @@ async function copySummaryAsImage() {
       ?.then(() => showSummaryToast('Imagem pronta. Clique novamente para copiar.'))
       .catch(error => {
         console.error('Erro ao preparar imagem do resumo:', error);
-        showSummaryToast('Não foi possível gerar a imagem do resumo.', 'error');
+        showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo.', 'error');
       });
     return;
   }
@@ -3333,7 +3857,7 @@ async function copySummaryAsImage() {
   try {
     await copyPreparedSummaryImage(state.summaryCopyBlob);
     clearPreparedSummaryCopy();
-    showSummaryToast('Resumo copiado para a área de transferência');
+    showSummaryToast('Resumo copiado para a Ã¡rea de transferÃªncia');
   } catch (error) {
     console.error('Erro ao copiar resumo como imagem:', error);
     showSummaryToast(summaryClipboardErrorMessage(error), 'error');
@@ -3364,7 +3888,7 @@ function prepareSummaryCopyImage() {
 
 async function getPreparedSummaryCopyBlob(panel) {
   if (!window.html2canvas) {
-    throw new Error('Não foi possível gerar a imagem do resumo.');
+    throw new Error('NÃ£o foi possÃ­vel gerar a imagem do resumo.');
   }
 
   if (hasFreshSummaryCopyBlob()) return state.summaryCopyBlob;
@@ -3412,7 +3936,7 @@ function canWriteClipboardImage() {
 
 async function writeSummaryImageToClipboard(blobOrPromise) {
   if (!canWriteClipboardImage()) {
-    throw new Error('Área de transferência de imagem indisponível neste navegador.');
+    throw new Error('Ãrea de transferÃªncia de imagem indisponÃ­vel neste navegador.');
   }
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobOrPromise })]);
 }
@@ -3457,7 +3981,7 @@ async function copyReportSummaryAsImage() {
 
   if (!hasFreshReportSummaryCopyBlob()) {
     if (!window.html2canvas) {
-      showSummaryToast('Não foi possível gerar a imagem do resumo. Atualize a página e tente novamente.', 'error');
+      showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo. Atualize a pÃ¡gina e tente novamente.', 'error');
       return;
     }
 
@@ -3466,8 +3990,8 @@ async function copyReportSummaryAsImage() {
     state.reportSummaryCopyRenderPromise
       ?.then(() => showSummaryToast('Imagem pronta. Clique novamente para copiar.'))
       .catch(error => {
-        console.error('Erro ao preparar imagem do resumo do relatório:', error);
-        showSummaryToast('Não foi possível gerar a imagem do resumo.', 'error');
+        console.error('Erro ao preparar imagem do resumo do relatÃ³rio:', error);
+        showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo.', 'error');
       });
     return;
   }
@@ -3476,9 +4000,9 @@ async function copyReportSummaryAsImage() {
   try {
     await copyPreparedSummaryImage(state.reportSummaryCopyBlob);
     clearPreparedReportSummaryCopy();
-    showSummaryToast('Resumo copiado para a área de transferência');
+    showSummaryToast('Resumo copiado para a Ã¡rea de transferÃªncia');
   } catch (error) {
-    console.error('Erro ao copiar resumo do relatório como imagem:', error);
+    console.error('Erro ao copiar resumo do relatÃ³rio como imagem:', error);
     showSummaryToast(summaryClipboardErrorMessage(error), 'error');
   } finally {
     if (button) button.disabled = false;
@@ -3501,7 +4025,7 @@ async function renderReportSummaryPanelBlob(panel) {
   clone.querySelectorAll('.report-summary-copy').forEach(el => el.remove());
   clone.querySelectorAll('.card-row-toggle').forEach(button => {
     const label = document.createElement('span');
-    label.textContent = button.textContent.replace(/[▶▼]/g, '').trim();
+    label.textContent = button.textContent.replace(/[â–¶â–¼]/g, '').trim();
     button.replaceWith(label);
   });
   sanitizeSummaryCaptureClone(clone);
@@ -3556,7 +4080,7 @@ function copyDataUrlImageToClipboard(dataUrl) {
     selection.addRange(range);
     return document.execCommand('copy');
   } catch (error) {
-    console.warn('Fallback de cópia por seleção falhou:', error);
+    console.warn('Fallback de cÃ³pia por seleÃ§Ã£o falhou:', error);
     return false;
   } finally {
     selection?.removeAllRanges();
@@ -3580,7 +4104,7 @@ function copyImageViaCopyEvent(dataUrl) {
     const copied = document.execCommand('copy');
     return copied && handled;
   } catch (error) {
-    console.warn('Fallback de cópia por evento falhou:', error);
+    console.warn('Fallback de cÃ³pia por evento falhou:', error);
     return false;
   } finally {
     document.removeEventListener('copy', onCopy);
@@ -3632,7 +4156,7 @@ async function renderSummaryCanvasBlob(panel) {
   canvas.style.height = `${height}px`;
 
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Não foi possível criar a imagem do resumo.');
+  if (!ctx) throw new Error('NÃ£o foi possÃ­vel criar a imagem do resumo.');
   ctx.scale(ratio, ratio);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
@@ -3654,7 +4178,7 @@ async function renderSummaryCanvasBlob(panel) {
 
 function readSummaryCardData(card) {
   return {
-    title: cleanCanvasText(card.querySelector('.summary-operation strong')?.textContent || 'Operação'),
+    title: cleanCanvasText(card.querySelector('.summary-operation strong')?.textContent || 'OperaÃ§Ã£o'),
     accent: summaryCaptureAccent(card),
     percent: cleanCanvasText(card.querySelector('.summary-percent span')?.textContent || ''),
     headers: [...card.querySelectorAll('thead th')].map(cell => cleanCanvasText(cell.textContent)),
@@ -3674,7 +4198,7 @@ function readSummaryCardData(card) {
 
 function cleanCanvasText(value) {
   return String(value || '')
-    .replace(/[▶▼⊖]/g, '')
+    .replace(/[â–¶â–¼âŠ–]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -3723,7 +4247,7 @@ function drawSummaryCanvasCard(ctx, card, x, y, width, height) {
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = card.accent;
   ctx.font = '800 11px Inter, Arial, sans-serif';
-  ctx.fillText('OPERAÇÃO', tableLeft + 56, footerY + 16);
+  ctx.fillText('OPERAÃ‡ÃƒO', tableLeft + 56, footerY + 16);
   ctx.fillStyle = '#172033';
   ctx.font = '900 17px Inter, Arial, sans-serif';
   ctx.fillText(card.title, tableLeft + 56, footerY + 39);
@@ -3790,12 +4314,12 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke, strokeWid
 
 function summaryClipboardErrorMessage(error) {
   if (!window.isSecureContext) {
-    return 'Não foi possível copiar a imagem. Abra o Dashlog em HTTPS ou localhost para liberar a área de transferência.';
+    return 'NÃ£o foi possÃ­vel copiar a imagem. Abra o Dashlog em HTTPS ou localhost para liberar a Ã¡rea de transferÃªncia.';
   }
   if (isClipboardNotAllowed(error)) {
-    return 'Não foi possível copiar. Permita acesso à área de transferência nas configurações do navegador.';
+    return 'NÃ£o foi possÃ­vel copiar. Permita acesso Ã  Ã¡rea de transferÃªncia nas configuraÃ§Ãµes do navegador.';
   }
-  return 'Não foi possível copiar. O navegador não permitiu acesso à área de transferência.';
+  return 'NÃ£o foi possÃ­vel copiar. O navegador nÃ£o permitiu acesso Ã  Ã¡rea de transferÃªncia.';
 }
 
 function isClipboardNotAllowed(error) {
@@ -3830,7 +4354,7 @@ function createSummaryCaptureStage(panel) {
   clone.querySelectorAll('.summary-copy-btn, .summary-config-btn').forEach(el => el.remove());
   clone.querySelectorAll('.card-row-toggle').forEach(button => {
     const label = document.createElement('span');
-    label.textContent = button.textContent.replace(/[▶▼]/g, '').trim();
+    label.textContent = button.textContent.replace(/[â–¶â–¼]/g, '').trim();
     button.replaceWith(label);
   });
   sanitizeSummaryCaptureClone(clone);
@@ -3944,7 +4468,7 @@ function renderOriginSummaryCard(operacao) {
   const metaTitle = metaCollapsed ? 'Mostrar meta por tipo de cimento' : 'Ocultar meta por tipo de cimento';
   const totalTitle = totalCollapsed ? 'Mostrar carregado por produto' : 'Ocultar carregado por produto';
   const configButton = isAdmin()
-    ? `<button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualização do card">⚙</button>`
+    ? `<button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualizaÃ§Ã£o do card">âš™</button>`
     : '';
 
   return `<article class="summary-card ${accentClass} origin-card-${originSlug(origem)}" data-operation-id="${escapeAttr(operationKey)}">
@@ -3954,13 +4478,13 @@ function renderOriginSummaryCard(operacao) {
           <tr><th>TIPO DE PRODUTO</th>${destinos.map(dest => `<th>${escapeHtml(dest)}</th>`).join('')}<th>TOTAL</th></tr>
         </thead>
         <tbody>
-          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle card-meta-toggle" onclick="toggleCardMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '▶' : '▼'}</span><span>META</span></button></td>${metaCells.join('')}<td>${formatKg(totals.meta)}</td></tr>
+          <tr class="card-row-meta"><td><button type="button" class="card-row-toggle card-meta-toggle" onclick="toggleCardMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? 'â–¶' : 'â–¼'}</span><span>META</span></button></td>${metaCells.join('')}<td>${formatKg(totals.meta)}</td></tr>
           ${metaProductRows}
           <tr class="card-row-fat"><td>FATURADO</td>${fatCells.join('')}<td>${formatKg(totals.fat)}</td></tr>
           <tr class="card-row-agenc"><td>AGENCIADO</td>${agencCells.join('')}<td>${formatKg(totals.agenc)}</td></tr>
-          <tr class="card-row-total"><td><button type="button" class="card-row-toggle card-total-toggle" onclick="toggleCardTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? '▶' : '▼'}</span><span>TOTAL</span></button></td>${totalCells.join('')}<td>${formatKg(totals.total)}</td></tr>
+          <tr class="card-row-total"><td><button type="button" class="card-row-toggle card-total-toggle" onclick="toggleCardTotalProducts('${escapeAttr(operationKey)}')" title="${totalTitle}"><span class="card-product-arrow">${totalCollapsed ? 'â–¶' : 'â–¼'}</span><span>TOTAL</span></button></td>${totalCells.join('')}<td>${formatKg(totals.total)}</td></tr>
           ${totalProductRows}
-          <tr class="card-row-falta"><td><span class="row-icon">⊖</span>FALTA</td>${faltaCells.join('')}<td>${formatKg(totals.falta)}</td></tr>
+          <tr class="card-row-falta"><td><span class="row-icon">âŠ–</span>FALTA</td>${faltaCells.join('')}<td>${formatKg(totals.falta)}</td></tr>
         </tbody>
       </table>
     </div>
@@ -3968,7 +4492,7 @@ function renderOriginSummaryCard(operacao) {
       <div class="summary-operation">
         <div class="summary-icon">${summaryIcon(origem)}</div>
         <div>
-          <span class="summary-card-kicker">Operação</span>
+          <span class="summary-card-kicker">OperaÃ§Ã£o</span>
           <strong>${escapeHtml(origem)}</strong>
         </div>
       </div>
@@ -3999,10 +4523,10 @@ function renderSummaryKpi(label, value, kind) {
 
 function summaryIcon(origem) {
   const normalized = normalizeOption(origem);
-  if (normalized === 'ARCOS') return '◔';
-  if (normalized === 'PEDRO LEOPOLDO') return '▦';
-  if (normalized === 'BARROSO') return '◇';
-  return '□';
+  if (normalized === 'ARCOS') return 'â—”';
+  if (normalized === 'PEDRO LEOPOLDO') return 'â–¦';
+  if (normalized === 'BARROSO') return 'â—‡';
+  return 'â–¡';
 }
 
 function cardAccentClass(origem) {
@@ -4065,7 +4589,7 @@ function renderProductSummary(rows) {
   const toggle = document.getElementById('btn-product-summary');
   const arrow = toggle?.querySelector('.product-summary-arrow');
 
-  if (arrow) arrow.textContent = state.productSummaryOpen ? '▾' : '▸';
+  if (arrow) arrow.textContent = state.productSummaryOpen ? 'â–¾' : 'â–¸';
   productRows.forEach(row => row.classList.toggle('collapsed', !state.productSummaryOpen));
 
   productList().forEach(produto => {
@@ -4221,7 +4745,7 @@ function renderTransportChart(faturadoRows) {
   }).join('');
 }
 
-// ─── INLINE EDIT ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ INLINE EDIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let activeInlineCell = null;
 let activeInlineEdit = null;
 let windowLostFocus = false;
@@ -4596,6 +5120,7 @@ async function updateViagemField(id, field, value, options = {}) {
   if (updated) {
     const idx = state.viagens.findIndex(v => v._id === id);
     if (idx !== -1) state.viagens[idx] = updated;
+    if (state.selectedViagemId === id) state.selectedViagemDetails = updated;
     if (!options.skipUndo && isUndoField(field) && previousValue !== nextValue) {
       setUndoAction({
         id,
@@ -4627,7 +5152,7 @@ function normalizeFieldValue(field, value) {
   if (field === 'marcadoAmarelo') return Boolean(value);
   if (field === 'descarga') return normalizeDescargaDateTime(value);
   if (TIME_FIELDS.includes(field)) return normalizeHours(value);
-  if (field === 'telefone') return normalizePhoneList(value);
+  if (field === 'telefone' || field === 'telefone2') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
   if (isDocumentNumberField(field)) return formatDocumentNumber(value, field);
@@ -4641,13 +5166,13 @@ function formatCellValue(field, value) {
   if (field === 'peso' && value !== '') return formatPeso(value);
   if (field === 'descarga' && value !== '') return formatDescargaDateTime(value);
   if (TIME_FIELDS.includes(field) && value !== '') return normalizeHours(value);
-  if (field === 'telefone' && value !== '') return firstPhone(value);
+  if ((field === 'telefone' || field === 'telefone2') && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
   return value || '';
 }
 
 function inputPlaceholder(field) {
-  if (field === 'telefone') return '(00) 00000-0000 / (00) 00000-0000';
+  if (field === 'telefone' || field === 'telefone2') return '(00) 00000-0000 / (00) 00000-0000';
   if (field === 'descarga') return '00:00 00/00/0000';
   if (TIME_FIELDS.includes(field)) return '00:00';
   if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';
@@ -4723,7 +5248,7 @@ function hashText(value) {
   return String(value || '').split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0);
 }
 
-// ─── MODAL ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openModal(viagem = null) {
   syncDynamicSelects();
   state.editingId = viagem ? viagem._id : null;
@@ -4755,10 +5280,10 @@ function openOperationModal(operationId = null) {
   if (!isAdmin()) return;
   const op = operationId ? findOperation(operationId) : null;
   state.editingOperationId = op?._id || null;
-  document.getElementById('op-modal-title').textContent = op ? 'Configurar Card de Resumo' : 'Adicionar Operação';
+  document.getElementById('op-modal-title').textContent = op ? 'Configurar Card de Resumo' : 'Adicionar OperaÃ§Ã£o';
   document.getElementById('op-origem').value = op ? op.origem : '';
   const saveBtn = document.getElementById('op-btn-save');
-  saveBtn.dataset.label = op ? 'Salvar Card' : 'Salvar Operação';
+  saveBtn.dataset.label = op ? 'Salvar Card' : 'Salvar OperaÃ§Ã£o';
   saveBtn.textContent = saveBtn.dataset.label;
   renderOperationCardChoices(op);
 
@@ -4801,7 +5326,7 @@ async function saveOperation() {
   const resumoProdutos = normalizeCardSelection(checkedProdutos, productList());
   const resumoDestinos = normalizeCardSelection(checkedDestinos, destinationList());
   if (!origem) {
-    alert('Informe a origem da operação');
+    alert('Informe a origem da operaÃ§Ã£o');
     return;
   }
   if (!checkedProdutos.length || !checkedDestinos.length) {
@@ -4845,7 +5370,7 @@ async function saveOperation() {
     await loadAll();
   }
 
-  btn.textContent = btn.dataset.label || 'Salvar Operação';
+  btn.textContent = btn.dataset.label || 'Salvar OperaÃ§Ã£o';
   btn.disabled = false;
 }
 
@@ -4930,7 +5455,7 @@ function v(id) {
   return (document.getElementById(id)?.value || '').trim();
 }
 
-// ─── EDIT / DELETE ────────────────────────────────────────────────────────────
+// â”€â”€â”€ EDIT / DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function editViagem(id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
@@ -4941,17 +5466,8 @@ async function copyViagem(event, id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!viagem) return;
 
-  const rows = [
-    ['NOME', viagem.nome || ''],
-    ['PLACA', viagem.placa || ''],
-    ['ORIGEM', viagem.origem || ''],
-    ['DESTINO', viagem.destino || ''],
-    ['PESO', formatPeso(viagem.peso || '')],
-    ['PRODUTO', viagem.produto || ''],
-    ['DT', viagem.dt || ''],
-    ['AGENDAMENTO', normalizeHours(viagem.agendamento || '')]
-  ];
-  const text = rows.map(([label, value]) => `*${label}:* ${value}`).join('\n');
+  const rows = copyViagemRows(viagem);
+  const text = copyViagemText(viagem);
   const html = rows
     .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
     .join('');
@@ -4974,6 +5490,23 @@ async function copyViagem(event, id) {
       console.error('Erro ao copiar viagem', fallbackError);
     }
   }
+}
+
+function copyViagemRows(viagem = {}) {
+  return [
+    ['NOME', viagem.nome || ''],
+    ['PLACA', viagem.placa || ''],
+    ['ORIGEM', viagem.origem || ''],
+    ['DESTINO', viagem.destino || ''],
+    ['PESO', formatPeso(viagem.peso || '')],
+    ['PRODUTO', viagem.produto || ''],
+    ['DT', viagem.dt || ''],
+    ['AGENDAMENTO', normalizeHours(viagem.agendamento || '')]
+  ];
+}
+
+function copyViagemText(viagem = {}) {
+  return copyViagemRows(viagem).map(([label, value]) => `*${label}:* ${value}`).join('\n');
 }
 
 async function writeFormattedClipboard(text, html) {
@@ -5036,7 +5569,7 @@ async function toggleLinhaAmarela() {
   await updateViagemField(id, 'marcadoAmarelo', !viagem.marcadoAmarelo);
 }
 
-// ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ CONTEXT MENU â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showCtxMenu(e, id, mode = 'row') {
   e.preventDefault();
   state.ctxTargetId = id;
@@ -5118,7 +5651,7 @@ function showContratoMenu(e, cell) {
   document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-desfazer').style.display = canUndoConclusao ? '' : 'none';
-  document.getElementById('contrato-desfazer').textContent = isStatusField ? 'Tirar de concluído' : 'Desfazer';
+  document.getElementById('contrato-desfazer').textContent = isStatusField ? 'Tirar de concluÃ­do' : 'Desfazer';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
@@ -5183,7 +5716,7 @@ async function toggleAgendamentoVerde() {
   await updateViagemField(id, 'agendamentoVerde', !viagem?.agendamentoVerde);
 }
 
-// ─── METAS SAVE ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ METAS SAVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function saveMetas() {
   if (!isAdmin()) return;
   const inputs = document.querySelectorAll('#metas-form input[data-dest]');
@@ -5204,7 +5737,7 @@ async function saveMetas() {
   setTimeout(() => { btn.textContent = 'Salvar Metas'; }, 1500);
 }
 
-// ─── FORMATTERS ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ FORMATTERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function sumPeso(rows) {
   return rows.reduce((sum, item) => sum + parseNumber(item.peso), 0);
 }
@@ -5392,4 +5925,6 @@ function escapeHtml(value) {
 function escapeAttr(value) {
   return escapeHtml(value);
 }
+
+
 
