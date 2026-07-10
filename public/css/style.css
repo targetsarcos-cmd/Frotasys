@@ -1322,6 +1322,104 @@ body.reports-page-active .main {
   gap: 4px;
 }
 
+.row-action-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.row-action-menu {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.row-action-menu summary {
+  width: 30px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.row-action-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-action-menu[open] summary,
+.row-action-menu summary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #eff6ff;
+}
+
+.row-action-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 0;
+  padding: 6px;
+  display: flex;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, .16);
+}
+
+.row-action-popover button,
+.row-action-popover a {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.row-action-popover button:hover,
+.row-action-popover a:hover {
+  background: #eef6ff;
+  color: var(--accent);
+}
+
+.row-action-popover .danger {
+  color: #b91c1c;
+}
+
+.row-action-popover .danger:hover {
+  background: #fff1f1;
+  color: #b91c1c;
+}
+
+.row-action-popover img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .btn-row {
   position: relative;
   background: var(--surface);
@@ -4698,27 +4796,29 @@ body.travel-drawer-open .summary-layout {
 }
 
 .data-table th[data-field="placa"],
-.data-table td[data-field="placa"] { width: 12%; }
+.data-table td[data-field="placa"] { width: 10%; }
 .data-table th[data-field="nome"],
-.data-table td[data-field="nome"] { width: 18%; }
+.data-table td[data-field="nome"] { width: 16%; }
 .data-table th[data-field="tipo"],
 .data-table td[data-field="tipo"] {
-  width: 12%;
+  width: 11%;
   text-align: center;
 }
 .data-table th[data-field="origem"],
-.data-table td[data-field="origem"] { width: 15%; }
+.data-table td[data-field="origem"] { width: 13%; }
 .data-table th[data-field="destino"],
-.data-table td[data-field="destino"] { width: 15%; }
+.data-table td[data-field="destino"] { width: 13%; }
+.data-table th[data-field="peso"],
+.data-table td[data-field="peso"] { width: 8%; }
 .data-table th[data-field="agendamento"],
 .data-table td[data-field="agendamento"] {
   width: 11%;
   text-align: center;
 }
 .data-table th[data-field="status"],
-.data-table td[data-field="status"] { width: 15%; }
+.data-table td[data-field="status"] { width: 13%; }
 .data-table .col-actions,
-.data-table td.master-actions { width: 174px; }
+.data-table td.master-actions { width: 64px; }
 
 .data-table tbody td {
   height: 44px;
@@ -4835,6 +4935,64 @@ body.travel-drawer-open .summary-layout {
 
 .status-chip {
   width: 100%;
+}
+
+.status-select {
+  --status-color: #0f766e;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 28px;
+  padding: 5px 26px 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--status-color) 78%, #ffffff 22%);
+  border-radius: 9px;
+  color: #07131f;
+  background:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%),
+    linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.62)),
+    color-mix(in srgb, var(--status-color) 26%, #ffffff 74%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-size: 5px 5px, 5px 5px, 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.92),
+    inset 0 -1px 0 color-mix(in srgb, var(--status-color) 28%, transparent),
+    0 2px 0 color-mix(in srgb, var(--status-color) 42%, #334155 20%),
+    0 8px 18px rgba(15, 23, 42, .10);
+  outline: none;
+  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+}
+
+.status-select:hover:not(:disabled) {
+  filter: saturate(1.08);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.96),
+    inset 0 -1px 0 color-mix(in srgb, var(--status-color) 32%, transparent),
+    0 3px 0 color-mix(in srgb, var(--status-color) 48%, #334155 18%),
+    0 12px 22px rgba(15, 23, 42, .14);
+}
+
+.status-select:focus-visible {
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, .16),
+    inset 0 1px 0 rgba(255,255,255,.96),
+    0 2px 0 color-mix(in srgb, var(--status-color) 42%, #334155 20%),
+    0 10px 22px rgba(15, 23, 42, .13);
+}
+
+.status-select option {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.status-select:disabled {
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .data-table thead th[data-field],
@@ -5104,6 +5262,13 @@ body.travel-drawer-open .summary-layout {
   gap: 6px;
 }
 
+.drawer-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px;
+  align-items: end;
+}
+
 .drawer-field span {
   color: #475569;
   font-size: 11px;
@@ -5262,11 +5427,30 @@ body.travel-drawer-open .summary-layout {
 .drawer-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
   padding: 14px 18px;
   border-top: 1px solid var(--border);
   background: #fff;
+}
+
+.drawer-footer-date {
+  width: 190px;
+  margin-left: auto;
+}
+
+.drawer-footer-date .drawer-field {
+  gap: 4px;
+}
+
+.drawer-footer-date .drawer-field strong {
+  min-height: 30px;
+  justify-content: flex-end;
+  font-size: 12px;
+}
+
+.drawer-footer-date .drawer-field span {
+  text-align: right;
 }
 
 .drawer-editing-label {

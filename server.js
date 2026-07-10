@@ -151,6 +151,7 @@ const VIAGEM_FIELD_LABELS = {
   manifesto: 'MANIFESTO',
   contrato: 'CONTRATO',
   nota: 'NOTA',
+  hora_nf: 'HORA NF',
   num_pedagio: 'N PED',
   valor_adiantamento: 'VALOR ADIANTAMENTO',
   vlr_pedagio: 'VLR PED',
@@ -479,6 +480,35 @@ function normalizeTipo(value) {
   return raw;
 }
 
+function applyFrotaContratoRule(data = {}) {
+  if (normalizeTipo(data.tipo) === 'FROTA') {
+    data.contrato = 'N\u00c3O FAZ CONTRATO';
+  }
+  return data;
+}
+
+function hasLoadedHistory(doc = {}) {
+  return doc.secao === 'arcos' ||
+    hasDocumentosCompletos(doc) ||
+    ['dt', 'cte', 'manifesto', 'contrato', 'nota'].some(field => String(doc[field] || '').trim());
+}
+
+function documentAutoStatus(data = {}) {
+  const hasDt = Boolean(String(data.dt || '').trim());
+  const hasNota = Boolean(String(data.nota || '').trim());
+  const hasPedagio = Boolean(String(data.num_pedagio || '').trim());
+  const hasValorPedagio = Boolean(String(data.vlr_pedagio || '').trim());
+  if (hasDt && hasNota && hasPedagio && hasValorPedagio) return 'EMITIR CTE';
+  if (hasDt) return 'DT CRIADA';
+  return '';
+}
+
+function applyDocumentAutoStatus(data = {}) {
+  const status = documentAutoStatus(data);
+  if (status) data.status = status;
+  return status;
+}
+
 function normalizeWaitlistItem(data = {}) {
   return {
     placa: normalizeUniqueValue(data.placa),
@@ -639,6 +669,8 @@ function isDocumentNumberField(field) {
 function formatDocumentNumber(value, field = '') {
   const raw = String(value || '').trim();
   if (field === 'contrato' && raw === '-') return '-';
+  if (field === 'contrato' && normalizeUniqueValue(raw) === 'NAO FAZ CONTRATO') return 'N\u00c3O FAZ CONTRATO';
+  if (field === 'contrato' && normalizeUniqueValue(raw) === 'N\u00c3O FAZ CONTRATO') return 'N\u00c3O FAZ CONTRATO';
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -1405,6 +1437,28 @@ app.get('/api/viagens/search', async (req, res) => {
   }
 });
 
+app.get('/api/viagens/placa/:placa/latest', requireViagemEditor, async (req, res) => {
+  try {
+    const placa = normalizeUniqueValue(req.params.placa);
+    if (!placa || placa.length < 5) return res.json(null);
+    const docs = await selectDocsByJson(TABLES.viagens, { placa }, { limit: DEFAULT_RANGE_LIMIT });
+    const latest = docs
+      .filter(doc => normalizeUniqueValue(doc.placa) === placa)
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+    if (!latest) return res.json(null);
+    res.json({
+      placa: latest.placa || placa,
+      nome: latest.nome || '',
+      tipo: normalizeTipo(latest.tipo),
+      carroceria: latest.carroceria || '',
+      telefone: latest.telefone || '',
+      cadastroOk: hasLoadedHistory(latest)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/viagens/export', requireAdmin, async (req, res) => {
   try {
     const inicio = String(req.query.inicio || req.query.start || '').trim();
@@ -1452,6 +1506,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
     normalizeViagemDocumentNumbers(payload);
+    applyFrotaContratoRule(payload);
     const dateError = viagemDateValidationError(payload.data);
     if (dateError) return res.status(400).json({ error: dateError });
     delete payload.usuario;
@@ -1462,6 +1517,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
         return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
       }
     }
+    const autoStatus = applyDocumentAutoStatus(payload);
 
     if (isViagemBloqueada(payload)) {
       payload.status = 'CONCLUIDO';
@@ -1469,7 +1525,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       payload.marcadoAmarelo = false;
     } else if (normalizeUniqueValue(payload.status) === 'CONCLUIDO') {
       payload.status = statusOperacional(payload);
-    } else if (payload.status !== undefined && normalizeUniqueValue(payload.status)) {
+    } else if ((payload.status !== undefined && normalizeUniqueValue(payload.status)) || autoStatus) {
       payload.usuario = profileDisplayName(req.userProfile);
     }
 
@@ -1497,6 +1553,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
     const patch = { ...req.body };
     normalizeViagemDocumentNumbers(patch);
+    applyFrotaContratoRule(patch);
     if (Object.prototype.hasOwnProperty.call(patch, 'data')) {
       const dateError = viagemDateValidationError(patch.data);
       if (dateError) return res.status(400).json({ error: dateError });
@@ -1537,10 +1594,13 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const statusWasSent = Object.prototype.hasOwnProperty.call(req.body, 'status');
     const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
 
-    const nextData = { ...current, ...patch };
+    const nextData = applyFrotaContratoRule({ ...current, ...patch });
+    if (normalizeTipo(nextData.tipo) === 'FROTA') patch.contrato = nextData.contrato;
     if (patch.conclusaoContrato && !hasDocumentosCompletos(nextData)) {
       return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
     }
+    const autoStatus = applyDocumentAutoStatus(nextData);
+    if (autoStatus) patch.status = autoStatus;
     if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
       patch.usuario = '';
@@ -1560,7 +1620,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
       nextData.conclusaoContrato = '';
       nextData.status = '';
       nextData.usuario = '';
-    } else if (statusChanged) {
+    } else if (statusChanged || autoStatus) {
       patch.usuario = profileDisplayName(req.userProfile);
       nextData.usuario = patch.usuario;
     }

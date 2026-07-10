@@ -50,7 +50,9 @@ const state = {
   drawerTab: 'documentos',
   drawerActiveField: '',
   drawerDraft: null,
-  drawerSaving: false
+  drawerSaving: false,
+  plateAutofillTimer: null,
+  plateAutofillToken: 0
 };
 
 const DEFAULT_DESTINOS = ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA'];
@@ -109,7 +111,7 @@ const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
 const DESKTOP_MIN_WIDTH = 760;
 const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
-const TIME_FIELDS = ['agendamento', 'horas'];
+const TIME_FIELDS = ['agendamento', 'horas', 'hora_nf'];
 const STABLE_INLINE_SELECTION_FIELDS = ['peso', 'dt', 'cte', 'manifesto', 'contrato', 'nota', 'num_pedagio', 'vlr_pedagio', 'horas'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
 const VIAGEM_MAX_FUTURE_DAYS = 3;
@@ -128,7 +130,7 @@ const DEFAULT_FRETE_CONSULTAS = {
       ['ARCOS', 'SOROCABA', 'R$ 4.650,00', 'R$ 5.082,00', 'R$ 6.250,00', 'R$ 6.400,00'],
       ['ARCOS', 'AMERICANA', 'R$ 3.650,00', 'R$ 4.000,00', 'R$ 4.600,00', 'R$ 5.800,00'],
       ['ARCOS', 'OSASCO', 'R$ 4.040,00', 'R$ 4.400,00', 'R$ 5.000,00', 'R$ 6.200,00'],
-      ['ARCOS', 'RIBEIRÃƒO P.', 'R$ 2.696,00', 'R$ 3.200,00', 'R$ 3.600,00', 'R$ 4.200,00'],
+      ['ARCOS', 'RIBEIR\u00c3O P.', 'R$ 2.696,00', 'R$ 3.200,00', 'R$ 3.600,00', 'R$ 4.200,00'],
       ['ARCOS', 'SJRP', 'R$ 3.800,00', 'R$ 4.480,00', 'R$ 5.320,00', 'R$ 6.720,00'],
       ['BARROSO', 'PINDA', 'R$ 3.730,00', 'R$ 4.066,07', 'R$ 4.548,94', 'R$ 5.135,12'],
       ['BARROSO', 'SJRP', 'R$ 5.167,00', 'R$ 5.667,14', 'R$ 6.303,98', 'R$ 7.132,39'],
@@ -146,7 +148,7 @@ const DEFAULT_FRETE_CONSULTAS = {
       ['ARCOS', 'SOROCABA', '--', '4.518,00', 'R$ 4.848,00', 'R$ 6.022,00'],
       ['ARCOS', 'AMERICANA', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
       ['ARCOS', 'OSASCO', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
-      ['ARCOS', 'RIBEIRÃƒO P.', '--', '3.300,00', 'R$ 3.600,00', 'R$ 4.500,00'],
+      ['ARCOS', 'RIBEIR\u00c3O P.', '--', '3.300,00', 'R$ 3.600,00', 'R$ 4.500,00'],
       ['ARCOS', 'SJRP', '--', '4.350,00', 'R$ 5.000,00', 'R$ 6.000,00'],
       ['BARROSO', 'PINDA', '--', '--', '--', '--'],
       ['BARROSO', 'SJRP', '--', '--', '--', '--'],
@@ -156,12 +158,12 @@ const DEFAULT_FRETE_CONSULTAS = {
       ['PEDRO L', 'SJRP', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
       ['PEDRO L', 'SOROCABA', '', '', 'R$ 5.884,00', 'R$ 6.974,00'],
       ['PEDRO L', 'OSASCO', '', '', 'R$ 5.517,00', 'R$ 6.852,00'],
-      ['PEDRO L', 'MAUÃ', '', '', 'R$ 5.515,00', 'R$ 6.850,00'],
-      ['PEDRO L', 'SÃƒO J. DOS CAMPOS', '', '', 'R$ 5.541,00', 'R$ 6.879,00'],
+      ['PEDRO L', 'MAU\u00c1', '', '', 'R$ 5.515,00', 'R$ 6.850,00'],
+      ['PEDRO L', 'S\u00c3O J. DOS CAMPOS', '', '', 'R$ 5.541,00', 'R$ 6.879,00'],
       ['PEDRO L', 'MOGI DAS CRUZES', '', '', 'R$ 5.545,00', 'R$ 6.883,00'],
       ['PEDRO L', 'PINDA', '', '', 'R$ 5.333,00', 'R$ 6.619,00'],
-      ['PEDRO L', 'SÃƒO JOSÃ‰ DO RIO PRETO', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
-      ['PEDRO L', 'SANTO ANDRÃ‰', '', '', 'R$ 5.514,00', 'R$ 6.848,00']
+      ['PEDRO L', 'S\u00c3O JOS\u00c9 DO RIO PRETO', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
+      ['PEDRO L', 'SANTO ANDR\u00c9', '', '', 'R$ 5.514,00', 'R$ 6.848,00']
     ]
   }
 };
@@ -176,7 +178,7 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'kanguru', label: 'KANGURU' },
   { key: 'pamcard', label: 'PAMCARD' },
   { key: 'status', label: 'STATUS' },
-  { key: 'usuario', label: 'USUÃRIO' },
+  { key: 'usuario', label: 'USU\u00c1RIO' },
   { key: 'agendamento', label: 'AGENDAMENTO' },
   { key: 'descarga', label: 'DESCARGA' },
   { key: 'telefone', label: 'TELEFONE' },
@@ -188,10 +190,10 @@ const SEARCH_RESULT_FIELDS = [
   { key: 'manifesto', label: 'MANIFESTO' },
   { key: 'contrato', label: 'CONTRATO' },
   { key: 'nota', label: 'NOTA' },
-  { key: 'num_pedagio', label: 'NÂº PEDÃGIO' },
-  { key: 'vlr_pedagio', label: 'VALOR PEDÃGIO' },
+  { key: 'num_pedagio', label: 'N\u00ba PED\u00c1GIO' },
+  { key: 'vlr_pedagio', label: 'VALOR PED\u00c1GIO' },
   { key: 'horas', label: 'HORAS' },
-  { key: 'obs', label: 'OBSERVAÃ‡ÃƒO' },
+  { key: 'obs', label: 'OBSERVA\u00c7\u00c3O' },
   { key: 'data', label: 'DATA' },
   { key: 'createdAt', label: 'CRIADO EM' }
 ];
@@ -217,10 +219,10 @@ function maxAllowedViagemDate() {
 function viagemDateValidationMessage(value) {
   const data = String(value || '').trim();
   if (!data) return '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return 'Informe uma data vÃ¡lida para a viagem.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return 'Informe uma data v\u00e1lida para a viagem.';
   const maxDate = maxAllowedViagemDate();
   if (data > maxDate) {
-    return `NÃ£o Ã© permitido lanÃ§ar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data mÃ¡xima: ${formatDateBR(maxDate)}.`;
+    return `N\u00e3o \u00e9 permitido lan\u00e7ar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data m\u00e1xima: ${formatDateBR(maxDate)}.`;
   }
   return '';
 }
@@ -407,7 +409,7 @@ async function apiFetch(url, opts = {}) {
         await FrotasysAuth.signOut();
         return null;
       }
-      alert(data.error || 'NÃ£o foi possÃ­vel salvar.');
+      alert(data.error || 'N\u00e3o foi poss\u00edvel salvar.');
       return null;
     }
     return data;
@@ -503,10 +505,11 @@ function initUI() {
     if (e.target === document.getElementById('settings-modal-overlay')) closeSettingsModal();
   });
 
-  document.getElementById('btn-nova-viagem').addEventListener('click', () => openModal());
+  document.getElementById('btn-nova-viagem').addEventListener('click', () => openModal(null, { origem: state.originFilter || '' }));
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
   document.getElementById('btn-save').addEventListener('click', saveViagem);
+  document.getElementById('f-placa').addEventListener('input', handleNewViagemPlacaInput);
   document.getElementById('f-agendamento').addEventListener('input', e => {
     e.target.value = maskHourInput(e.target.value);
   });
@@ -560,6 +563,7 @@ function initUI() {
       renderTravelDrawer();
     }
   });
+  document.addEventListener('click', handleMasterCellDrawerShortcut, true);
   document.addEventListener('pointerdown', e => {
     if (e.target.matches('input, select, button')) return;
     if (e.target.closest('.master-row')) return;
@@ -571,6 +575,7 @@ function initUI() {
     saveAndCloseActiveInlineEdit();
   });
   document.addEventListener('click', e => {
+    if (!e.target.closest('.row-action-menu')) closeRowActionMenus();
     if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
@@ -717,7 +722,7 @@ function normalizeLembrete(lembrete = {}) {
 }
 
 function stripReminderNumber(line) {
-  return String(line || '').replace(/^\s*\d+Â°\s*/, '');
+  return String(line || '').replace(/^\s*\d+\u00b0\s*/, '');
 }
 
 function cleanReminderText(text) {
@@ -838,8 +843,8 @@ function updateUndoButton() {
   const action = state.undoAction;
   button.disabled = !action;
   button.title = action
-    ? `Desfazer Ãºltima alteraÃ§Ã£o em ${UNDO_FIELD_LABELS[action.field] || action.field}`
-    : 'Desfazer Ãºltima alteraÃ§Ã£o em DT, CT-E, MANIFESTO ou CONTRATO';
+    ? `Desfazer \u00faltima altera\u00e7\u00e3o em ${UNDO_FIELD_LABELS[action.field] || action.field}`
+    : 'Desfazer \u00faltima altera\u00e7\u00e3o em DT, CT-E, MANIFESTO ou CONTRATO';
 }
 
 async function undoLastAction() {
@@ -865,7 +870,7 @@ async function loadUsers() {
   const users = await apiFetch('/api/users');
   const tbody = document.getElementById('users-table-body');
   if (!users) {
-    tbody.innerHTML = '<tr><td colspan="4">NÃ£o foi possÃ­vel carregar usuÃ¡rios.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">N\u00e3o foi poss\u00edvel carregar usu\u00e1rios.</td></tr>';
     return;
   }
   tbody.innerHTML = users.map(user => `
@@ -913,12 +918,12 @@ async function createUserProfile(event) {
   });
 
   button.disabled = false;
-  button.textContent = 'Criar usuÃ¡rio';
+  button.textContent = 'Criar usu\u00e1rio';
 
   if (!created) return;
   form.reset();
   document.getElementById('user-create-ativo').checked = true;
-  message.textContent = 'UsuÃ¡rio criado com sucesso.';
+  message.textContent = 'Usu\u00e1rio criado com sucesso.';
   message.classList.add('success');
   await loadUsers();
 }
@@ -1027,7 +1032,7 @@ function openHistoryModal(id) {
   const viagem = state.viagens.find(item => item._id === id);
   if (!viagem) return;
   const title = document.getElementById('history-title');
-  if (title) title.textContent = `HistÃ³rico da Viagem - ${viagem.placa || 'Sem placa'}`;
+  if (title) title.textContent = `Hist\u00f3rico da Viagem - ${viagem.placa || 'Sem placa'}`;
   renderViagemHistory(viagem);
   document.getElementById('history-overlay')?.classList.remove('hidden');
 }
@@ -1041,7 +1046,7 @@ function renderViagemHistory(viagem) {
   if (!container) return;
   const history = Array.isArray(viagem.historico) ? [...viagem.historico] : [];
   if (!history.length) {
-    container.innerHTML = '<div class="history-empty">Nenhuma alteraÃ§Ã£o registrada para esta viagem.</div>';
+    container.innerHTML = '<div class="history-empty">Nenhuma altera\u00e7\u00e3o registrada para esta viagem.</div>';
     return;
   }
 
@@ -1050,10 +1055,10 @@ function renderViagemHistory(viagem) {
     .map(item => {
       const isCreate = item.tipo === 'CRIACAO';
       const when = formatHistoryDateTime(item.dataHora);
-      const user = item.usuario || item.email || 'UsuÃ¡rio';
+      const user = item.usuario || item.email || 'Usu\u00e1rio';
       return `<article class="history-item ${isCreate ? 'is-create' : ''}">
         <div class="history-item-head">
-          <strong>${escapeHtml(isCreate ? 'Cadastro criado' : (item.label || item.campo || 'ALTERAÃ‡ÃƒO'))}</strong>
+          <strong>${escapeHtml(isCreate ? 'Cadastro criado' : (item.label || item.campo || 'ALTERA\u00c7\u00c3O'))}</strong>
           <span>${escapeHtml(when)}</span>
         </div>
         <div class="history-user">${escapeHtml(user)}</div>
@@ -1084,13 +1089,13 @@ async function updateReports() {
   const button = document.getElementById('reports-refresh');
 
   if (!isValidDateRange(start, end)) {
-    setReportsStatus('Informe um perÃ­odo vÃ¡lido de atÃ© 366 dias.', true);
+    setReportsStatus('Informe um per\u00edodo v\u00e1lido de at\u00e9 366 dias.', true);
     return;
   }
 
   button.disabled = true;
   button.textContent = 'Atualizando...';
-  setReportsStatus('Carregando dados do perÃ­odo...');
+  setReportsStatus('Carregando dados do per\u00edodo...');
 
   try {
     const params = new URLSearchParams({ dataInicio: start, dataFim: end });
@@ -1103,8 +1108,8 @@ async function updateReports() {
     renderReports(report);
     setReportsStatus(report.rows.length ? '' : 'Nenhuma viagem encontrada para os filtros selecionados.');
   } catch (error) {
-    console.error('Erro ao atualizar relatÃ³rios:', error);
-    setReportsStatus('NÃ£o foi possÃ­vel carregar os relatÃ³rios.', true);
+    console.error('Erro ao atualizar relat\u00f3rios:', error);
+    setReportsStatus('N\u00e3o foi poss\u00edvel carregar os relat\u00f3rios.', true);
   } finally {
     button.disabled = false;
     button.textContent = 'Atualizar';
@@ -1118,11 +1123,11 @@ async function exportReportsPdf() {
   const reportArea = document.querySelector('.reports-grid');
 
   if (!isValidDateRange(start, end)) {
-    setReportsStatus('Informe um perÃ­odo vÃ¡lido de atÃ© 366 dias.', true);
+    setReportsStatus('Informe um per\u00edodo v\u00e1lido de at\u00e9 366 dias.', true);
     return;
   }
   if (!window.html2canvas || !reportArea) {
-    setReportsStatus('NÃ£o foi possÃ­vel preparar a imagem do relatÃ³rio.', true);
+    setReportsStatus('N\u00e3o foi poss\u00edvel preparar a imagem do relat\u00f3rio.', true);
     return;
   }
 
@@ -1131,7 +1136,7 @@ async function exportReportsPdf() {
     pdfBtn.disabled = true;
     pdfBtn.textContent = 'Gerando...';
   }
-  setReportsStatus('Gerando PDF do relatÃ³rio...');
+  setReportsStatus('Gerando PDF do relat\u00f3rio...');
 
   try {
     if (!state.reportData) await updateReports();
@@ -1145,15 +1150,15 @@ async function exportReportsPdf() {
     });
     const images = splitCanvasForPdfImages(canvas);
     if (!images.length) {
-      setReportsStatus('Nenhum conteÃºdo disponÃ­vel para exportar.', true);
+      setReportsStatus('Nenhum conte\u00fado dispon\u00edvel para exportar.', true);
       return;
     }
     const blob = buildImagesPdfBlob(images);
     downloadBlob(blob, `relatorios_${formatDateForFilename(start)}_${formatDateForFilename(end)}.pdf`);
-    setReportsStatus('PDF do relatÃ³rio gerado.');
+    setReportsStatus('PDF do relat\u00f3rio gerado.');
   } catch (error) {
-    console.error('Erro ao exportar relatÃ³rio:', error);
-    setReportsStatus('Erro ao exportar o relatÃ³rio.', true);
+    console.error('Erro ao exportar relat\u00f3rio:', error);
+    setReportsStatus('Erro ao exportar o relat\u00f3rio.', true);
   } finally {
     if (pdfBtn) {
       pdfBtn.disabled = false;
@@ -1488,7 +1493,7 @@ function renderReports(report) {
 function renderReportCharts(report) {
   destroyReportCharts();
   if (!window.Chart) {
-    setReportsStatus('Biblioteca de grÃ¡ficos indisponÃ­vel neste navegador.', true);
+    setReportsStatus('Biblioteca de gr\u00e1ficos indispon\u00edvel neste navegador.', true);
     return;
   }
 
@@ -1565,8 +1570,8 @@ function renderReportSummary(report) {
   if (period) {
     const start = formatDateBR(report.filters?.start || state.currentDate);
     const end = formatDateBR(report.filters?.end || state.currentDate);
-    const operation = report.filters?.operation ? titleCase(report.filters.operation) : 'Todas as operaÃ§Ãµes';
-    period.textContent = `${start} a ${end} Â· ${operation}`;
+    const operation = report.filters?.operation ? titleCase(report.filters.operation) : 'Todas as opera\u00e7\u00f5es';
+    period.textContent = `${start} a ${end} - ${operation}`;
   }
 
   const cards = Array.isArray(report.summaryCards) ? report.summaryCards : [];
@@ -1609,7 +1614,7 @@ function renderReportSummaryCard(card) {
       <div class="report-summary-operation">
         <div class="summary-icon">${summaryIcon(card.origem)}</div>
         <div>
-          <span>OPERACAO</span>
+          <span>OPERA&Ccedil;&Atilde;O</span>
           <strong>${escapeHtml(card.origem)}</strong>
         </div>
       </div>
@@ -1802,7 +1807,7 @@ function renderListaEspera() {
 
   tbody.innerHTML = state.listaEspera.map((item, index) => `
     <tr data-id="${escapeAttr(item._id)}">
-      <td>${index + 1}Âº</td>
+      <td>${index + 1}&ordm;</td>
       <td contenteditable="true" spellcheck="false" data-field="placa" data-value="${escapeAttr(item.placa)}">${escapeHtml(item.placa)}</td>
       <td contenteditable="true" spellcheck="false" data-field="nome" data-value="${escapeAttr(item.nome)}">${escapeHtml(item.nome)}</td>
       <td>
@@ -2018,7 +2023,7 @@ function renderFreteQueryPanel() {
   return `<section class="frete-query-card">
     <div class="frete-query-head">
       <div>
-        <strong>Consulta rÃ¡pida</strong>
+        <strong>Consulta R&aacute;pida</strong>
         <span>Selecione origem, destino e eixo para localizar o valor cadastrado.</span>
       </div>
     </div>
@@ -2046,14 +2051,14 @@ function renderFreteQueryPanel() {
 }
 
 function renderFreteConsultTable(key, table) {
-  const header = `${FRETE_COLUMNS.map((col, colIndex) => renderFreteConsultHeader(key, col, colIndex)).join('')}<th>AÃ‡Ã•ES</th>`;
+  const header = `${FRETE_COLUMNS.map((col, colIndex) => renderFreteConsultHeader(key, col, colIndex)).join('')}<th>A&Ccedil;&Otilde;ES</th>`;
   const rows = table.rows.map((row, rowIndex) => {
     const rowTone = freteOriginTone(row[0]);
     const cells = row.map((value, colIndex) => `
       <td contenteditable="true" spellcheck="false" class="frete-cell-${freteColumnType(colIndex)}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-type="${freteColumnType(colIndex)}" data-value="${escapeAttr(formatFreteCellValue(value, colIndex))}">${escapeHtml(formatFreteCellValue(value, colIndex))}</td>
     `).join('');
     return `<tr class="${rowTone}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" ondragover="handleFreteRowDragOver(event)" ondragleave="handleFreteRowDragLeave(event)" ondrop="dropFreteRow(event,'${escapeAttr(key)}',${rowIndex})">${cells}<td class="frete-row-actions">
-      <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">â†•</button>
+      <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">&#8597;</button>
       <button type="button" class="frete-row-delete" onclick="deleteFreteConsultRow('${escapeAttr(key)}', ${rowIndex})" title="Excluir linha">Excluir</button>
     </td></tr>`;
   }).join('');
@@ -2077,7 +2082,7 @@ function renderFreteConsultHeader(tableKey, label, colIndex) {
   const sort = state.freteSort?.[tableKey];
   const isActive = sort?.col === colIndex;
   const nextDirection = isActive && sort.direction === 'asc' ? 'desc' : 'asc';
-  const indicator = isActive ? (sort.direction === 'asc' ? 'A-Z' : 'Z-A') : 'â†•';
+  const indicator = isActive ? (sort.direction === 'asc' ? 'A-Z' : 'Z-A') : '&#8597;';
   const title = `${label}: ordenar ${nextDirection === 'asc' ? 'A a Z' : 'Z a A'}`;
   return `<th>
     <button type="button" class="frete-sort-btn ${isActive ? 'is-active' : ''}" onclick="sortFreteConsultTable('${escapeAttr(tableKey)}', ${colIndex})" title="${escapeAttr(title)}">
@@ -2205,7 +2210,7 @@ function consultarFreteValor() {
   }).filter(item => item.value && item.value !== '--');
 
   if (!matches.length) {
-    result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combinaÃ§Ã£o.</span>';
+    result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combina&ccedil;&atilde;o.</span>';
     return;
   }
 
@@ -2442,7 +2447,7 @@ async function fetchCarregamentosSearch(filters = {}) {
     const data = await apiFetch(searchUrl);
     if (Array.isArray(data)) return data;
   } catch (e) {
-    console.warn('Busca dedicada indisponÃ­vel.', e);
+    console.warn('Busca dedicada indispon\u00edvel.', e);
   }
 
   return [];
@@ -2468,7 +2473,7 @@ function normalizeNameSearchTerm(value) {
 
 function renderSearchResult(viagem, index = 0, total = 1) {
   const title = viagem.nota || viagem.cte || viagem.nome || viagem.placa || 'Carregamento';
-  const subtitle = [viagem.origem, viagem.destino].filter(Boolean).join(' â†’ ');
+  const subtitle = [viagem.origem, viagem.destino].filter(Boolean).join(' \u2192 ');
   const collapsible = total > 1;
   const collapsed = collapsible && index > 0;
   const cardId = `search-result-${index}`;
@@ -2488,7 +2493,7 @@ function renderSearchResult(viagem, index = 0, total = 1) {
       <div class="search-result-head-actions">
         <em>${escapeHtml(formatSearchValue('data', viagem.data))}</em>
         ${collapsible ? `<button type="button" class="search-result-toggle" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${escapeAttr(cardId)}" title="${collapsed ? 'Exibir resultado' : 'Recolher resultado'}">
-          <span aria-hidden="true">${collapsed ? 'â–¾' : 'â–´'}</span>
+          <span aria-hidden="true">${collapsed ? '\u25be' : '\u25b4'}</span>
         </button>` : ''}
       </div>
     </div>
@@ -2506,7 +2511,7 @@ function handleSearchResultToggle(event) {
   button.setAttribute('aria-expanded', String(!collapsed));
   button.title = collapsed ? 'Exibir resultado' : 'Recolher resultado';
   const icon = button.querySelector('span');
-  if (icon) icon.textContent = collapsed ? 'â–¾' : 'â–´';
+  if (icon) icon.textContent = collapsed ? '\u25be' : '\u25b4';
 }
 
 function formatSearchValue(field, value) {
@@ -2586,16 +2591,17 @@ function renderOriginFilters() {
     .join('');
 }
 
-async function selectViagem(id, preferredTab = 'documentos') {
+async function selectViagem(id, preferredTab = 'documentos', activeField = '') {
   const listItem = state.viagens.find(item => item._id === id);
   if (!listItem) return;
   state.selectedViagemId = id;
   state.selectedViagemDetails = listItem;
-  state.drawerActiveField = '';
-  state.drawerDraft = null;
+  state.drawerActiveField = canEditDrawerFieldForViagem(listItem, activeField) ? activeField : '';
+  state.drawerDraft = state.drawerActiveField ? { ...listItem } : null;
   state.drawerTab = preferredTab;
   document.body.classList.add('travel-drawer-open');
   renderAll();
+  focusDrawerActiveField();
   await loadSelectedViagemDetails(id);
 }
 
@@ -2612,10 +2618,13 @@ async function loadSelectedViagemDetails(id) {
   if (isViagemConcluida(detail)) {
     state.drawerActiveField = '';
     state.drawerDraft = null;
+  } else if (state.drawerActiveField) {
+    state.drawerDraft = { ...detail };
   }
   const idx = state.viagens.findIndex(item => item._id === id);
   if (idx !== -1) state.viagens[idx] = detail;
   renderAll();
+  focusDrawerActiveField();
 }
 
 function closeTravelDrawer() {
@@ -2638,7 +2647,7 @@ function viagemStatusDisplay(viagem) {
   if (hasDocumentosCompletos(viagem) && !normalizeContratoConclusao(viagem?.conclusaoContrato)) return 'FALTA ADIANTAMENTO';
   if (hasDocumentosCompletos(viagem) && normalizeContratoConclusao(viagem?.conclusaoContrato) && !String(viagem?.descarga || '').trim()) return 'AGENDAR DESCARGA';
   if (isViagemConcluida(viagem)) return 'CONCLUIDO';
-  return String(viagem?.status || '').trim() || 'PROGRAMADO';
+  return String(viagem?.status || '').trim();
 }
 
 function statusColorStyle(status) {
@@ -2646,6 +2655,13 @@ function statusColorStyle(status) {
   if (normalized === 'FALTA ADIANTAMENTO') return 'color:#92400e;background:#fef3c7;border-color:#f59e0b;';
   if (normalized === 'AGENDAR DESCARGA') return 'color:#1d4ed8;background:#dbeafe;border-color:#60a5fa;';
   return selectColorStyle('status', status);
+}
+
+function statusHexColor(status) {
+  const normalized = normalizeOption(status);
+  if (normalized === 'FALTA ADIANTAMENTO') return '#f59e0b';
+  if (normalized === 'AGENDAR DESCARGA') return '#2563eb';
+  return configColor('status', status || 'STATUS');
 }
 
 function drawerValue(field) {
@@ -2670,14 +2686,16 @@ function renderTravelDrawer() {
     ['agendamento', 'Agendamento'],
     ['financeiro', 'Financeiro'],
     ['gerais', 'Dados Gerais'],
-    ['observacoes', 'Observacoes']
+    ['observacoes', 'Observa\u00e7\u00f5es']
   ];
   if (!tabs.some(([key]) => key === state.drawerTab)) state.drawerTab = 'documentos';
   const status = viagemStatusDisplay(viagem);
+  const statusBadge = status ? `<span class="modern-badge status-chip" style="${escapeAttr(statusColorStyle(status))}">${escapeHtml(status)}</span>` : '';
   drawer.innerHTML = `
     <div class="drawer-head">
       <div>
-        <div class="drawer-title-row"><h2>Viagem ${escapeHtml(viagem.placa || viagem._id || '-')}</h2><span class="modern-badge status-chip" style="${escapeAttr(statusColorStyle(status))}">${escapeHtml(status)}</span></div>
+        <div class="drawer-title-row"><h2>${escapeHtml(String(viagem.nome || 'Sem motorista').toUpperCase())}</h2>${statusBadge}</div>
+        <p>${escapeHtml(viagem.placa || viagem._id || '-')}</p>
       </div>
       <button type="button" class="drawer-close" data-drawer-action="close" aria-label="Fechar">x</button>
     </div>
@@ -2685,7 +2703,7 @@ function renderTravelDrawer() {
     <div class="drawer-body">${state.drawerLoading ? renderDrawerSkeleton() : renderDrawerTab(viagem)}</div>
     <div class="drawer-footer">
       <button type="button" class="btn-cancel" data-drawer-action="close">Fechar</button>
-      ${canEditDrawerViagem(viagem) ? '<span class="drawer-editing-label">Clique em um campo para editar</span>' : '<span class="drawer-locked-label">Viagem concluida bloqueada</span>'}
+      <div class="drawer-footer-date">${drawerField('data','Data carregamento','date')}</div>
     </div>`;
 }
 
@@ -2703,22 +2721,21 @@ function renderDrawerTab(viagem) {
 
 function renderDrawerGerais() {
   return `<div class="drawer-card-grid">
-    ${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerField('nota','Nota'), drawerField('num_pedagio','Pedagio')])}
-    ${drawerCard('VEICULO', [drawerField('placa','Placa'), drawerSelect('tipo','Tipo'), drawerField('eixos','Eixos','number'), drawerSelect('status','Status'), drawerSelect('carroceria','Carroceria'), drawerSelect('pamcard','Pamcard')])}
+    ${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')])}
+    ${drawerCard('VEICULO', [drawerField('placa','Placa'), drawerSelect('tipo','Tipo'), drawerField('eixos','Eixos','number'), drawerSelect('carroceria','Carroceria'), drawerSelect('pamcard','Pamcard')])}
     ${drawerCard('MOTORISTA', [drawerField('nome','Nome'), drawerPhoneField('telefone','Telefone'), drawerPhoneField('telefone2','Telefone 2'), drawerField('usuario','Usuario', true)])}
     ${drawerCard('VIAGEM', [drawerSelect('origem','Origem'), drawerSelect('destino','Destino'), drawerSelect('produto','Produto'), drawerField('peso','Peso (kg)','number')])}
     ${drawerCard('AGENDAMENTO', [drawerField('agendamento','Carga','time'), drawerField('descarga','Descarga','datetime-local')])}
     ${drawerCard('FINANCEIRO', [
       drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem())),
       drawerField('valor_adiantamento','Valor adiantamento'),
-      drawerField('vlr_pedagio','Valor pedagio','number'),
       drawerAdvanceButton()
     ])}
   </div>`;
 }
 
 function renderDrawerDocuments() {
-  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerField('nota','Nota Fiscal'), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')])}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')])}</div>`;
 }
 
 function renderDrawerAgendamento() {
@@ -2729,7 +2746,6 @@ function renderDrawerFinanceiro() {
   return `<div class="drawer-card-grid single">${drawerCard('FINANCEIRO', [
     drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem())),
     drawerField('valor_adiantamento','Valor adiantamento'),
-    drawerField('vlr_pedagio','Valor pedagio','number'),
     drawerAdvanceButton()
   ])}</div>`;
 }
@@ -2780,11 +2796,15 @@ function renderDrawerHistorico(viagem) {
 }
 
 function renderDrawerObservacoes() {
-  return `<div class="drawer-card-grid single">${drawerCard('OBSERVACOES', [drawerTextarea('obs','Observacoes')])}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('OBSERVA\u00c7\u00d5ES', [drawerTextarea('obs','Observa\u00e7\u00f5es')])}</div>`;
 }
 
 function drawerCard(title, content) {
   return `<section class="drawer-card"><h3>${drawerCardIcon(title)}<span>${escapeHtml(title)}</span></h3>${content.join('')}</section>`;
+}
+
+function drawerFieldRow(...fields) {
+  return `<div class="drawer-field-row">${fields.join('')}</div>`;
 }
 
 function drawerCardIcon(title) {
@@ -2805,9 +2825,9 @@ function drawerField(field, label, type = 'text') {
   const isActive = state.drawerActiveField === field;
   const editable = canEditDrawerField(field);
   const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : drawerValue(field);
-  const display = field === 'peso' ? formatPeso(value) : field === 'descarga' ? formatDescargaDateTime(value) : value;
+  const display = field === 'peso' ? formatPeso(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
   if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
-  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'datetime-local' ? 'datetime-local' : 'text';
+  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'datetime-local' : 'text';
   return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" autofocus></label>`;
 }
 
@@ -2863,6 +2883,30 @@ function rowWhatsappAction(viagem) {
   return `<a class="btn-row table-action-icon table-whatsapp-action" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="Abrir WhatsApp" aria-label="Abrir WhatsApp"><img src="img/whatsapp.jpg" alt=""></a>`;
 }
 
+function rowActionMenu(viagem) {
+  const id = escapeAttr(viagem._id);
+  const href = whatsappHrefForViagem(viagem);
+  const items = [
+    isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
+    href ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp"><img src="img/whatsapp.jpg" alt=""></a>` : '',
+    viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
+    viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
+    `<button type="button" onclick="copyViagem(event,'${id}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>`,
+    canDeleteViagem(viagem) ? `<button type="button" class="danger" onclick="deleteViagem('${id}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''
+  ].filter(Boolean).join('');
+  return `<div class="row-action-wrap">
+    <button type="button" class="btn-row table-action-icon" onclick="selectViagem('${id}')" title="Visualizar" aria-label="Visualizar"><span class="table-view-icon" aria-hidden="true"></span></button>
+    <details class="row-action-menu" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()">
+      <summary aria-label="Abrir a&ccedil;&otilde;es">...</summary>
+      <div class="row-action-popover">${items}</div>
+    </details>
+  </div>`;
+}
+
+function closeRowActionMenus() {
+  document.querySelectorAll('.row-action-menu[open]').forEach(menu => { menu.open = false; });
+}
+
 function whatsappHrefForViagem(viagem = {}) {
   const digits = String(firstPhone(viagem.telefone || '') || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -2912,12 +2956,43 @@ function handleDrawerContextMenu(event) {
   showContratoMenu(event, { dataset: { id: viagem._id, field: 'contrato' } });
 }
 
+function handleMasterCellDrawerShortcut(event) {
+  if (event.target.closest('button, a, input, select, textarea, .master-actions')) return;
+  const cell = event.target.closest('tr.master-row td[data-field]');
+  if (!cell) return;
+  const id = cell.dataset.id || cell.closest('tr.master-row')?.dataset.id;
+  const field = cell.dataset.field;
+  if (!id || !field) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  selectViagem(id, drawerTabForField(field), field);
+}
+
+function drawerTabForField(field) {
+  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field)) return 'documentos';
+  if (['agendamento', 'descarga'].includes(field)) return 'agendamento';
+  if (['valor_adiantamento'].includes(field)) return 'financeiro';
+  if (field === 'obs') return 'observacoes';
+  return 'gerais';
+}
+
+function canEditDrawerFieldForViagem(viagem, field) {
+  return Boolean(field) && canEditViagemField(viagem, field) && field !== 'usuario';
+}
+
 function activateDrawerField(field) {
   const viagem = selectedViagem();
   if (!viagem || !canEditDrawerField(field)) return;
   state.drawerActiveField = field;
   state.drawerDraft = { ...viagem };
   renderTravelDrawer();
+  focusDrawerActiveField();
+}
+
+function focusDrawerActiveField() {
+  const field = state.drawerActiveField;
+  if (!field) return;
   requestAnimationFrame(() => {
     const input = document.querySelector(`[data-drawer-field="${CSS.escape(field)}"]`);
     input?.focus();
@@ -2941,6 +3016,12 @@ async function commitActiveDrawerField() {
   if (!field || !viagem || !state.drawerDraft || state.drawerSaving) return;
   const next = normalizeFieldValue(field, state.drawerDraft[field] || '');
   const current = normalizeFieldValue(field, viagem[field] || '');
+  if (field === 'data' && !canSaveViagemDate(next)) {
+    state.drawerActiveField = '';
+    state.drawerDraft = null;
+    renderTravelDrawer();
+    return;
+  }
   if (next === current) {
     state.drawerActiveField = '';
     state.drawerDraft = null;
@@ -2970,7 +3051,7 @@ async function saveDrawerViagem() {
   const viagem = selectedViagem();
   if (!viagem || !state.drawerDraft || state.drawerSaving) return;
   const patch = {};
-  const fields = ['placa','nome','tipo','eixos','status','carroceria','pamcard','telefone','telefone2','origem','destino','produto','peso','agendamento','descarga','dt','cte','manifesto','contrato','nota','num_pedagio','valor_adiantamento','vlr_pedagio','obs'];
+  const fields = ['placa','nome','tipo','eixos','status','carroceria','pamcard','telefone','telefone2','origem','destino','produto','peso','agendamento','descarga','dt','cte','manifesto','contrato','nota','hora_nf','num_pedagio','valor_adiantamento','vlr_pedagio','obs','data'];
   fields.forEach(field => {
     const next = normalizeFieldValue(field, state.drawerDraft[field] || '');
     const current = normalizeFieldValue(field, viagem[field] || '');
@@ -3000,6 +3081,7 @@ const FIELDS = [
   { key: 'tipo', label: 'TIPO', select: true },
   { key: 'origem', label: 'ORIGEM', select: true },
   { key: 'destino', label: 'DESTINO', select: true },
+  { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'status', label: 'STATUS', select: true }
 ];
@@ -3039,8 +3121,9 @@ function renderTableRow(v) {
   const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
   const selectedClass = state.selectedViagemId === v._id ? 'is-selected' : '';
   const status = viagemStatusDisplay(v);
+  const statusBadge = renderStatusButton(v, status);
   const obsIndicator = String(v.obs || '').trim()
-    ? `<button type="button" class="plate-obs-indicator" title="Abrir observacoes" aria-label="Abrir observacoes" onclick="openViagemObservacoes(event,'${escapeAttr(v._id)}')">💬</button>`
+    ? `<button type="button" class="plate-obs-indicator" title="Abrir observa\u00e7\u00f5es" aria-label="Abrir observa\u00e7\u00f5es" onclick="openViagemObservacoes(event,'${escapeAttr(v._id)}')">&#128172;</button>`
     : '';
 
   return `<tr data-id="${escapeHtml(v._id)}" class="origin-row master-row ${originClass} ${completeClass} ${semCadastroClass} ${yellowClass} ${selectedClass}" onclick="selectViagem('${escapeAttr(v._id)}')" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
@@ -3061,24 +3144,29 @@ function renderTableRow(v) {
     <td data-field="destino" data-id="${escapeAttr(v._id)}">
       <div class="route-cell"><strong>${escapeHtml(String(v.destino || '-').toUpperCase())}</strong></div>
     </td>
+    <td data-field="peso" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.peso || '')}" class="quick-edit">
+      <strong>${escapeHtml(formatPeso(v.peso || '') || '-')}</strong>
+    </td>
     <td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
       <span class="modern-badge schedule-chip">${escapeHtml(normalizeHours(v.agendamento || '') || '-')}</span>
     </td>
-    <td data-field="status" data-id="${escapeAttr(v._id)}">
-      <span class="modern-badge status-chip ${statusSlug(status)}" style="${escapeAttr(statusColorStyle(status))}">${escapeHtml(status)}</span>
+    <td data-field="status" data-id="${escapeAttr(v._id)}" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()">
+      ${statusBadge}
     </td>
     <td class="master-actions" onclick="event.stopPropagation()">
-      <div class="row-actions">
-        <button class="btn-row table-action-icon" onclick="selectViagem('${escapeAttr(v._id)}')" title="Visualizar" aria-label="Visualizar"><span class="table-view-icon" aria-hidden="true"></span></button>
-        ${isAdmin() ? `<button class="btn-row table-action-icon" onclick="openHistoryModal('${escapeAttr(v._id)}')" title="Historico" aria-label="Historico"><span class="table-history-icon" aria-hidden="true"></span></button>` : ''}
-        ${rowWhatsappAction(v)}
-        ${v.secao === 'agenciando' && canEditViagem(v) ? `<button class="btn-row table-action-icon table-promote-action" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : ''}
-        ${v.secao === 'arcos' && canEditViagem(v) ? `<button class="btn-row table-action-icon table-demote-action" onclick="demoteToAgenciado(event,'${escapeAttr(v._id)}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : ''}
-        <button class="btn-row table-action-icon" onclick="copyViagem(event,'${escapeAttr(v._id)}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>
-      </div>
+      ${rowActionMenu(v)}
     </td>
   </tr>`;
 }
+
+function renderStatusButton(viagem, status) {
+  const canChange = canEditViagemField(viagem, 'status');
+  const statusColor = statusHexColor(status);
+  const style = `--status-color:${statusColor};`;
+  const disabled = canChange ? '' : ' disabled';
+  return `<select class="modern-badge status-chip status-select ${statusSlug(status)}" style="${escapeAttr(style)}" data-field="status" data-id="${escapeAttr(viagem._id)}" onchange="updateInlineSelect(this)" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()" aria-label="Selecionar status"${disabled}>${renderOptions(getSelectOptions('status'), status)}</select>`;
+}
+
 const tableScrollSyncing = {};
 
 function updateTableScrollControls(secao) {
@@ -3275,7 +3363,7 @@ function renderTableHeader(secao) {
     const order = sortIndex > 0 ? ` ${sortIndex + 1}` : '';
     const label = `${field.label}${arrow}${order}`;
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
-  }).join('')}<th class="col-actions">ACOES</th>`;
+  }).join('')}<th class="col-actions">A&Ccedil;&Otilde;ES</th>`;
 
   headRow.querySelectorAll('th[data-field]').forEach(th => {
     th.onclick = () => sortTableBy(th.dataset.field);
@@ -3326,7 +3414,7 @@ function renderCell(v, field) {
     const canPromote = v.secao === 'agenciando' && canEditViagem(v);
     return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell">
       <span class="placa-content">
-        <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'JÃ¡ estÃ¡ faturado'}">â†‘</button>
+        <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'J\u00e1 est\u00e1 faturado'}">&#8593;</button>
         <span>${escapeHtml(display)}</span>
       </span>
     </td>`;
@@ -3340,7 +3428,12 @@ function renderCell(v, field) {
 
 function renderOptions(options, selected) {
   const selectedNorm = normalizeOption(selected);
-  return options.map(opt => {
+  const cleanOptions = [...new Set((options || []).map(opt => String(opt || '').trim()).filter(Boolean))];
+  const selectedValue = String(selected || '').trim();
+  const allOptions = selectedValue && !cleanOptions.some(opt => normalizeOption(opt) === selectedNorm)
+    ? [selectedValue, ...cleanOptions]
+    : cleanOptions;
+  return allOptions.map(opt => {
     const label = opt || '-';
     const isSelected = normalizeOption(opt) === selectedNorm ? 'selected' : '';
     return `<option value="${escapeAttr(opt)}" ${isSelected}>${escapeHtml(label)}</option>`;
@@ -3348,15 +3441,15 @@ function renderOptions(options, selected) {
 }
 
 function getSelectOptions(field) {
-  if (field === 'tipo') return ['', ...configOptionList('tipo')];
-  if (field === 'produto') return ['', ...productList()];
-  if (field === 'carroceria') return ['', ...configOptionList('carroceria')];
-  if (field === 'pamcard') return ['', ...configOptionList('pamcard')];
-  if (field === 'kanguru') return ['', ...configOptionList('kanguru')];
-  if (field === 'status') return ['', ...configOptionList('status')];
-  if (field === 'origem') return ['', ...originList()];
-  if (field === 'destino') return ['', ...destinationList()];
-  return [''];
+  if (field === 'tipo') return configOptionList('tipo');
+  if (field === 'produto') return productList();
+  if (field === 'carroceria') return configOptionList('carroceria');
+  if (field === 'pamcard') return configOptionList('pamcard');
+  if (field === 'kanguru') return configOptionList('kanguru');
+  if (field === 'status') return configOptionList('status');
+  if (field === 'origem') return originList();
+  if (field === 'destino') return destinationList();
+  return [];
 }
 
 function normalizeOption(value) {
@@ -3382,7 +3475,7 @@ function normalizeOperacoes(operacoes) {
   const list = Array.isArray(operacoes) ? operacoes : DEFAULT_OPERACOES;
   return list.map((op, index) => ({
     ...op,
-    origem: String(op.origem || `OPERACAO ${index + 1}`).trim().toUpperCase(),
+    origem: String(op.origem || `OPERA\u00c7\u00c3O ${index + 1}`).trim().toUpperCase(),
     metaTipo: op.metaTipo || metaTipo(op.origem),
     produtos: normalizeProducts(op.produtos),
     resumoProdutos: normalizeCardSelection(op.resumoProdutos, productList()),
@@ -3450,8 +3543,10 @@ function syncDynamicSelects() {
 function setSelectOptions(select, options) {
   if (!select) return;
   const current = select.value;
-  select.innerHTML = options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(opt || '-')}</option>`).join('');
-  if (options.includes(current)) select.value = current;
+  const cleanOptions = [...new Set((options || []).map(opt => String(opt || '').trim()).filter(Boolean))];
+  select.innerHTML = cleanOptions.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(opt)}</option>`).join('');
+  if (cleanOptions.includes(current)) select.value = current;
+  else select.value = '';
 }
 
 function setReportOperationOptions() {
@@ -3459,7 +3554,7 @@ function setReportOperationOptions() {
   if (!select) return;
   const current = select.value;
   const options = originList();
-  select.innerHTML = `<option value="">Todas as operaÃ§Ãµes</option>${options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('')}`;
+  select.innerHTML = `<option value="">Todas as opera&ccedil;&otilde;es</option>${options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('')}`;
   if (options.includes(current) || current === '') select.value = current;
 }
 
@@ -3494,8 +3589,8 @@ function renderSettingsModal() {
           <span>${escapeHtml(value)}</span>
           ${hasColors ? renderConfigColorPicker(field.key, value) : ''}
           <div class="settings-order-actions">
-            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">â†‘</button>
-            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">â†“</button>
+            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">&#8593;</button>
+            <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
           </div>
           <button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>
         </div>`).join('')}
@@ -3526,7 +3621,7 @@ async function exportViagensExcel() {
     return;
   }
   if (start > end) {
-    setExportStatus('A data inicial nÃ£o pode ser maior que a data final.', true);
+    setExportStatus('A data inicial n\u00e3o pode ser maior que a data final.', true);
     return;
   }
 
@@ -3543,7 +3638,7 @@ async function exportViagensExcel() {
 
     if (!res.ok) {
       const message = await responseErrorMessage(res);
-      setExportStatus(message || 'NÃ£o foi possÃ­vel exportar as viagens.', true);
+      setExportStatus(message || 'N\u00e3o foi poss\u00edvel exportar as viagens.', true);
       return;
     }
 
@@ -3644,19 +3739,19 @@ function renderSettingsOperations() {
   const operations = operationsList();
   container.innerHTML = `<section class="settings-section settings-operations-section">
     <div class="settings-section-head">
-      <strong>OPERAÃ‡Ã•ES</strong>
+      <strong>OPERA&Ccedil;&Otilde;ES</strong>
       <span>${operations.length} itens</span>
     </div>
     <div class="settings-operation-actions">
-      <button type="button" class="btn-add-operation" onclick="openOperationModal()">Adicionar operaÃ§Ã£o</button>
+      <button type="button" class="btn-add-operation" onclick="openOperationModal()">Adicionar opera&ccedil;&atilde;o</button>
     </div>
     <div class="settings-operation-list">
       ${operations.map(op => {
         const id = escapeAttr(op._id || op.metaTipo || op.origem);
         const label = escapeHtml(titleCase(op.origem));
         return `<div class="settings-operation-chip">
-          <button type="button" class="settings-operation-edit" onclick="openOperationModal('${id}')" title="Editar operaÃ§Ã£o">${label}</button>
-          <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir operaÃ§Ã£o" aria-label="Excluir operaÃ§Ã£o ${escapeAttr(titleCase(op.origem))}">Ã—</button>
+          <button type="button" class="settings-operation-edit" onclick="openOperationModal('${id}')" title="Editar opera&ccedil;&atilde;o">${label}</button>
+          <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir opera&ccedil;&atilde;o" aria-label="Excluir opera&ccedil;&atilde;o ${escapeAttr(titleCase(op.origem))}">&times;</button>
         </div>`;
       }).join('')}
     </div>
@@ -3714,7 +3809,7 @@ async function deleteConfigOption(field, value) {
 async function deleteOperation(operationId) {
   const op = findOperation(operationId);
   if (!op?._id) return;
-  if (!confirm(`Excluir a operaÃ§Ã£o "${titleCase(op.origem)}"?`)) return;
+  if (!confirm(`Excluir a opera\u00e7\u00e3o "${titleCase(op.origem)}"?`)) return;
 
   const removed = await apiFetch(`/api/operacoes/${op._id}`, { method: 'DELETE' });
   if (!removed) return;
@@ -3839,7 +3934,7 @@ async function copySummaryAsImage() {
 
   if (!hasFreshSummaryCopyBlob()) {
     if (!window.html2canvas) {
-      showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo. Atualize a pÃ¡gina e tente novamente.', 'error');
+      showSummaryToast('N\u00e3o foi poss\u00edvel gerar a imagem do resumo. Atualize a p\u00e1gina e tente novamente.', 'error');
       return;
     }
 
@@ -3849,7 +3944,7 @@ async function copySummaryAsImage() {
       ?.then(() => showSummaryToast('Imagem pronta. Clique novamente para copiar.'))
       .catch(error => {
         console.error('Erro ao preparar imagem do resumo:', error);
-        showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo.', 'error');
+        showSummaryToast('N\u00e3o foi poss\u00edvel gerar a imagem do resumo.', 'error');
       });
     return;
   }
@@ -3859,7 +3954,7 @@ async function copySummaryAsImage() {
   try {
     await copyPreparedSummaryImage(state.summaryCopyBlob);
     clearPreparedSummaryCopy();
-    showSummaryToast('Resumo copiado para a Ã¡rea de transferÃªncia');
+    showSummaryToast('Resumo copiado para a \u00e1rea de transfer\u00eancia');
   } catch (error) {
     console.error('Erro ao copiar resumo como imagem:', error);
     showSummaryToast(summaryClipboardErrorMessage(error), 'error');
@@ -3890,7 +3985,7 @@ function prepareSummaryCopyImage() {
 
 async function getPreparedSummaryCopyBlob(panel) {
   if (!window.html2canvas) {
-    throw new Error('NÃ£o foi possÃ­vel gerar a imagem do resumo.');
+    throw new Error('N\u00e3o foi poss\u00edvel gerar a imagem do resumo.');
   }
 
   if (hasFreshSummaryCopyBlob()) return state.summaryCopyBlob;
@@ -3938,7 +4033,7 @@ function canWriteClipboardImage() {
 
 async function writeSummaryImageToClipboard(blobOrPromise) {
   if (!canWriteClipboardImage()) {
-    throw new Error('Ãrea de transferÃªncia de imagem indisponÃ­vel neste navegador.');
+    throw new Error('\u00c1rea de transfer\u00eancia de imagem indispon\u00edvel neste navegador.');
   }
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobOrPromise })]);
 }
@@ -3983,7 +4078,7 @@ async function copyReportSummaryAsImage() {
 
   if (!hasFreshReportSummaryCopyBlob()) {
     if (!window.html2canvas) {
-      showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo. Atualize a pÃ¡gina e tente novamente.', 'error');
+      showSummaryToast('N\u00e3o foi poss\u00edvel gerar a imagem do resumo. Atualize a p\u00e1gina e tente novamente.', 'error');
       return;
     }
 
@@ -3992,8 +4087,8 @@ async function copyReportSummaryAsImage() {
     state.reportSummaryCopyRenderPromise
       ?.then(() => showSummaryToast('Imagem pronta. Clique novamente para copiar.'))
       .catch(error => {
-        console.error('Erro ao preparar imagem do resumo do relatÃ³rio:', error);
-        showSummaryToast('NÃ£o foi possÃ­vel gerar a imagem do resumo.', 'error');
+        console.error('Erro ao preparar imagem do resumo do relat\u00f3rio:', error);
+        showSummaryToast('N\u00e3o foi poss\u00edvel gerar a imagem do resumo.', 'error');
       });
     return;
   }
@@ -4002,9 +4097,9 @@ async function copyReportSummaryAsImage() {
   try {
     await copyPreparedSummaryImage(state.reportSummaryCopyBlob);
     clearPreparedReportSummaryCopy();
-    showSummaryToast('Resumo copiado para a Ã¡rea de transferÃªncia');
+    showSummaryToast('Resumo copiado para a \u00e1rea de transfer\u00eancia');
   } catch (error) {
-    console.error('Erro ao copiar resumo do relatÃ³rio como imagem:', error);
+    console.error('Erro ao copiar resumo do relat\u00f3rio como imagem:', error);
     showSummaryToast(summaryClipboardErrorMessage(error), 'error');
   } finally {
     if (button) button.disabled = false;
@@ -4027,7 +4122,7 @@ async function renderReportSummaryPanelBlob(panel) {
   clone.querySelectorAll('.report-summary-copy').forEach(el => el.remove());
   clone.querySelectorAll('.card-row-toggle').forEach(button => {
     const label = document.createElement('span');
-    label.textContent = button.textContent.replace(/[â–¶â–¼]/g, '').trim();
+    label.textContent = button.textContent.replace(/[\u25b6\u25bc]/g, '').trim();
     button.replaceWith(label);
   });
   sanitizeSummaryCaptureClone(clone);
@@ -4082,7 +4177,7 @@ function copyDataUrlImageToClipboard(dataUrl) {
     selection.addRange(range);
     return document.execCommand('copy');
   } catch (error) {
-    console.warn('Fallback de cÃ³pia por seleÃ§Ã£o falhou:', error);
+    console.warn('Fallback de c\u00f3pia por sele\u00e7\u00e3o falhou:', error);
     return false;
   } finally {
     selection?.removeAllRanges();
@@ -4106,7 +4201,7 @@ function copyImageViaCopyEvent(dataUrl) {
     const copied = document.execCommand('copy');
     return copied && handled;
   } catch (error) {
-    console.warn('Fallback de cÃ³pia por evento falhou:', error);
+    console.warn('Fallback de c\u00f3pia por evento falhou:', error);
     return false;
   } finally {
     document.removeEventListener('copy', onCopy);
@@ -4158,7 +4253,7 @@ async function renderSummaryCanvasBlob(panel) {
   canvas.style.height = `${height}px`;
 
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('NÃ£o foi possÃ­vel criar a imagem do resumo.');
+  if (!ctx) throw new Error('N\u00e3o foi poss\u00edvel criar a imagem do resumo.');
   ctx.scale(ratio, ratio);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
@@ -4180,7 +4275,7 @@ async function renderSummaryCanvasBlob(panel) {
 
 function readSummaryCardData(card) {
   return {
-    title: cleanCanvasText(card.querySelector('.summary-operation strong')?.textContent || 'OperaÃ§Ã£o'),
+    title: cleanCanvasText(card.querySelector('.summary-operation strong')?.textContent || 'Opera\u00e7\u00e3o'),
     accent: summaryCaptureAccent(card),
     percent: cleanCanvasText(card.querySelector('.summary-percent span')?.textContent || ''),
     headers: [...card.querySelectorAll('thead th')].map(cell => cleanCanvasText(cell.textContent)),
@@ -4200,7 +4295,7 @@ function readSummaryCardData(card) {
 
 function cleanCanvasText(value) {
   return String(value || '')
-    .replace(/[â–¶â–¼âŠ–]/g, '')
+    .replace(/[\u25b6\u25bc\u2296]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -4249,7 +4344,7 @@ function drawSummaryCanvasCard(ctx, card, x, y, width, height) {
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = card.accent;
   ctx.font = '800 11px Inter, Arial, sans-serif';
-  ctx.fillText('OPERAÃ‡ÃƒO', tableLeft + 56, footerY + 16);
+  ctx.fillText('OPERA\u00c7\u00c3O', tableLeft + 56, footerY + 16);
   ctx.fillStyle = '#172033';
   ctx.font = '900 17px Inter, Arial, sans-serif';
   ctx.fillText(card.title, tableLeft + 56, footerY + 39);
@@ -4316,12 +4411,12 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke, strokeWid
 
 function summaryClipboardErrorMessage(error) {
   if (!window.isSecureContext) {
-    return 'NÃ£o foi possÃ­vel copiar a imagem. Abra o Dashlog em HTTPS ou localhost para liberar a Ã¡rea de transferÃªncia.';
+    return 'N\u00e3o foi poss\u00edvel copiar a imagem. Abra o Dashlog em HTTPS ou localhost para liberar a \u00e1rea de transfer\u00eancia.';
   }
   if (isClipboardNotAllowed(error)) {
-    return 'NÃ£o foi possÃ­vel copiar. Permita acesso Ã  Ã¡rea de transferÃªncia nas configuraÃ§Ãµes do navegador.';
+    return 'N\u00e3o foi poss\u00edvel copiar. Permita acesso \u00e0 \u00e1rea de transfer\u00eancia nas configura\u00e7\u00f5es do navegador.';
   }
-  return 'NÃ£o foi possÃ­vel copiar. O navegador nÃ£o permitiu acesso Ã  Ã¡rea de transferÃªncia.';
+  return 'N\u00e3o foi poss\u00edvel copiar. O navegador n\u00e3o permitiu acesso \u00e0 \u00e1rea de transfer\u00eancia.';
 }
 
 function isClipboardNotAllowed(error) {
@@ -4356,7 +4451,7 @@ function createSummaryCaptureStage(panel) {
   clone.querySelectorAll('.summary-copy-btn, .summary-config-btn').forEach(el => el.remove());
   clone.querySelectorAll('.card-row-toggle').forEach(button => {
     const label = document.createElement('span');
-    label.textContent = button.textContent.replace(/[â–¶â–¼]/g, '').trim();
+    label.textContent = button.textContent.replace(/[\u25b6\u25bc]/g, '').trim();
     button.replaceWith(label);
   });
   sanitizeSummaryCaptureClone(clone);
@@ -4470,7 +4565,7 @@ function renderOriginSummaryCard(operacao) {
   const metaTitle = metaCollapsed ? 'Mostrar meta por tipo de cimento' : 'Ocultar meta por tipo de cimento';
   const totalTitle = totalCollapsed ? 'Mostrar carregado por produto' : 'Ocultar carregado por produto';
   const configButton = isAdmin()
-    ? `<button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualizaÃ§Ã£o do card">âš™</button>`
+    ? `<button class="summary-config-btn" onclick="openOperationModal('${escapeAttr(operacao._id || '')}')" title="Configurar visualiza&ccedil;&atilde;o do card" aria-label="Configurar visualiza&ccedil;&atilde;o do card">&#9881;</button>`
     : '';
 
   return `<article class="summary-card ${accentClass} origin-card-${originSlug(origem)}" data-operation-id="${escapeAttr(operationKey)}">
@@ -4494,7 +4589,7 @@ function renderOriginSummaryCard(operacao) {
       <div class="summary-operation">
         <div class="summary-icon">${summaryIcon(origem)}</div>
         <div>
-          <span class="summary-card-kicker">Operacao</span>
+          <span class="summary-card-kicker">Opera&ccedil;&atilde;o</span>
           <strong>${escapeHtml(origem)}</strong>
         </div>
       </div>
@@ -5197,6 +5292,8 @@ function isDocumentNumberField(field) {
 function formatDocumentNumber(value, field = '') {
   const raw = String(value || '').trim();
   if (field === 'contrato' && raw === '-') return '-';
+  if (field === 'contrato' && normalizeOption(raw) === 'NAO FAZ CONTRATO') return 'N\u00c3O FAZ CONTRATO';
+  if (field === 'contrato' && normalizeOption(raw) === 'N\u00c3O FAZ CONTRATO') return 'N\u00c3O FAZ CONTRATO';
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
@@ -5260,9 +5357,10 @@ function hashText(value) {
 }
 
 // â”€â”€â”€ MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function openModal(viagem = null) {
+function openModal(viagem = null, defaults = {}) {
   syncDynamicSelects();
   state.editingId = viagem ? viagem._id : null;
+  clearPlateAutofill();
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
   document.querySelectorAll('#modal-overlay .hidden-on-new').forEach(el => el.classList.toggle('is-hidden', !viagem));
   document.querySelectorAll('#modal-overlay .bulk-only').forEach(el => el.classList.toggle('is-hidden', !!viagem));
@@ -5272,7 +5370,7 @@ function openModal(viagem = null) {
     if (!el) return;
     el.value = viagem
       ? (f === 'tipo' ? normalizeTipo(viagem[f]) : f === 'descarga' ? descargaToInputValue(viagem[f]) : (viagem[f] || ''))
-      : (f === 'secao' ? 'agenciando' : '');
+      : (defaults[f] !== undefined ? defaults[f] : (f === 'secao' ? 'agenciando' : ''));
   });
   const usuarioInput = document.getElementById('f-usuario');
   if (usuarioInput && !viagem) usuarioInput.value = '';
@@ -5285,16 +5383,74 @@ function openModal(viagem = null) {
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   state.editingId = null;
+  clearPlateAutofill();
+}
+
+function clearPlateAutofill() {
+  if (state.plateAutofillTimer) clearTimeout(state.plateAutofillTimer);
+  state.plateAutofillTimer = null;
+  state.plateAutofillToken += 1;
+}
+
+function handleNewViagemPlacaInput(event) {
+  const input = event.target;
+  const placa = String(input.value || '').trim().toUpperCase();
+  input.value = placa;
+  if (state.editingId) return;
+  if (state.plateAutofillTimer) clearTimeout(state.plateAutofillTimer);
+  if (placa.replace(/[^A-Z0-9]/g, '').length < 5) return;
+  const token = ++state.plateAutofillToken;
+  state.plateAutofillTimer = setTimeout(() => autofillViagemByPlaca(placa, token), 350);
+}
+
+async function autofillViagemByPlaca(placa, token) {
+  const currentPlaca = v('f-placa').toUpperCase();
+  if (state.editingId || token !== state.plateAutofillToken || currentPlaca !== placa) return;
+  const history = await apiFetch(`/api/viagens/placa/${encodeURIComponent(placa)}/latest`);
+  if (state.editingId || token !== state.plateAutofillToken || v('f-placa').toUpperCase() !== placa) return;
+  if (!history) {
+    setModalSelectValue('f-status', 'CONFERIR CADASTRO');
+    return;
+  }
+
+  setModalFieldValue('f-nome', history.nome || '');
+  setModalSelectValue('f-tipo', normalizeTipo(history.tipo || ''));
+  setModalSelectValue('f-carroceria', history.carroceria || '');
+  setModalFieldValue('f-telefone', normalizePhoneList(history.telefone || ''));
+  setModalSelectValue('f-status', history.cadastroOk ? 'CRIAR DT' : 'CONFERIR CADASTRO');
+}
+
+function setModalFieldValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el || !String(value || '').trim()) return;
+  el.value = value;
+}
+
+function setModalSelectValue(id, value) {
+  const select = document.getElementById(id);
+  const clean = String(value || '').trim();
+  if (!select || !clean) return;
+  ensureSelectOption(select, clean);
+  select.value = clean;
+}
+
+function ensureSelectOption(select, value) {
+  const exists = [...select.options].some(option => normalizeOption(option.value) === normalizeOption(value));
+  if (exists) return;
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = value;
+  select.appendChild(option);
 }
 
 function openOperationModal(operationId = null) {
   if (!isAdmin()) return;
   const op = operationId ? findOperation(operationId) : null;
   state.editingOperationId = op?._id || null;
-  document.getElementById('op-modal-title').textContent = op ? 'Configurar Card de Resumo' : 'Adicionar OperaÃ§Ã£o';
+  document.getElementById('op-modal-title').textContent = op ? 'Configurar Card de Resumo' : 'Adicionar Opera\u00e7\u00e3o';
   document.getElementById('op-origem').value = op ? op.origem : '';
   const saveBtn = document.getElementById('op-btn-save');
-  saveBtn.dataset.label = op ? 'Salvar Card' : 'Salvar OperaÃ§Ã£o';
+  saveBtn.dataset.label = op ? 'Salvar Card' : 'Salvar Opera\u00e7\u00e3o';
   saveBtn.textContent = saveBtn.dataset.label;
   renderOperationCardChoices(op);
 
@@ -5337,7 +5493,7 @@ async function saveOperation() {
   const resumoProdutos = normalizeCardSelection(checkedProdutos, productList());
   const resumoDestinos = normalizeCardSelection(checkedDestinos, destinationList());
   if (!origem) {
-    alert('Informe a origem da operaÃ§Ã£o');
+    alert('Informe a origem da opera\u00e7\u00e3o');
     return;
   }
   if (!checkedProdutos.length || !checkedDestinos.length) {
@@ -5381,7 +5537,7 @@ async function saveOperation() {
     await loadAll();
   }
 
-  btn.textContent = btn.dataset.label || 'Salvar OperaÃ§Ã£o';
+  btn.textContent = btn.dataset.label || 'Salvar Opera\u00e7\u00e3o';
   btn.disabled = false;
 }
 
@@ -5565,7 +5721,7 @@ function showFloatingCopyBubble(x, y) {
 async function deleteViagem(id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!canDeleteViagem(viagem)) return;
-  if (!confirm('Excluir este registro?')) return;
+  if (!confirm('Deseja excluir esta viagem?')) return;
   await apiFetch(`/api/viagens/${id}`, { method: 'DELETE' });
   state.viagens = state.viagens.filter(v => v._id !== id);
   renderAll();
@@ -5662,7 +5818,7 @@ function showContratoMenu(e, cell) {
   document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-desfazer').style.display = canUndoConclusao ? '' : 'none';
-  document.getElementById('contrato-desfazer').textContent = isStatusField ? 'Tirar de concluÃ­do' : 'Desfazer';
+  document.getElementById('contrato-desfazer').textContent = isStatusField ? 'Tirar de conclu\u00eddo' : 'Desfazer';
 
   const menu = document.getElementById('contrato-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
