@@ -585,6 +585,11 @@ function initUI() {
     const td = e.target.closest('td[data-field]:not(.cell-select)');
     if (td && td.classList.contains('quick-edit')) startInlineEdit(td);
   });
+  document.addEventListener('toggle', event => {
+    if (event.target?.matches?.('.row-action-menu') && event.target.open) positionRowActionMenu(event.target);
+  }, true);
+  window.addEventListener('resize', closeRowActionMenus);
+  window.addEventListener('scroll', closeRowActionMenus, true);
 
   document.addEventListener('contextmenu', e => {
     const placaCell = e.target.closest('td[data-field="placa"]');
@@ -2904,7 +2909,29 @@ function rowActionMenu(viagem) {
 }
 
 function closeRowActionMenus() {
-  document.querySelectorAll('.row-action-menu[open]').forEach(menu => { menu.open = false; });
+  document.querySelectorAll('.row-action-menu[open]').forEach(menu => {
+    menu.open = false;
+    const popover = menu.querySelector('.row-action-popover');
+    if (popover) {
+      popover.style.left = '';
+      popover.style.top = '';
+    }
+  });
+}
+
+function positionRowActionMenu(menu) {
+  document.querySelectorAll('.row-action-menu[open]').forEach(other => {
+    if (other !== menu) other.open = false;
+  });
+  const popover = menu.querySelector('.row-action-popover');
+  const summary = menu.querySelector('summary');
+  if (!popover || !summary) return;
+  const rect = summary.getBoundingClientRect();
+  const width = Math.max(popover.offsetWidth || 0, 42);
+  const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+  const top = Math.min(rect.bottom + 6, window.innerHeight - 46);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
 }
 
 function whatsappHrefForViagem(viagem = {}) {
@@ -5007,7 +5034,7 @@ async function updateInlineSelect(select) {
   if (!canEditViagemField(viagem, field)) return renderAll();
   const value = normalizeFieldValue(field, select.value);
   select.disabled = true;
-  const updated = await updateViagemField(id, field, value);
+  const updated = await updateViagemField(id, field, value, field === 'status' ? { manualStatus: true } : {});
   select.disabled = false;
   if (!updated) renderAll();
 }
@@ -5219,9 +5246,11 @@ async function updateViagemField(id, field, value, options = {}) {
   if (field === 'data' && !canSaveViagemDate(value)) return null;
   const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
   const nextValue = normalizeFieldValue(field, value);
+  const body = { [field]: nextValue };
+  if (options.manualStatus) body.__manualStatus = true;
   const updated = await apiFetch(`/api/viagens/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ [field]: nextValue })
+    body: JSON.stringify(body)
   });
   if (updated) {
     const idx = state.viagens.findIndex(v => v._id === id);

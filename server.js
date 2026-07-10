@@ -1552,6 +1552,8 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem nÃ£o encontrada' });
 
     const patch = { ...req.body };
+    const manualStatus = Boolean(patch.__manualStatus);
+    delete patch.__manualStatus;
     normalizeViagemDocumentNumbers(patch);
     applyFrotaContratoRule(patch);
     if (Object.prototype.hasOwnProperty.call(patch, 'data')) {
@@ -1599,7 +1601,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (patch.conclusaoContrato && !hasDocumentosCompletos(nextData)) {
       return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
     }
-    const autoStatus = applyDocumentAutoStatus(nextData);
+    const autoStatus = manualStatus ? '' : applyDocumentAutoStatus(nextData);
     if (autoStatus) patch.status = autoStatus;
     if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
