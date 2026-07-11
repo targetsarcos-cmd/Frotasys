@@ -493,6 +493,15 @@ function hasLoadedHistory(doc = {}) {
     ['dt', 'cte', 'manifesto', 'contrato', 'nota'].some(field => String(doc[field] || '').trim());
 }
 
+async function latestViagemByPlaca(placa) {
+  const normalizedPlaca = normalizeUniqueValue(placa);
+  if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
+  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT });
+  return docs
+    .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
+    .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+}
+
 function documentAutoStatus(data = {}) {
   const hasDt = Boolean(String(data.dt || '').trim());
   const hasNota = Boolean(String(data.nota || '').trim());
@@ -1441,10 +1450,7 @@ app.get('/api/viagens/placa/:placa/latest', requireViagemEditor, async (req, res
   try {
     const placa = normalizeUniqueValue(req.params.placa);
     if (!placa || placa.length < 5) return res.json(null);
-    const docs = await selectDocsByJson(TABLES.viagens, { placa }, { limit: DEFAULT_RANGE_LIMIT });
-    const latest = docs
-      .filter(doc => normalizeUniqueValue(doc.placa) === placa)
-      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0];
+    const latest = await latestViagemByPlaca(placa);
     if (!latest) return res.json(null);
     res.json({
       placa: latest.placa || placa,
@@ -1507,6 +1513,11 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const payload = { ...req.body };
     normalizeViagemDocumentNumbers(payload);
     applyFrotaContratoRule(payload);
+    const previousByPlaca = await latestViagemByPlaca(payload.placa);
+    const nomeAlteradoDoHistorico = previousByPlaca &&
+      normalizeUniqueValue(previousByPlaca.nome) &&
+      normalizeUniqueValue(previousByPlaca.nome) !== normalizeUniqueValue(payload.nome);
+    if (nomeAlteradoDoHistorico) payload.status = 'CONFERIR CADASTRO';
     const dateError = viagemDateValidationError(payload.data);
     if (dateError) return res.status(400).json({ error: dateError });
     delete payload.usuario;

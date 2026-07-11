@@ -3144,7 +3144,7 @@ function renderTable(secao) {
 function renderTableRow(v) {
   const originClass = originSlug(v.origem);
   const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
-  const semCadastroClass = isStatusSemCadastro(v.status) ? 'is-sem-cadastro' : '';
+  const semCadastroClass = isStatusSemCadastro(v.status, v.pamcard) ? 'is-sem-cadastro' : '';
   const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
   const selectedClass = state.selectedViagemId === v._id ? 'is-selected' : '';
   const status = viagemStatusDisplay(v);
@@ -3410,8 +3410,9 @@ function hasNotaPreenchida(viagem) {
   return String(viagem?.nota || '').trim() !== '';
 }
 
-function isStatusSemCadastro(status) {
-  return ['SEM CADASTRO', 'S/ CADASTRO'].includes(normalizeOption(status));
+function isStatusSemCadastro(status, pamcard = '') {
+  const hasPamcardOk = normalizeOption(pamcard) === 'PAMCARD OK';
+  return !hasPamcardOk && ['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO'].includes(normalizeOption(status));
 }
 
 function renderCell(v, field) {
