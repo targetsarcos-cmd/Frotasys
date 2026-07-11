@@ -75,6 +75,8 @@ const DEFAULT_CONFIG_OPTIONS = {
   destino: DEFAULT_DESTINOS
 };
 const THEME_STORAGE_KEY = 'frotasys-theme';
+const TABLE_SORT_STORAGE_KEY = 'frotasys-table-sort';
+const USER_PREFS_STORAGE_PREFIX = 'frotasys-user-pref';
 const THEME_OPTIONS = ['dark', 'white'];
 
 const CONFIG_FIELDS = [
@@ -276,12 +278,14 @@ function applyViewportGuard() {
 async function startApp() {
   if (appStarted || !isDesktopViewport()) return;
   appStarted = true;
-  applyTheme(loadThemePreference());
+  applyTheme(loadThemePreference(), { persist: false });
   document.getElementById('date-picker').value = state.currentDate;
   renderDateWeekday();
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
+  applyTheme(loadThemePreference(), { persist: false });
+  loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
   initWS();
@@ -500,6 +504,7 @@ function initUI() {
   summaryCopyBtn?.addEventListener('pointerdown', prepareSummaryCopyImage);
   summaryCopyBtn?.addEventListener('click', copySummaryAsImage);
 
+  document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
   document.getElementById('settings-btn-close').addEventListener('click', closeSettingsModal);
@@ -713,7 +718,7 @@ function applyPermissions() {
   if (loggedUser) loggedUser.textContent = loggedUserDisplayName();
   updateUndoButton();
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
-  document.getElementById('btn-settings').classList.remove('is-hidden');
+  document.getElementById('btn-settings').classList.toggle('is-hidden', !isAdmin());
   updateThemeControls();
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
 }
@@ -3140,8 +3145,8 @@ function renderTable(secao) {
 function renderTableRow(v) {
   const originClass = originSlug(v.origem);
   const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
-  const semCadastroClass = isStatusSemCadastro(v.status, v.pamcard) ? 'is-sem-cadastro' : '';
-  const conferirMotoristaClass = isStatusConferirMotorista(v.status, v.pamcard) ? 'is-conferir-motorista' : '';
+  const semCadastroClass = isCadastroPendente(v) ? 'is-sem-cadastro' : '';
+  const conferirMotoristaClass = isConferirMotoristaPendente(v) ? 'is-conferir-motorista' : '';
   const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
   const selectedClass = state.selectedViagemId === v._id ? 'is-selected' : '';
   const status = viagemStatusDisplay(v);
@@ -3420,14 +3425,21 @@ function hasNotaPreenchida(viagem) {
   return String(viagem?.nota || '').trim() !== '';
 }
 
-function isStatusSemCadastro(status, pamcard = '') {
+function hasPamcardOk(pamcard = '') {
   const hasPamcardOk = normalizeOption(pamcard) === 'PAMCARD OK';
-  return !hasPamcardOk && ['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO'].includes(normalizeOption(status));
+  return hasPamcardOk;
 }
 
-function isStatusConferirMotorista(status, pamcard = '') {
-  const hasPamcardOk = normalizeOption(pamcard) === 'PAMCARD OK';
-  return !hasPamcardOk && normalizeOption(status) === 'CONFERIR MOTORISTA';
+function isCadastroPendente(viagem = {}) {
+  if (hasPamcardOk(viagem.pamcard)) return false;
+  const status = normalizeOption(viagem.status);
+  return ['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO'].includes(status) ||
+    (!normalizeOption(viagem.pamcard) && status !== 'CONFERIR MOTORISTA');
+}
+
+function isConferirMotoristaPendente(viagem = {}) {
+  if (hasPamcardOk(viagem.pamcard)) return false;
+  return normalizeOption(viagem.status) === 'CONFERIR MOTORISTA';
 }
 
 function renderCell(v, field) {
@@ -3652,9 +3664,20 @@ function renderSettingsModal() {
   }).join('');
 }
 
+function userPreferenceId() {
+  const raw = state.userProfile?.user_id || state.userProfile?.id || state.userProfile?.email || '';
+  return String(raw || '').trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, '_');
+}
+
+function userPreferenceStorageKey(key) {
+  const userId = userPreferenceId();
+  return userId ? `${USER_PREFS_STORAGE_PREFIX}:${userId}:${key}` : key;
+}
+
 function loadThemePreference() {
   try {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    const userKey = userPreferenceStorageKey(THEME_STORAGE_KEY);
+    const saved = localStorage.getItem(userKey) || localStorage.getItem(THEME_STORAGE_KEY);
     return THEME_OPTIONS.includes(saved) ? saved : 'dark';
   } catch (e) {
     return 'dark';
@@ -3663,7 +3686,8 @@ function loadThemePreference() {
 
 function saveThemePreference(theme) {
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    localStorage.setItem(userPreferenceStorageKey(THEME_STORAGE_KEY), theme);
+    if (!userPreferenceId()) localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch (e) {
     // Prefer keeping the interface usable if storage is unavailable.
   }
@@ -3673,11 +3697,12 @@ function currentTheme() {
   return document.body.classList.contains('theme-white') ? 'white' : 'dark';
 }
 
-function applyTheme(theme) {
+function applyTheme(theme, options = {}) {
+  const shouldPersist = options.persist !== false;
   const safeTheme = THEME_OPTIONS.includes(theme) ? theme : 'dark';
   document.body.classList.toggle('theme-dark', safeTheme === 'dark');
   document.body.classList.toggle('theme-white', safeTheme === 'white');
-  saveThemePreference(safeTheme);
+  if (shouldPersist) saveThemePreference(safeTheme);
   updateThemeControls();
 }
 
@@ -3688,7 +3713,7 @@ function toggleTheme() {
 
 function updateThemeControls() {
   const theme = currentTheme();
-  const btn = document.getElementById('btn-settings');
+  const btn = document.getElementById('btn-theme-toggle');
   if (btn) {
     btn.dataset.theme = theme;
     btn.title = theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark';
@@ -3964,6 +3989,7 @@ function sortTableBy(fieldKey) {
 
   if (isPrimary && existing?.direction === 'desc') {
     state.tableSort = criteria.filter(item => item.field !== fieldKey);
+    saveTableSortPreference();
     renderTable('arcos');
     renderTable('agenciando');
     return;
@@ -3974,6 +4000,7 @@ function sortTableBy(fieldKey) {
     { field: fieldKey, direction },
     ...criteria.filter(item => item.field !== fieldKey)
   ];
+  saveTableSortPreference();
   renderTable('arcos');
   renderTable('agenciando');
 }
@@ -4015,6 +4042,24 @@ function normalizeTableSortCriteria() {
       field: item.field,
       direction: item.direction === 'desc' ? 'desc' : 'asc'
     }));
+}
+
+function loadTableSortPreference() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(userPreferenceStorageKey(TABLE_SORT_STORAGE_KEY)) || '[]');
+    state.tableSort = Array.isArray(saved) ? saved : [];
+    state.tableSort = normalizeTableSortCriteria();
+  } catch (e) {
+    state.tableSort = [];
+  }
+}
+
+function saveTableSortPreference() {
+  try {
+    localStorage.setItem(userPreferenceStorageKey(TABLE_SORT_STORAGE_KEY), JSON.stringify(normalizeTableSortCriteria()));
+  } catch (e) {
+    // Keep sorting usable if storage is unavailable.
+  }
 }
 
 function sortValue(viagem, field) {
@@ -5532,6 +5577,7 @@ async function autofillViagemByPlaca(placa, token) {
   setModalFieldValue('f-nome', history.nome || '');
   setModalSelectValue('f-tipo', normalizeTipo(history.tipo || ''));
   setModalSelectValue('f-carroceria', history.carroceria || '');
+  setModalSelectValue('f-pamcard', 'PAMCARD OK');
   setModalFieldValue('f-telefone', normalizePhoneList(history.telefone || ''));
   setModalSelectValue('f-status', history.cadastroOk ? 'CRIAR DT' : 'CONFERIR CADASTRO');
 }
