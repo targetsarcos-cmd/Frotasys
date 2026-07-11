@@ -74,6 +74,8 @@ const DEFAULT_CONFIG_OPTIONS = {
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: DEFAULT_DESTINOS
 };
+const THEME_STORAGE_KEY = 'frotasys-theme';
+const THEME_OPTIONS = ['dark', 'white'];
 
 const CONFIG_FIELDS = [
   { key: 'tipo', label: 'TIPO' },
@@ -274,6 +276,7 @@ function applyViewportGuard() {
 async function startApp() {
   if (appStarted || !isDesktopViewport()) return;
   appStarted = true;
+  applyTheme(loadThemePreference());
   document.getElementById('date-picker').value = state.currentDate;
   renderDateWeekday();
   const auth = await FrotasysAuth.init({ requireAuth: true });
@@ -685,7 +688,7 @@ function canEditViagens() {
 
 function isViagemConcluida(viagem) {
   return hasDocumentosCompletos(viagem) &&
-    Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato)) &&
+    hasAdiantamentoLiberado(viagem) &&
     Boolean(String(viagem?.descarga || '').trim());
 }
 
@@ -710,7 +713,8 @@ function applyPermissions() {
   if (loggedUser) loggedUser.textContent = loggedUserDisplayName();
   updateUndoButton();
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
-  document.getElementById('btn-settings').classList.toggle('is-hidden', !isAdmin());
+  document.getElementById('btn-settings').classList.remove('is-hidden');
+  updateThemeControls();
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
 }
 
@@ -2649,8 +2653,8 @@ function selectedViagem() {
 }
 
 function viagemStatusDisplay(viagem) {
-  if (hasDocumentosCompletos(viagem) && !normalizeContratoConclusao(viagem?.conclusaoContrato)) return 'FALTA ADIANTAMENTO';
-  if (hasDocumentosCompletos(viagem) && normalizeContratoConclusao(viagem?.conclusaoContrato) && !String(viagem?.descarga || '').trim()) return 'AGENDAR DESCARGA';
+  if (hasDocumentosCompletos(viagem) && !hasAdiantamentoLiberado(viagem)) return 'FALTA ADIANTAMENTO';
+  if (hasDocumentosCompletos(viagem) && hasAdiantamentoLiberado(viagem) && !String(viagem?.descarga || '').trim()) return 'AGENDAR DESCARGA';
   if (isViagemConcluida(viagem)) return 'CONCLUIDO';
   return String(viagem?.status || '').trim();
 }
@@ -2694,12 +2698,10 @@ function renderTravelDrawer() {
     ['observacoes', 'Observa\u00e7\u00f5es']
   ];
   if (!tabs.some(([key]) => key === state.drawerTab)) state.drawerTab = 'documentos';
-  const status = viagemStatusDisplay(viagem);
-  const statusBadge = status ? `<span class="modern-badge status-chip" style="${escapeAttr(statusColorStyle(status))}">${escapeHtml(status)}</span>` : '';
   drawer.innerHTML = `
     <div class="drawer-head">
       <div>
-        <div class="drawer-title-row"><h2>${escapeHtml(String(viagem.nome || 'Sem motorista').toUpperCase())}</h2>${statusBadge}</div>
+        <div class="drawer-title-row"><h2>${escapeHtml(String(viagem.nome || 'Sem motorista').toUpperCase())}</h2></div>
         <p>${escapeHtml(viagem.placa || viagem._id || '-')}</p>
       </div>
       <button type="button" class="drawer-close" data-drawer-action="close" aria-label="Fechar">x</button>
@@ -2726,16 +2728,9 @@ function renderDrawerTab(viagem) {
 
 function renderDrawerGerais() {
   return `<div class="drawer-card-grid">
-    ${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')])}
     ${drawerCard('VEICULO', [drawerField('placa','Placa'), drawerSelect('tipo','Tipo'), drawerField('eixos','Eixos','number'), drawerSelect('carroceria','Carroceria'), drawerSelect('pamcard','Pamcard')])}
-    ${drawerCard('MOTORISTA', [drawerField('nome','Nome'), drawerPhoneField('telefone','Telefone'), drawerPhoneField('telefone2','Telefone 2'), drawerField('usuario','Usuario', true)])}
+    ${drawerCard('MOTORISTA', [drawerField('nome','Nome'), drawerPhoneField('telefone','Telefone'), drawerPhoneField('telefone2','Telefone 2')])}
     ${drawerCard('VIAGEM', [drawerSelect('origem','Origem'), drawerSelect('destino','Destino'), drawerSelect('produto','Produto'), drawerField('peso','Peso (kg)','number')])}
-    ${drawerCard('AGENDAMENTO', [drawerField('agendamento','Carga','time'), drawerField('descarga','Descarga','datetime-local')])}
-    ${drawerCard('FINANCEIRO', [
-      drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem())),
-      drawerField('valor_adiantamento','Valor adiantamento'),
-      drawerAdvanceButton()
-    ])}
   </div>`;
 }
 
@@ -2845,7 +2840,7 @@ function drawerSelect(field, label) {
   const editable = canEditDrawerField(field);
   const isActive = state.drawerActiveField === field;
   if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
-  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><select data-drawer-field="${escapeAttr(field)}" data-drawer-commit="change" autofocus>${renderOptions(getSelectOptions(field), value)}</select></label>`;
+  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><select data-drawer-field="${escapeAttr(field)}" data-drawer-commit="change" autofocus>${renderOptions(getSelectOptions(field), value, true)}</select></label>`;
 }
 
 function drawerTextarea(field, label) {
@@ -2867,6 +2862,7 @@ function drawerPhoneField(field = 'telefone', label = 'Telefone') {
 function drawerAdvanceButton() {
   const viagem = selectedViagem();
   if (!hasDocumentosCompletos(viagem)) return '<div class="drawer-hint">Adiantamento liberado apos documentos completos.</div>';
+  if (normalizeTipo(viagem?.tipo) === 'FROTA') return '<div class="drawer-hint">Adiantamento dispensado para frota.</div>';
   const done = Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
   if (done) return '<button type="button" class="drawer-action-pill is-done" data-drawer-advance-menu="true" title="Botao direito para opcoes">Adiantamento efetuado</button>';
   if (!canEditDrawerViagem(viagem)) return '<div class="drawer-hint">Adiantamento pendente.</div>';
@@ -3145,6 +3141,7 @@ function renderTableRow(v) {
   const originClass = originSlug(v.origem);
   const completeClass = isViagemConcluida(v) ? 'is-documentos-completos' : '';
   const semCadastroClass = isStatusSemCadastro(v.status, v.pamcard) ? 'is-sem-cadastro' : '';
+  const conferirMotoristaClass = isStatusConferirMotorista(v.status, v.pamcard) ? 'is-conferir-motorista' : '';
   const yellowClass = v.marcadoAmarelo ? 'is-marcado-amarelo' : '';
   const selectedClass = state.selectedViagemId === v._id ? 'is-selected' : '';
   const status = viagemStatusDisplay(v);
@@ -3153,7 +3150,7 @@ function renderTableRow(v) {
     ? `<button type="button" class="plate-obs-indicator" title="Abrir observa\u00e7\u00f5es" aria-label="Abrir observa\u00e7\u00f5es" onclick="openViagemObservacoes(event,'${escapeAttr(v._id)}')">&#128172;</button>`
     : '';
 
-  return `<tr data-id="${escapeHtml(v._id)}" class="origin-row master-row ${originClass} ${completeClass} ${semCadastroClass} ${yellowClass} ${selectedClass}" onclick="selectViagem('${escapeAttr(v._id)}')" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
+  return `<tr data-id="${escapeHtml(v._id)}" class="origin-row master-row ${originClass} ${completeClass} ${semCadastroClass} ${conferirMotoristaClass} ${yellowClass} ${selectedClass}" onclick="selectViagem('${escapeAttr(v._id)}')" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
     <td data-field="placa" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.placa || '')}" class="quick-edit placa-cell">
       <strong class="master-plate">${obsIndicator}${escapeHtml(v.placa || '-')}</strong>
     </td>
@@ -3177,7 +3174,7 @@ function renderTableRow(v) {
     <td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
       <span class="modern-badge schedule-chip">${escapeHtml(normalizeHours(v.agendamento || '') || '-')}</span>
     </td>
-    <td data-field="status" data-id="${escapeAttr(v._id)}" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()">
+    <td data-field="status" data-id="${escapeAttr(v._id)}" data-status-label="${escapeAttr(status || '-')}" class="status-cell" style="--status-font-size:${statusFontSize(status)}px;" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()">
       ${statusBadge}
     </td>
     <td class="master-actions" onclick="event.stopPropagation()">
@@ -3189,9 +3186,18 @@ function renderTableRow(v) {
 function renderStatusButton(viagem, status) {
   const canChange = canEditViagemField(viagem, 'status');
   const statusColor = statusHexColor(status);
-  const style = `--status-color:${statusColor};`;
+  const style = `--status-color:${statusColor};--status-font-size:${statusFontSize(status)}px;`;
   const disabled = canChange ? '' : ' disabled';
   return `<select class="modern-badge status-chip status-select ${statusSlug(status)}" style="${escapeAttr(style)}" data-field="status" data-id="${escapeAttr(viagem._id)}" onchange="updateInlineSelect(this)" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()" aria-label="Selecionar status"${disabled}>${renderOptions(getSelectOptions('status'), status)}</select>`;
+}
+
+function statusFontSize(status) {
+  const length = normalizeOption(status).length;
+  if (length >= 24) return 6.8;
+  if (length >= 20) return 7.2;
+  if (length >= 16) return 7.8;
+  if (length >= 12) return 8.4;
+  return 9;
 }
 
 const tableScrollSyncing = {};
@@ -3406,6 +3412,10 @@ function normalizeContratoConclusao(value) {
   return ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'].includes(normalized) ? normalized : '';
 }
 
+function hasAdiantamentoLiberado(viagem) {
+  return normalizeTipo(viagem?.tipo) === 'FROTA' || Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
+}
+
 function hasNotaPreenchida(viagem) {
   return String(viagem?.nota || '').trim() !== '';
 }
@@ -3413,6 +3423,11 @@ function hasNotaPreenchida(viagem) {
 function isStatusSemCadastro(status, pamcard = '') {
   const hasPamcardOk = normalizeOption(pamcard) === 'PAMCARD OK';
   return !hasPamcardOk && ['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO'].includes(normalizeOption(status));
+}
+
+function isStatusConferirMotorista(status, pamcard = '') {
+  const hasPamcardOk = normalizeOption(pamcard) === 'PAMCARD OK';
+  return !hasPamcardOk && normalizeOption(status) === 'CONFERIR MOTORISTA';
 }
 
 function renderCell(v, field) {
@@ -3454,18 +3469,20 @@ function renderCell(v, field) {
   return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="${cls.trim()}"${title}>${escapeHtml(display)}</td>`;
 }
 
-function renderOptions(options, selected) {
+function renderOptions(options, selected, includeBlank = false) {
   const selectedNorm = normalizeOption(selected);
   const cleanOptions = [...new Set((options || []).map(opt => String(opt || '').trim()).filter(Boolean))];
   const selectedValue = String(selected || '').trim();
   const allOptions = selectedValue && !cleanOptions.some(opt => normalizeOption(opt) === selectedNorm)
     ? [selectedValue, ...cleanOptions]
     : cleanOptions;
-  return allOptions.map(opt => {
+  const renderedOptions = allOptions.map(opt => {
     const label = opt || '-';
     const isSelected = normalizeOption(opt) === selectedNorm ? 'selected' : '';
     return `<option value="${escapeAttr(opt)}" ${isSelected}>${escapeHtml(label)}</option>`;
   }).join('');
+  const blankOption = includeBlank ? `<option value="" ${selectedValue ? '' : 'selected'}></option>` : '';
+  return blankOption + renderedOptions;
 }
 
 function getSelectOptions(field) {
@@ -3587,7 +3604,6 @@ function setReportOperationOptions() {
 }
 
 function openSettingsModal() {
-  if (!isAdmin()) return;
   resetExportViagensForm();
   renderSettingsModal();
   document.getElementById('settings-modal-overlay').classList.remove('hidden');
@@ -3598,9 +3614,18 @@ function closeSettingsModal() {
 }
 
 function renderSettingsModal() {
-  renderSettingsOperations();
+  document.querySelector('.settings-export-section')?.classList.toggle('is-hidden', !isAdmin());
+  const operations = document.getElementById('settings-operations');
+  if (operations) operations.classList.toggle('is-hidden', !isAdmin());
+  if (isAdmin()) renderSettingsOperations();
+  else if (operations) operations.innerHTML = '';
   const grid = document.getElementById('settings-grid');
-  grid.innerHTML = CONFIG_FIELDS.map(field => {
+  const themeSection = renderThemeSettingsSection();
+  if (!isAdmin()) {
+    grid.innerHTML = themeSection;
+    return;
+  }
+  grid.innerHTML = themeSection + CONFIG_FIELDS.map(field => {
     const values = configOptionList(field.key);
     const hasColors = CONFIG_COLOR_FIELDS.includes(field.key);
     return `<section class="settings-section ${hasColors ? 'has-colors' : ''}" data-field="${field.key}">
@@ -3625,6 +3650,67 @@ function renderSettingsModal() {
       </div>
     </section>`;
   }).join('');
+}
+
+function loadThemePreference() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return THEME_OPTIONS.includes(saved) ? saved : 'dark';
+  } catch (e) {
+    return 'dark';
+  }
+}
+
+function saveThemePreference(theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (e) {
+    // Prefer keeping the interface usable if storage is unavailable.
+  }
+}
+
+function currentTheme() {
+  return document.body.classList.contains('theme-white') ? 'white' : 'dark';
+}
+
+function applyTheme(theme) {
+  const safeTheme = THEME_OPTIONS.includes(theme) ? theme : 'dark';
+  document.body.classList.toggle('theme-dark', safeTheme === 'dark');
+  document.body.classList.toggle('theme-white', safeTheme === 'white');
+  saveThemePreference(safeTheme);
+  updateThemeControls();
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme() === 'dark' ? 'white' : 'dark');
+  renderSettingsModal();
+}
+
+function updateThemeControls() {
+  const theme = currentTheme();
+  const btn = document.getElementById('btn-settings');
+  if (btn) {
+    btn.dataset.theme = theme;
+    btn.title = theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark';
+    btn.setAttribute('aria-label', btn.title);
+  }
+  const modalBtn = document.getElementById('settings-theme-toggle');
+  if (modalBtn) {
+    modalBtn.dataset.theme = theme;
+    modalBtn.title = theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark';
+    modalBtn.setAttribute('aria-label', modalBtn.title);
+  }
+}
+
+function renderThemeSettingsSection() {
+  const theme = currentTheme();
+  return `<section class="settings-section settings-theme-section">
+    <div class="settings-section-head">
+      <strong>TEMA</strong>
+      <span>${theme === 'dark' ? 'Dark' : 'White'}</span>
+    </div>
+    <button type="button" id="settings-theme-toggle" class="theme-toggle-btn" data-theme="${escapeAttr(theme)}" onclick="toggleTheme()" title="${theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark'}" aria-label="${theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark'}"></button>
+  </section>`;
 }
 
 function resetExportViagensForm() {
@@ -5308,7 +5394,7 @@ function formatCellValue(field, value) {
 }
 
 function inputPlaceholder(field) {
-  if (field === 'telefone' || field === 'telefone2') return '(00) 00000-0000 / (00) 00000-0000';
+  if (field === 'telefone' || field === 'telefone2') return '(00) 00000-0000';
   if (field === 'descarga') return '00:00 00/00/0000';
   if (TIME_FIELDS.includes(field)) return '00:00';
   if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';

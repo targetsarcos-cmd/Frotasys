@@ -499,6 +499,7 @@ async function latestViagemByPlaca(placa) {
   const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT });
   return docs
     .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
+    .filter(doc => isViagemBloqueada(doc) || normalizeUniqueValue(doc.status) === 'CONCLUIDO')
     .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
 }
 
@@ -510,6 +511,12 @@ function documentAutoStatus(data = {}) {
   if (hasDt && hasNota && hasPedagio && hasValorPedagio) return 'EMITIR CTE';
   if (hasDt) return 'DT CRIADA';
   return '';
+}
+
+const DOCUMENT_AUTO_STATUS_FIELDS = new Set(['dt', 'nota', 'num_pedagio', 'vlr_pedagio']);
+
+function shouldApplyDocumentAutoStatus(patch = {}) {
+  return Object.keys(patch).some(field => DOCUMENT_AUTO_STATUS_FIELDS.has(field));
 }
 
 function applyDocumentAutoStatus(data = {}) {
@@ -1021,9 +1028,17 @@ function normalizeContratoConclusao(value) {
   return CONTRATO_CONCLUSAO_OPTIONS.includes(normalized) ? normalized : '';
 }
 
+function isFrota(data = {}) {
+  return normalizeTipo(data.tipo) === 'FROTA';
+}
+
+function hasAdiantamentoLiberado(data = {}) {
+  return isFrota(data) || Boolean(normalizeContratoConclusao(data.conclusaoContrato));
+}
+
 function isViagemBloqueada(data = {}) {
   return hasDocumentosCompletos(data) &&
-    Boolean(normalizeContratoConclusao(data.conclusaoContrato)) &&
+    hasAdiantamentoLiberado(data) &&
     Boolean(String(data.descarga || '').trim());
 }
 
@@ -1032,8 +1047,8 @@ function hasDocumentosCompletos(data = {}) {
 }
 
 function statusOperacional(data = {}) {
-  if (hasDocumentosCompletos(data) && !normalizeContratoConclusao(data.conclusaoContrato)) return 'FALTA ADIANTAMENTO';
-  if (hasDocumentosCompletos(data) && normalizeContratoConclusao(data.conclusaoContrato) && !String(data.descarga || '').trim()) return 'AGENDAR DESCARGA';
+  if (hasDocumentosCompletos(data) && !hasAdiantamentoLiberado(data)) return 'FALTA ADIANTAMENTO';
+  if (hasDocumentosCompletos(data) && hasAdiantamentoLiberado(data) && !String(data.descarga || '').trim()) return 'AGENDAR DESCARGA';
   if (isViagemBloqueada(data)) return 'CONCLUIDO';
   return data.status || '';
 }
@@ -1517,7 +1532,10 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const nomeAlteradoDoHistorico = previousByPlaca &&
       normalizeUniqueValue(previousByPlaca.nome) &&
       normalizeUniqueValue(previousByPlaca.nome) !== normalizeUniqueValue(payload.nome);
-    if (nomeAlteradoDoHistorico) payload.status = 'CONFERIR CADASTRO';
+    if (nomeAlteradoDoHistorico) {
+      payload.status = 'CONFERIR MOTORISTA';
+      payload.pamcard = '';
+    }
     const dateError = viagemDateValidationError(payload.data);
     if (dateError) return res.status(400).json({ error: dateError });
     delete payload.usuario;
@@ -1612,7 +1630,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (patch.conclusaoContrato && !hasDocumentosCompletos(nextData)) {
       return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
     }
-    const autoStatus = manualStatus ? '' : applyDocumentAutoStatus(nextData);
+    const autoStatus = !manualStatus && shouldApplyDocumentAutoStatus(patch) ? applyDocumentAutoStatus(nextData) : '';
     if (autoStatus) patch.status = autoStatus;
     if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
