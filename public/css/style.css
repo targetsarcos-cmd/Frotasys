@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -21,8 +23,8 @@
   --pedro: #0f766e;
   --barroso: #c05621;
   --shadow: 0 10px 30px rgba(15, 23, 42, .08);
-  --font-mono: Arial, sans-serif;
-  --font-sans: Arial, sans-serif;
+  --font-mono: "Geist", Arial, sans-serif;
+  --font-sans: "Geist", Arial, sans-serif;
   --app-header-height: 64px;
 }
 
@@ -348,7 +350,7 @@ button, input, select {
   background: var(--teal);
   color: #fff;
   cursor: pointer;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: 24px;
   font-weight: 700;
   line-height: 1;
@@ -519,7 +521,7 @@ button, input, select {
   background: #fff8cf;
   color: #51472a;
   caret-color: #1f1b0d;
-  font-family: "Segoe UI", var(--font-sans);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.55;
   font-weight: 400;

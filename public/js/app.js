@@ -105,6 +105,7 @@ const DEFAULT_CONFIG_COLORS = {
     MANIFESTO: '#2563eb',
     'FALTA ADIANTAMENTO': '#b7791f',
     'AGENDAR DESCARGA': '#2563eb',
+    'CONFERIR MOTORISTA': '#c93434',
     CONCLUIDO: '#16803f'
   },
   origem: {},
@@ -117,7 +118,7 @@ const UNDO_FIELDS = ['dt', 'cte', 'manifesto', 'contrato'];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas', 'hora_nf'];
 const STABLE_INLINE_SELECTION_FIELDS = ['peso', 'dt', 'cte', 'manifesto', 'contrato', 'nota', 'num_pedagio', 'vlr_pedagio', 'horas'];
-const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
+const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo', 'trocaMotoristaConcluida'];
 const VIAGEM_MAX_FUTURE_DAYS = 3;
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
@@ -607,6 +608,16 @@ function initUI() {
       return;
     }
 
+    const nomeCell = e.target.closest('td[data-field="nome"]');
+    if (nomeCell) {
+      const viagem = state.viagens.find(item => item._id === nomeCell.dataset.id);
+      if (isConferirMotoristaPendente(viagem)) {
+        e.stopPropagation();
+        showCtxMenu(e, nomeCell.dataset.id, 'nome');
+        return;
+      }
+    }
+
     const statusCell = e.target.closest('td[data-field="status"]');
     if (statusCell) {
       const viagem = state.viagens.find(item => item._id === statusCell.dataset.id);
@@ -637,6 +648,7 @@ function initUI() {
     if (state.ctxTargetId) editViagem(state.ctxTargetId);
   });
   document.getElementById('ctx-yellow').addEventListener('click', toggleLinhaAmarela);
+  document.getElementById('ctx-driver-swap').addEventListener('click', concluirTrocaMotorista);
   document.getElementById('agendamento-mark').addEventListener('click', toggleAgendamentoVerde);
   document.getElementById('agendamento-edit').addEventListener('click', () => {
     const id = state.agendamentoTargetId;
@@ -3438,8 +3450,7 @@ function isCadastroPendente(viagem = {}) {
 }
 
 function isConferirMotoristaPendente(viagem = {}) {
-  if (hasPamcardOk(viagem.pamcard)) return false;
-  return normalizeOption(viagem.status) === 'CONFERIR MOTORISTA';
+  return normalizeOption(viagem.status) === 'CONFERIR MOTORISTA' && viagem.trocaMotoristaConcluida !== true;
 }
 
 function renderCell(v, field) {
@@ -5417,6 +5428,7 @@ function cancelInlineEdit() {
 
 function normalizeFieldValue(field, value) {
   if (field === 'marcadoAmarelo') return Boolean(value);
+  if (field === 'trocaMotoristaConcluida') return Boolean(value);
   if (field === 'descarga') return normalizeDescargaDateTime(value);
   if (TIME_FIELDS.includes(field)) return normalizeHours(value);
   if (field === 'telefone' || field === 'telefone2') return normalizePhoneList(value);
@@ -5898,6 +5910,15 @@ async function toggleLinhaAmarela() {
   await updateViagemField(id, 'marcadoAmarelo', !viagem.marcadoAmarelo);
 }
 
+async function concluirTrocaMotorista() {
+  const id = state.ctxTargetId;
+  hideCtxMenu();
+  if (!id) return;
+  const viagem = state.viagens.find(v => v._id === id);
+  if (!viagem || !canEditViagem(viagem) || !isConferirMotoristaPendente(viagem)) return;
+  await updateViagemField(id, 'trocaMotoristaConcluida', true);
+}
+
 // â”€â”€â”€ CONTEXT MENU â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showCtxMenu(e, id, mode = 'row') {
   e.preventDefault();
@@ -5906,11 +5927,13 @@ function showCtxMenu(e, id, mode = 'row') {
   const copyItem = document.getElementById('ctx-copy');
   const editItem = document.getElementById('ctx-edit');
   const yellowItem = document.getElementById('ctx-yellow');
+  const driverSwapItem = document.getElementById('ctx-driver-swap');
   copyItem.style.display = mode === 'placa' ? '' : 'none';
   editItem.style.display = mode === 'placa' ? 'none' : canEditViagem(viagem) ? '' : 'none';
   yellowItem.style.display = mode === 'placa' || !canEditViagens() || !viagem ? 'none' : '';
+  driverSwapItem.style.display = mode === 'nome' && isConferirMotoristaPendente(viagem) && canEditViagem(viagem) ? '' : 'none';
   yellowItem.textContent = viagem?.marcadoAmarelo ? 'Remover amarelo' : 'Marcar amarelo';
-  if (copyItem.style.display === 'none' && editItem.style.display === 'none' && yellowItem.style.display === 'none') return;
+  if (copyItem.style.display === 'none' && editItem.style.display === 'none' && yellowItem.style.display === 'none' && driverSwapItem.style.display === 'none') return;
   const menu = document.getElementById('ctx-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 160)}px`;
   menu.style.top = `${Math.min(e.clientY, window.innerHeight - 90)}px`;

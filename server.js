@@ -99,7 +99,7 @@ const UNIQUE_VIAGEM_FIELDS = [
 ];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
-const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo'];
+const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo', 'trocaMotoristaConcluida'];
 const VIAGEM_HISTORY_LIMIT = 500;
 const VIAGEM_MAX_FUTURE_DAYS = 3;
 const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
@@ -1534,7 +1534,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       normalizeUniqueValue(previousByPlaca.nome) !== normalizeUniqueValue(payload.nome);
     if (nomeAlteradoDoHistorico) {
       payload.status = 'CONFERIR MOTORISTA';
-      payload.pamcard = '';
+      payload.trocaMotoristaConcluida = false;
     }
     const dateError = viagemDateValidationError(payload.data);
     if (dateError) return res.status(400).json({ error: dateError });
@@ -1592,6 +1592,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     delete patch.usuario;
     delete patch.historico;
     if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
+    if (patch.trocaMotoristaConcluida !== undefined) patch.trocaMotoristaConcluida = Boolean(patch.trocaMotoristaConcluida);
     if (patch.descarga !== undefined) patch.descarga = normalizeDescargaDateTime(patch.descarga);
     if (isViagemBloqueada(current)) {
       const isAdminUser = req.userProfile?.role === 'admin';
@@ -1632,6 +1633,16 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
     const autoStatus = !manualStatus && shouldApplyDocumentAutoStatus(patch) ? applyDocumentAutoStatus(nextData) : '';
     if (autoStatus) patch.status = autoStatus;
+    const pamcardChangedToOk = Object.prototype.hasOwnProperty.call(patch, 'pamcard') &&
+      normalizeUniqueValue(nextData.pamcard) === 'PAMCARD OK';
+    const shouldPromoteCadastroAfterPamcard = !manualStatus &&
+      !autoStatus &&
+      pamcardChangedToOk &&
+      normalizeUniqueValue(current.status) === 'CONFERIR CADASTRO';
+    if (shouldPromoteCadastroAfterPamcard) {
+      patch.status = 'CRIAR DT';
+      nextData.status = 'CRIAR DT';
+    }
     if (isViagemBloqueada(nextData)) {
       patch.status = 'CONCLUIDO';
       patch.usuario = '';
@@ -1651,7 +1662,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
       nextData.conclusaoContrato = '';
       nextData.status = '';
       nextData.usuario = '';
-    } else if (statusChanged || autoStatus) {
+    } else if (statusChanged || autoStatus || shouldPromoteCadastroAfterPamcard) {
       patch.usuario = profileDisplayName(req.userProfile);
       nextData.usuario = patch.usuario;
     }
