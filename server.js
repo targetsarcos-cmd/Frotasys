@@ -1512,6 +1512,9 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     }
     const dateError = viagemDateValidationError(payload.data);
     if (dateError) return res.status(400).json({ error: dateError });
+    if (!normalizeUniqueValue(payload.produto)) {
+      return res.status(400).json({ error: 'Selecione PRODUTO para salvar a viagem.', field: 'produto' });
+    }
     delete payload.usuario;
     const rawCadastroStatus = normalizeUniqueValue(payload.status);
     const cadastroStatus = ['SEM CADASTRO', 'CONFERIR CADASTRO'].includes(rawCadastroStatus) ? 'SEM CADASTRO' : '';

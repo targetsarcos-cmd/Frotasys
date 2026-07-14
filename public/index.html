@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -15,7 +15,7 @@
 <div class="mobile-blocker" aria-live="polite">
   <section class="mobile-blocker-card">
     <div class="mobile-blocker-mark">D</div>
-    <h1>Acesso indisponível em dispositivos móveis</h1>
+    <h1>Acesso indispon&iacute;vel em dispositivos m&oacute;veis</h1>
     <p>O Dashlog foi desenvolvido para uso em computador. Acesse por um notebook ou desktop.</p>
   </section>
 </div>
@@ -32,7 +32,7 @@
 
   <form class="header-search" id="header-search-form" role="search" autocomplete="off">
     <input type="search" id="header-search-input" placeholder="Digite o CT-E ou Nota" aria-label="Digite o CT-E ou Nota">
-    <button type="button" id="btn-advanced-search" class="header-search-advanced" title="Busca avançada" aria-label="Busca avançada">⌕</button>
+    <button type="button" id="btn-advanced-search" class="header-search-advanced" title="Busca avan&ccedil;ada" aria-label="Busca avan&ccedil;ada">&#8981;</button>
   </form>
 
   <div class="header-actions">
@@ -42,24 +42,24 @@
         <div class="reminder-note-top">
           <button type="button" class="reminder-note-tool" aria-label="Novo lembrete">+</button>
           <span class="reminder-note-spacer"></span>
-          <button type="button" class="reminder-note-tool" aria-label="Mais opções">...</button>
-          <button type="button" class="reminder-note-tool" id="reminder-note-close" aria-label="Fechar lembrete">×</button>
+          <button type="button" class="reminder-note-tool" aria-label="Mais op&ccedil;&otilde;es">...</button>
+          <button type="button" class="reminder-note-tool" id="reminder-note-close" aria-label="Fechar lembrete">&times;</button>
         </div>
-        <textarea id="reminder-text" maxlength="2000" placeholder="Escrever uma anotação..."></textarea>
+        <textarea id="reminder-text" maxlength="2000" placeholder="Escrever uma anota&ccedil;&atilde;o..."></textarea>
         <div class="reminder-note-bottom">
           <span class="reminder-format-tools" aria-hidden="true">
-            <b>B</b><i>I</i><u>U</u><span>ab</span><span>≡</span><span>▧</span>
+            <b>B</b><i>I</i><u>U</u><span>ab</span><span>&equiv;</span><span>&#9639;</span>
           </span>
           <div id="reminder-status" class="reminder-status">Salvo</div>
         </div>
       </div>
     </div>
-    <button class="btn-reports" id="btn-relatorios">Relatórios</button>
+    <button class="btn-reports" id="btn-relatorios">Relat&oacute;rios</button>
     <button class="btn-frete-consult" id="btn-frete-consult">Consulta Frete</button>
     <button class="btn-waitlist" id="btn-lista-espera">Lista de Espera</button>
-    <button class="btn-users is-hidden" id="btn-users-admin">Usuários</button>
+    <button class="btn-users is-hidden" id="btn-users-admin">Usu&aacute;rios</button>
     <button class="btn-theme-toggle" id="btn-theme-toggle" title="Mudar tema" aria-label="Mudar tema"></button>
-    <button class="btn-settings is-hidden" id="btn-settings" title="Configurações" aria-label="Configurações">⚙</button>
+    <button class="btn-settings is-hidden" id="btn-settings" title="Configura&ccedil;&otilde;es" aria-label="Configura&ccedil;&otilde;es">&#9881;</button>
     <button class="btn-add" id="btn-nova-viagem">Nova Viagem</button>
     <button class="btn-logout" id="btn-logout">Sair</button>
   </div>
@@ -72,9 +72,9 @@
     <div class="date-tools">
       <div class="date-nav">
         <span id="date-weekday" class="date-weekday">Hoje</span>
-        <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">‹</button>
+        <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">&lsaquo;</button>
         <input type="date" id="date-picker" class="date-picker">
-        <button id="btn-next-date" class="nav-btn" aria-label="Próximo dia">›</button>
+        <button id="btn-next-date" class="nav-btn" aria-label="Pr&oacute;ximo dia">&rsaquo;</button>
       </div>
     </div>
   </section>
@@ -87,7 +87,7 @@
       </div>
     </div>
     <div class="table-wrapper" id="table-faturado-wrap">
-      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="arcos" data-scroll-direction="left" onclick="scrollTableToEdge('arcos','left')" aria-label="Ir para o início da tabela">‹</button>
+      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="arcos" data-scroll-direction="left" onclick="scrollTableToEdge('arcos','left')" aria-label="Ir para o in&iacute;cio da tabela">&lsaquo;</button>
       <div class="table-scroll-main">
         <div class="table-scroll-top" data-table-scroll-top="arcos" onscroll="syncTableScrollFromTop('arcos')"><div></div></div>
         <div class="table-scroll-area">
@@ -100,7 +100,7 @@
               <th>CARROCERIA</th>
               <th>PAMCARD</th>
               <th>STATUS</th>
-              <th>USUÁRIO</th>
+              <th>USU&Aacute;RIO</th>
               <th>AGENDAMENTO</th>
               <th>DESCARGA</th>
               <th>TELEFONE</th>
@@ -113,10 +113,10 @@
               <th>MANIFESTO</th>
               <th>CONTRATO</th>
               <th>NOTA</th>
-              <th>Nº PEDÁGIO</th>
-              <th>VLR PEDÁGIO</th>
+              <th>N&ordm; PED&Aacute;GIO</th>
+              <th>VLR PED&Aacute;GIO</th>
               <th>HORAS</th>
-              <th>OBSERVAÇÃO</th>
+              <th>OBSERVA&Ccedil;&Atilde;O</th>
               <th>DATA</th>
               <th class="col-actions"></th>
             </tr>
@@ -125,7 +125,7 @@
         </table>
         </div>
       </div>
-      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="arcos" data-scroll-direction="right" onclick="scrollTableToEdge('arcos','right')" aria-label="Ir para o fim da tabela">›</button>
+      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="arcos" data-scroll-direction="right" onclick="scrollTableToEdge('arcos','right')" aria-label="Ir para o fim da tabela">&rsaquo;</button>
     </div>
   </section>
 
@@ -137,7 +137,7 @@
       </div>
     </div>
     <div class="table-wrapper" id="table-agenciado-wrap">
-      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="agenciando" data-scroll-direction="left" onclick="scrollTableToEdge('agenciando','left')" aria-label="Ir para o início da tabela">‹</button>
+      <button type="button" class="table-scroll-jump left" data-table-scroll-jump="agenciando" data-scroll-direction="left" onclick="scrollTableToEdge('agenciando','left')" aria-label="Ir para o in&iacute;cio da tabela">&lsaquo;</button>
       <div class="table-scroll-main">
         <div class="table-scroll-top" data-table-scroll-top="agenciando" onscroll="syncTableScrollFromTop('agenciando')"><div></div></div>
         <div class="table-scroll-area">
@@ -150,7 +150,7 @@
               <th>CARROCERIA</th>
               <th>PAMCARD</th>
               <th>STATUS</th>
-              <th>USUÁRIO</th>
+              <th>USU&Aacute;RIO</th>
               <th>AGENDAMENTO</th>
               <th>DESCARGA</th>
               <th>TELEFONE</th>
@@ -163,10 +163,10 @@
               <th>MANIFESTO</th>
               <th>CONTRATO</th>
               <th>NOTA</th>
-              <th>Nº PEDÁGIO</th>
-              <th>VLR PEDÁGIO</th>
+              <th>N&ordm; PED&Aacute;GIO</th>
+              <th>VLR PED&Aacute;GIO</th>
               <th>HORAS</th>
-              <th>OBSERVAÇÃO</th>
+              <th>OBSERVA&Ccedil;&Atilde;O</th>
               <th>DATA</th>
               <th class="col-actions"></th>
             </tr>
@@ -175,7 +175,7 @@
         </table>
         </div>
       </div>
-      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="agenciando" data-scroll-direction="right" onclick="scrollTableToEdge('agenciando','right')" aria-label="Ir para o fim da tabela">›</button>
+      <button type="button" class="table-scroll-jump right" data-table-scroll-jump="agenciando" data-scroll-direction="right" onclick="scrollTableToEdge('agenciando','right')" aria-label="Ir para o fim da tabela">&rsaquo;</button>
     </div>
   </section>
 
@@ -188,7 +188,7 @@
           </span>
           <div>
             <div class="summary-title">Resumo Consolidado</div>
-            <div class="summary-subtitle">Visão geral do desempenho por origem</div>
+            <div class="summary-subtitle">Vis&atilde;o geral do desempenho por origem</div>
           </div>
         </div>
         <button type="button" class="summary-copy-btn" id="summary-copy-btn" title="Copiar resumo como imagem" aria-label="Copiar resumo como imagem">
@@ -206,7 +206,7 @@
   <div class="modal">
     <div class="modal-header">
       <span id="modal-title">Nova Viagem</span>
-      <button class="modal-close" id="modal-close" aria-label="Fechar">×</button>
+      <button class="modal-close" id="modal-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body">
       <div class="form-grid">
@@ -229,7 +229,7 @@
           </select>
         </div>
         <div class="form-group">
-          <label>PRODUTO</label>
+          <label class="required-label">PRODUTO</label>
           <select id="f-produto">
             <option value="">-</option>
             <option value="CPII-F">CPII-F</option>
@@ -249,7 +249,7 @@
           <select id="f-carroceria">
             <option value="">-</option>
             <option value="GRADE BAIXA">GRADE BAIXA</option>
-            <option value="BAU">BAÚ</option>
+            <option value="BAU">BA&Uacute;</option>
             <option value="SIDER">SIDER</option>
             <option value="TANQUE">TANQUE</option>
             <option value="GRANELEIRO">GRANELEIRO</option>
@@ -280,11 +280,11 @@
             <option value="CADASTRANDO">CADASTRANDO</option>
             <option value="AGUARDANDO CARREGAMENTO">AGUARDANDO CARREGAMENTO</option>
             <option value="MANIFESTO">MANIFESTO</option>
-            <option value="CONCLUIDO">CONCLUÍDO</option>
+            <option value="CONCLUIDO">CONCLU&Iacute;DO</option>
           </select>
         </div>
         <div class="form-group hidden-on-new">
-          <label>USUÁRIO</label>
+          <label>USU&Aacute;RIO</label>
           <input type="text" id="f-usuario" placeholder="Atualizado automaticamente pelo status" readonly>
         </div>
         <div class="form-group hidden-on-new">
@@ -296,7 +296,7 @@
           <input type="text" id="f-telefone" placeholder="(00) 00000-0000">
         </div>
         <div class="form-group">
-          <label>ORIGEM</label>
+          <label class="required-label">ORIGEM</label>
           <select id="f-origem">
             <option value="">-</option>
             <option value="ARCOS">ARCOS</option>
@@ -340,8 +340,8 @@
           </select>
         </div>
         <div class="form-group full-width">
-          <label>OBSERVAÇÃO</label>
-          <input type="text" id="f-obs" placeholder="Observação livre">
+          <label>OBSERVA&Ccedil;&Atilde;O</label>
+          <input type="text" id="f-obs" placeholder="Observa&ccedil;&atilde;o livre">
         </div>
       </div>
     </div>
@@ -355,8 +355,8 @@
 <div id="op-modal-overlay" class="modal-overlay hidden">
   <div class="modal operation-modal">
     <div class="modal-header">
-      <span id="op-modal-title">Configurar Operação</span>
-      <button class="modal-close" id="op-modal-close" aria-label="Fechar">×</button>
+      <span id="op-modal-title">Configurar Opera&ccedil;&atilde;o</span>
+      <button class="modal-close" id="op-modal-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body">
       <div class="operation-form">
@@ -366,7 +366,7 @@
         </div>
       </div>
       <div class="operation-visibility">
-        <div class="summary-title">Visualização do card</div>
+        <div class="summary-title">Visualiza&ccedil;&atilde;o do card</div>
         <div class="operation-choice-layout">
           <section class="operation-choice-section">
             <div class="operation-choice-head">
@@ -378,7 +378,7 @@
           <section class="operation-choice-section">
             <div class="operation-choice-head">
               <strong>Tipos de produto</strong>
-              <span>Usa as opções da aba Configurações</span>
+              <span>Usa as op&ccedil;&otilde;es da aba Configura&ccedil;&otilde;es</span>
             </div>
             <div class="operation-choice-grid" id="op-produtos-grid"></div>
           </section>
@@ -387,7 +387,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="op-btn-cancel">Cancelar</button>
-      <button class="btn-save" id="op-btn-save">Salvar Operação</button>
+      <button class="btn-save" id="op-btn-save">Salvar Opera&ccedil;&atilde;o</button>
     </div>
   </div>
 </div>
@@ -395,8 +395,8 @@
 <div id="search-modal-overlay" class="modal-overlay hidden">
   <div class="modal search-modal">
     <div class="modal-header">
-      <span>Busca avançada</span>
-      <button class="modal-close" id="search-modal-close" aria-label="Fechar">×</button>
+      <span>Busca avan&ccedil;ada</span>
+      <button class="modal-close" id="search-modal-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body">
       <form class="advanced-search-form" id="advanced-search-form" autocomplete="off">
@@ -425,7 +425,7 @@
           <input type="text" id="search-placa" placeholder="Placa">
         </div>
         <div class="form-group">
-          <label>INÍCIO</label>
+          <label>IN&Iacute;CIO</label>
           <input type="date" id="search-data-inicio">
         </div>
         <div class="form-group">
@@ -450,7 +450,7 @@
   <div class="modal frete-consult-modal">
     <div class="modal-header">
       <span>Consulta Frete</span>
-      <button class="modal-close" id="frete-consult-close" aria-label="Fechar">×</button>
+      <button class="modal-close" id="frete-consult-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body frete-consult-body">
       <div class="frete-consult-grid" id="frete-consult-grid"></div>
@@ -464,21 +464,21 @@
 <div id="reports-overlay" class="modal-overlay hidden">
   <div class="modal reports-modal">
     <div class="modal-header">
-      <span>Relatórios</span>
-      <button class="modal-close" id="reports-close" aria-label="Fechar">×</button>
+      <span>Relat&oacute;rios</span>
+      <button class="modal-close" id="reports-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body reports-body">
       <section class="reports-filters">
         <label>
-          <span>PERÍODO INICIAL</span>
+          <span>PER&Iacute;ODO INICIAL</span>
           <input type="date" id="report-start-date">
         </label>
         <label>
-          <span>PERÍODO FINAL</span>
+          <span>PER&Iacute;ODO FINAL</span>
           <input type="date" id="report-end-date">
         </label>
         <label>
-          <span>OPERAÇÃO</span>
+          <span>OPERA&Ccedil;&Atilde;O</span>
           <select id="report-operation"></select>
         </label>
         <div class="reports-filter-actions">
@@ -491,7 +491,7 @@
         <article class="report-card report-card-large">
           <div class="report-card-head">
             <strong>Modalidade</strong>
-            <span>Participação por cadastro</span>
+            <span>Participa&ccedil;&atilde;o por cadastro</span>
           </div>
           <div class="report-type-visual">
             <div class="report-chart-wrap report-type-chart"><canvas id="chart-report-tipo"></canvas></div>
@@ -499,10 +499,15 @@
           </div>
         </article>
         <article class="report-card report-summary-card" id="report-summary-card">
-          <div class="report-summary-head">
-            <div>
-              <strong>Resumo Consolidado</strong>
-              <span id="report-summary-period">Período filtrado</span>
+          <div class="summary-head report-summary-head">
+            <div class="summary-title-wrap">
+              <span class="summary-head-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 3 5-7"></path></svg>
+              </span>
+              <div>
+                <div class="summary-title">Resumo Consolidado</div>
+                <div class="summary-subtitle" id="report-summary-period">Per&iacute;odo filtrado</div>
+              </div>
             </div>
             <button type="button" class="summary-copy-btn report-summary-copy" id="report-summary-copy" title="Copiar resumo como imagem" aria-label="Copiar resumo como imagem">
               <span class="windows-copy-icon" aria-hidden="true"></span>
@@ -513,7 +518,7 @@
         <article class="report-card report-card-wide">
           <div class="report-card-head">
             <strong>Meta por destino</strong>
-            <span>Percentual carregado por praça</span>
+            <span>Percentual carregado por pra&ccedil;a</span>
           </div>
           <div class="report-chart-wrap"><canvas id="chart-report-destino"></canvas></div>
         </article>
@@ -526,7 +531,7 @@
         </article>
         <article class="report-card report-card-wide">
           <div class="report-card-head">
-            <strong>Evolução diária</strong>
+            <strong>Evolu&ccedil;&atilde;o di&aacute;ria</strong>
             <span>Carregado x meta</span>
           </div>
           <div class="report-chart-wrap"><canvas id="chart-report-evolucao"></canvas></div>
@@ -542,8 +547,8 @@
 <div id="history-overlay" class="modal-overlay hidden">
   <div class="modal history-modal">
     <div class="modal-header">
-      <span id="history-title">Histórico da Viagem</span>
-      <button class="modal-close" id="history-close" aria-label="Fechar">×</button>
+      <span id="history-title">Hist&oacute;rico da Viagem</span>
+      <button class="modal-close" id="history-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body history-body">
       <div class="history-list" id="history-list"></div>
@@ -558,7 +563,7 @@
   <div class="modal waitlist-modal">
     <div class="modal-header">
       <span>Lista de Espera</span>
-      <button class="modal-close" id="waitlist-close" aria-label="Fechar">×</button>
+      <button class="modal-close" id="waitlist-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body waitlist-body">
       <form class="waitlist-form" id="waitlist-form">
@@ -587,8 +592,8 @@
           <input type="time" id="waitlist-hora">
         </div>
         <div class="form-group">
-          <label>OBSERVAÇÃO</label>
-          <input type="text" id="waitlist-obs" placeholder="Observação">
+          <label>OBSERVA&Ccedil;&Atilde;O</label>
+          <input type="text" id="waitlist-obs" placeholder="Observa&ccedil;&atilde;o">
         </div>
         <button type="submit" class="btn-primary" id="waitlist-add">Adicionar</button>
       </form>
@@ -603,7 +608,7 @@
               <th>ORIGEM</th>
               <th>DATA</th>
               <th>HORA</th>
-              <th>OBSERVAÇÃO</th>
+              <th>OBSERVA&Ccedil;&Atilde;O</th>
               <th></th>
             </tr>
           </thead>
@@ -619,8 +624,8 @@
 
 <div id="meta-goal-overlay" class="modal-overlay hidden">
   <div class="modal meta-goal-modal">
-    <div class="meta-goal-icon">✓</div>
-    <div class="meta-goal-title">Parabéns Meta Cumprida</div>
+    <div class="meta-goal-icon">&#10003;</div>
+    <div class="meta-goal-title">Parab&eacute;ns Meta Cumprida</div>
     <div class="meta-goal-detail" id="meta-goal-detail"></div>
     <div class="meta-goal-footer">
       <button type="button" class="btn-primary" id="meta-goal-ok">OK</button>
@@ -631,18 +636,18 @@
 <div id="settings-modal-overlay" class="modal-overlay hidden">
   <div class="modal settings-modal">
     <div class="modal-header">
-      <span>Configurações</span>
-      <button class="modal-close" id="settings-modal-close" aria-label="Fechar">×</button>
+      <span>Configura&ccedil;&otilde;es</span>
+      <button class="modal-close" id="settings-modal-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body">
       <section class="settings-section settings-export-section">
         <div class="settings-section-head">
           <strong>EXPORTAR VIAGENS</strong>
-          <span>Excel por período</span>
+          <span>Excel por per&iacute;odo</span>
         </div>
         <div class="settings-export-form">
           <label>
-            <span>DATA INÍCIO</span>
+            <span>DATA IN&Iacute;CIO</span>
             <input type="date" id="export-start-date">
           </label>
           <label>
@@ -665,15 +670,15 @@
 <div id="users-modal-overlay" class="modal-overlay hidden">
   <div class="modal users-modal">
     <div class="modal-header">
-      <span>Usuários</span>
-      <button class="modal-close" id="users-modal-close" aria-label="Fechar">×</button>
+      <span>Usu&aacute;rios</span>
+      <button class="modal-close" id="users-modal-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body">
       <form class="user-create-form" id="user-create-form">
-        <div class="user-create-title">Novo usuário</div>
+        <div class="user-create-title">Novo usu&aacute;rio</div>
         <label>
           <span>Nome</span>
-          <input type="text" id="user-create-nome" placeholder="Nome do usuário" required>
+          <input type="text" id="user-create-nome" placeholder="Nome do usu&aacute;rio" required>
         </label>
         <label>
           <span>E-mail</span>
@@ -681,7 +686,7 @@
         </label>
         <label>
           <span>Senha</span>
-          <input type="password" id="user-create-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+          <input type="password" id="user-create-password" placeholder="M&iacute;nimo 6 caracteres" minlength="6" required>
         </label>
         <label>
           <span>Perfil</span>
@@ -695,7 +700,7 @@
           <input type="checkbox" id="user-create-ativo" checked>
           <span>Ativo</span>
         </label>
-        <button type="submit" class="btn-primary" id="user-create-submit">Criar usuário</button>
+        <button type="submit" class="btn-primary" id="user-create-submit">Criar usu&aacute;rio</button>
         <div class="user-create-message" id="user-create-message"></div>
       </form>
       <div class="users-table-wrap">
@@ -722,7 +727,7 @@
   <div class="ctx-item" id="ctx-copy">Copiar</div>
   <div class="ctx-item" id="ctx-edit">Editar</div>
   <div class="ctx-item" id="ctx-yellow">Marcar amarelo</div>
-  <div class="ctx-item" id="ctx-driver-swap">Troca Concluída</div>
+  <div class="ctx-item" id="ctx-driver-swap">Troca Conclu&iacute;da</div>
 </div>
 
 <div id="agendamento-menu" class="ctx-menu hidden">
@@ -733,7 +738,7 @@
 <div id="contrato-menu" class="ctx-menu hidden">
   <div class="ctx-item" id="contrato-copy">Copiar</div>
   <div class="ctx-item" id="contrato-adiantamento">Adiantamento Efetuado</div>
-  <div class="ctx-item" id="contrato-sem-contrato">Não faz contrato</div>
+  <div class="ctx-item" id="contrato-sem-contrato">N&atilde;o faz contrato</div>
   <div class="ctx-item danger" id="contrato-desfazer">Desfazer</div>
 </div>
 
@@ -744,3 +749,5 @@
 <script src="js/app.js?v=20260616-date-limit"></script>
 </body>
 </html>
+
+

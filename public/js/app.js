@@ -93,10 +93,10 @@ const CONFIG_FIELDS = [
 const CONFIG_COLOR_FIELDS = ['tipo', 'status', 'origem', 'destino'];
 const DEFAULT_CONFIG_COLORS = {
   tipo: {
-    AGREGADO: '#9a6500',
-    CARRETEIRO: '#c93434',
-    DEDICADO: '#0891b2',
-    FROTA: '#16803f'
+    AGREGADO: '#FFF200',
+    CARRETEIRO: '#DE3022',
+    DEDICADO: '#68E4E6',
+    FROTA: '#377D22'
   },
   status: {
     'CRIANDO DT': '#4f46e5',
@@ -106,11 +106,11 @@ const DEFAULT_CONFIG_COLORS = {
     PROGRAMAR: '#7c3aed',
     'AGUARDANDO CARREGAMENTO': '#0b2f5f',
     'ADIANTAMENTO / DESCARGA': '#b7791f',
-    ADIANTAMENTO: '#b7791f',
+    ADIANTAMENTO: '#115927',
     'EMITIR CTE': '#2563eb',
     MANIFESTO: '#2563eb',
     'FALTA ADIANTAMENTO': '#b7791f',
-    'AGENDAR DESCARGA': '#2563eb',
+    'AGENDAR DESCARGA': '#39107B',
     'SEM CADASTRO': '#c93434',
     'CONFERIR MOTORISTA': '#c93434',
     CONCLUIDO: '#049135'
@@ -1520,7 +1520,7 @@ function renderReportCharts(report) {
 
   const chartText = '#172033';
   const gridColor = 'rgba(148, 163, 184, .24)';
-  const typeColors = ['#fbbf24', '#16803f', '#0891b2', '#c93434'];
+  const typeColors = ['#FFF200', '#377D22', '#68E4E6', '#DE3022'];
   Chart.defaults.color = chartText;
   Chart.defaults.font.family = "'Inter', sans-serif";
 
@@ -1596,12 +1596,13 @@ function renderReportSummary(report) {
   }
 
   const cards = Array.isArray(report.summaryCards) ? report.summaryCards : [];
+  const periodLabel = `${formatDateBR(report.filters?.start || state.currentDate)} a ${formatDateBR(report.filters?.end || state.currentDate)}`;
   container.innerHTML = cards.length
-    ? cards.map(renderReportSummaryCard).join('')
+    ? cards.map(card => renderReportSummaryCard(card, periodLabel)).join('')
     : '<div class="report-empty">Nenhum dado para o resumo.</div>';
 }
 
-function renderReportSummaryCard(card) {
+function renderReportSummaryCard(card, periodLabel = '') {
   const headers = card.columns.map(column => `<th>${escapeHtml(column.destino)}</th>`).join('');
   const cell = (key) => card.columns.map(column => `<td>${formatKg(column[key])}</td>`).join('');
   const total = key => formatKg(card.totals[key]);
@@ -1614,11 +1615,34 @@ function renderReportSummaryCard(card) {
   const metaProductRows = renderReportSummaryProductRows(card.metaProductRows, metaCollapsed, 'card-meta-product-row');
   const totalProductRows = renderReportSummaryProductRows(card.totalProductRows, totalCollapsed, 'card-total-product-row');
 
-  return `<article class="report-summary-origin ${card.accentClass}">
-    <div class="report-summary-table-wrap">
-      <table class="report-summary-table">
+  return `<article class="summary-card report-summary-origin ${card.accentClass}">
+    <div class="summary-head report-summary-origin-head">
+      <div class="summary-title-wrap">
+        <div>
+          <div class="summary-title">Resumo Consolidado</div>
+          <div class="summary-subtitle">${escapeHtml(periodLabel)}</div>
+        </div>
+        <span class="summary-head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 3 5-7"></path></svg>
+        </span>
+      </div>
+      <div class="report-summary-head-actions">
+        <button type="button" class="summary-copy-btn report-summary-copy-inline" title="Copiar resumo como imagem" aria-label="Copiar resumo como imagem" onpointerdown="prepareReportSummaryCopyImage()" onclick="copyReportSummaryAsImage()">
+          <span class="windows-copy-icon" aria-hidden="true"></span>
+        </button>
+        <div class="summary-operation report-summary-operation report-summary-operation-header">
+          <div>
+            <span class="summary-card-kicker">Opera&ccedil;&atilde;o</span>
+            <strong>${escapeHtml(card.origem)}</strong>
+          </div>
+          <div class="summary-icon">${summaryIcon(card.origem)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="summary-card-table-wrap report-summary-table-wrap">
+      <table class="summary-card-table report-summary-table">
         <thead>
-          <tr><th>TIPO</th>${headers}<th>TOTAL</th></tr>
+          <tr><th>TIPO DE PRODUTO</th>${headers}<th>TOTAL</th></tr>
         </thead>
         <tbody>
           <tr class="card-row-meta"><td><button type="button" class="card-row-toggle report-summary-toggle" onclick="toggleReportSummaryMetaProducts('${escapeAttr(operationKey)}')" title="${metaTitle}"><span class="card-product-arrow">${metaCollapsed ? '&#9658;' : '&#9660;'}</span><span>META</span></button></td>${cell('meta')}<td>${total('meta')}</td></tr>
@@ -1631,25 +1655,9 @@ function renderReportSummaryCard(card) {
         </tbody>
       </table>
     </div>
-    <div class="report-summary-bottom">
-      <div class="report-summary-operation">
-        <div class="summary-icon">${summaryIcon(card.origem)}</div>
-        <div>
-          <span>OPERA&Ccedil;&Atilde;O</span>
-          <strong>${escapeHtml(card.origem)}</strong>
-        </div>
-      </div>
-      <div class="report-summary-kpis">
-        ${renderReportSummaryKpi('META', card.totals.meta, 'meta')}
-        ${renderReportSummaryKpi('FATURADO', card.totals.fat, 'fat')}
-        ${renderReportSummaryKpi('AGENCIADO', card.totals.agenc, 'agenc')}
-        ${renderReportSummaryKpi('TOTAL', card.totals.total, 'total')}
-        ${renderReportSummaryKpi('FALTA', card.totals.falta, 'falta')}
-      </div>
-      <div class="report-summary-percent" style="--percent:${percentFill}">
-        <strong>${card.percent}%</strong>
-        <span>% da Meta</span>
-      </div>
+    <div class="summary-progress-row report-summary-progress-row" style="--percent:${percentFill}">
+      <div class="summary-progress-track"><span></span></div>
+      <strong>${card.percent}%</strong>
     </div>
   </article>`;
 }
@@ -1675,8 +1683,8 @@ function toggleReportSummaryTotalProducts(operationKey) {
 }
 
 function renderReportSummaryKpi(label, value, kind) {
-  return `<div class="report-summary-kpi ${kind}">
-    <span>${label}</span>
+  return `<div class="summary-kpi report-summary-kpi ${kind}">
+    <span><i class="summary-kpi-icon" aria-hidden="true">${summaryKpiIcon(kind)}</i>${label}</span>
     <strong>${formatKg(value)}</strong>
   </div>`;
 }
@@ -2352,12 +2360,7 @@ async function commitFreteConsultEdit(cell) {
 }
 
 function scheduleMetaGoalAlert({ origem, destino, meta, realizado }) {
-  if (meta <= 0 || realizado < meta) return;
-  const key = metaGoalAlertKey(origem, destino);
-  if (state.metaGoalDismissed.has(key) || state.metaGoalAlertsShown.has(key)) return;
-  state.metaGoalAlertsShown.add(key);
-  state.metaGoalQueue.push({ key, origem, destino, meta, realizado });
-  setTimeout(showNextMetaGoalDialog, 0);
+  return;
 }
 
 function metaGoalAlertKey(origem, destino) {
@@ -2994,6 +2997,17 @@ async function handleDrawerClick(event) {
 }
 
 function handleDrawerContextMenu(event) {
+  const drawerField = event.target.closest('[data-drawer-edit-field]');
+  if (state.drawerTab === 'documentos' && drawerField) {
+    const field = drawerField.dataset.drawerEditField;
+    const viagem = selectedViagem();
+    if (viagem && isDrawerDocumentCopyField(field)) {
+      event.preventDefault();
+      showDrawerDocumentCopyMenu(event, viagem._id, field);
+      return;
+    }
+  }
+
   const target = event.target.closest('[data-drawer-advance-menu]');
   if (!target || !isAdmin()) return;
   const viagem = selectedViagem();
@@ -3002,6 +3016,27 @@ function handleDrawerContextMenu(event) {
   state.contratoTargetId = viagem._id;
   state.contratoTargetField = 'contrato';
   showContratoMenu(event, { dataset: { id: viagem._id, field: 'contrato' } });
+}
+
+function isDrawerDocumentCopyField(field) {
+  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field);
+}
+
+function showDrawerDocumentCopyMenu(event, id, field) {
+  hideCtxMenu();
+  hideAgendamentoMenu();
+  state.contratoTargetId = id;
+  state.contratoTargetField = field;
+
+  document.getElementById('contrato-copy').style.display = '';
+  document.getElementById('contrato-adiantamento').style.display = 'none';
+  document.getElementById('contrato-sem-contrato').style.display = 'none';
+  document.getElementById('contrato-desfazer').style.display = 'none';
+
+  const menu = document.getElementById('contrato-menu');
+  menu.style.left = `${Math.min(event.clientX, window.innerWidth - 180)}px`;
+  menu.style.top = `${Math.min(event.clientY, window.innerHeight - 48)}px`;
+  menu.classList.remove('hidden');
 }
 
 function handleMasterCellDrawerShortcut(event) {
@@ -4728,7 +4763,6 @@ function renderOriginSummaryCard(operacao) {
     const agencVal = sumPeso(agenciadoRows.filter(v => v.destino === dest));
     const totalVal = fatVal + agencVal;
     const faltaVal = metaVal - totalVal;
-    scheduleMetaGoalAlert({ origem, destino: dest, meta: metaVal, realizado: totalVal });
 
     totals.meta += metaVal;
     totals.fat += fatVal;
@@ -5508,7 +5542,7 @@ function formatDocumentNumber(value, field = '') {
 }
 
 function copyDocumentValue(value) {
-  return String(value || '').replace(/\./g, '');
+  return String(value || '').replace(/\D/g, '');
 }
 
 function mergeConfigColors(saved = {}) {
@@ -5790,6 +5824,12 @@ async function saveViagem() {
 
   if (!canSaveViagemDate(data.data)) return;
 
+  if (!data.produto) {
+    alert('Selecione PRODUTO para salvar a viagem.');
+    document.getElementById('f-produto')?.focus();
+    return;
+  }
+
   if (!data.origem) {
     alert('Informe ORIGEM para salvar a viagem.');
     document.getElementById('f-origem')?.focus();
@@ -6032,8 +6072,8 @@ function showContratoMenu(e, cell) {
   state.contratoTargetField = field;
 
   document.getElementById('contrato-copy').style.display = isStatusField ? 'none' : '';
-  document.getElementById('contrato-adiantamento').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
-  document.getElementById('contrato-sem-contrato').style.display = isContratoField && !concluida && canEditViagem(viagem) ? '' : 'none';
+  document.getElementById('contrato-adiantamento').style.display = isContratoField && (!concluida || isAdmin()) && canEditViagem(viagem) ? '' : 'none';
+  document.getElementById('contrato-sem-contrato').style.display = isContratoField && (!concluida || isAdmin()) && canEditViagem(viagem) ? '' : 'none';
   document.getElementById('contrato-desfazer').style.display = canUndoConclusao ? '' : 'none';
   document.getElementById('contrato-desfazer').textContent = isStatusField ? 'Tirar de conclu\u00eddo' : 'Desfazer';
 
