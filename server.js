@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const ExcelJS = require('exceljs');
 const supabase = require('./supabaseClient');
+const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
 
 const app = express();
 const server = http.createServer(app);
@@ -86,7 +87,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
   kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
-  status: ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'S/ CADASTRO', 'FALTA ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO'],
+  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'CONFERIR MOTORISTA'],
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA']
 };
@@ -450,8 +451,8 @@ async function ensureDefaultConfigOptions() {
         const statusCount = existing.filter(doc => doc.field === 'status').length;
         docs.push({
           field: 'status',
-          value: 'S/ CADASTRO',
-          normalized: normalizeUniqueValue('S/ CADASTRO'),
+          value: 'SEM CADASTRO',
+          normalized: normalizeUniqueValue('SEM CADASTRO'),
           ordem: statusCount + 1
         });
       }
@@ -501,28 +502,6 @@ async function latestViagemByPlaca(placa) {
     .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
     .filter(doc => isViagemBloqueada(doc) || normalizeUniqueValue(doc.status) === 'CONCLUIDO')
     .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
-}
-
-function documentAutoStatus(data = {}) {
-  const hasDt = Boolean(String(data.dt || '').trim());
-  const hasNota = Boolean(String(data.nota || '').trim());
-  const hasPedagio = Boolean(String(data.num_pedagio || '').trim());
-  const hasValorPedagio = Boolean(String(data.vlr_pedagio || '').trim());
-  if (hasDt && hasNota && hasPedagio && hasValorPedagio) return 'EMITIR CTE';
-  if (hasDt) return 'DT CRIADA';
-  return '';
-}
-
-const DOCUMENT_AUTO_STATUS_FIELDS = new Set(['dt', 'nota', 'num_pedagio', 'vlr_pedagio']);
-
-function shouldApplyDocumentAutoStatus(patch = {}) {
-  return Object.keys(patch).some(field => DOCUMENT_AUTO_STATUS_FIELDS.has(field));
-}
-
-function applyDocumentAutoStatus(data = {}) {
-  const status = documentAutoStatus(data);
-  if (status) data.status = status;
-  return status;
 }
 
 function normalizeWaitlistItem(data = {}) {
@@ -1033,13 +1012,11 @@ function isFrota(data = {}) {
 }
 
 function hasAdiantamentoLiberado(data = {}) {
-  return isFrota(data) || Boolean(normalizeContratoConclusao(data.conclusaoContrato));
+  return hasAdvanceOk(data);
 }
 
 function isViagemBloqueada(data = {}) {
-  return hasDocumentosCompletos(data) &&
-    hasAdiantamentoLiberado(data) &&
-    Boolean(String(data.descarga || '').trim());
+  return calculateTripStatus(data) === 'CONCLUIDO';
 }
 
 function hasDocumentosCompletos(data = {}) {
@@ -1047,10 +1024,7 @@ function hasDocumentosCompletos(data = {}) {
 }
 
 function statusOperacional(data = {}) {
-  if (hasDocumentosCompletos(data) && !hasAdiantamentoLiberado(data)) return 'FALTA ADIANTAMENTO';
-  if (hasDocumentosCompletos(data) && hasAdiantamentoLiberado(data) && !String(data.descarga || '').trim()) return 'AGENDAR DESCARGA';
-  if (isViagemBloqueada(data)) return 'CONCLUIDO';
-  return data.status || '';
+  return calculateTripStatus(data);
 }
 
 async function profileForUser(userId) {
@@ -1539,23 +1513,21 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const dateError = viagemDateValidationError(payload.data);
     if (dateError) return res.status(400).json({ error: dateError });
     delete payload.usuario;
+    const rawCadastroStatus = normalizeUniqueValue(payload.status);
+    const cadastroStatus = ['SEM CADASTRO', 'CONFERIR CADASTRO'].includes(rawCadastroStatus) ? 'SEM CADASTRO' : '';
+    payload.status = cadastroStatus;
     if (payload.marcadoAmarelo !== undefined) payload.marcadoAmarelo = Boolean(payload.marcadoAmarelo);
+    if (payload.programado !== undefined) payload.programado = Boolean(payload.programado);
+    if (payload.adiantamentoOk !== undefined) payload.adiantamentoOk = Boolean(payload.adiantamentoOk);
     if (payload.conclusaoContrato !== undefined) {
       payload.conclusaoContrato = normalizeContratoConclusao(payload.conclusaoContrato);
-      if (payload.conclusaoContrato && !hasDocumentosCompletos(payload)) {
-        return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
-      }
     }
-    const autoStatus = applyDocumentAutoStatus(payload);
-
-    if (isViagemBloqueada(payload)) {
-      payload.status = 'CONCLUIDO';
+    if (nomeAlteradoDoHistorico) payload.status = 'CONFERIR MOTORISTA';
+    payload.status = calculateTripStatus(payload);
+    if (payload.status) payload.usuario = profileDisplayName(req.userProfile);
+    if (payload.status === 'CONCLUIDO') {
       payload.usuario = '';
       payload.marcadoAmarelo = false;
-    } else if (normalizeUniqueValue(payload.status) === 'CONCLUIDO') {
-      payload.status = statusOperacional(payload);
-    } else if ((payload.status !== undefined && normalizeUniqueValue(payload.status)) || autoStatus) {
-      payload.usuario = profileDisplayName(req.userProfile);
     }
 
     const duplicate = await findDuplicateViagemFields(payload);
@@ -1581,8 +1553,8 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem nÃ£o encontrada' });
 
     const patch = { ...req.body };
-    const manualStatus = Boolean(patch.__manualStatus);
     delete patch.__manualStatus;
+    delete patch.status;
     normalizeViagemDocumentNumbers(patch);
     applyFrotaContratoRule(patch);
     if (Object.prototype.hasOwnProperty.call(patch, 'data')) {
@@ -1593,6 +1565,8 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     delete patch.historico;
     if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
     if (patch.trocaMotoristaConcluida !== undefined) patch.trocaMotoristaConcluida = Boolean(patch.trocaMotoristaConcluida);
+    if (patch.programado !== undefined) patch.programado = Boolean(patch.programado);
+    if (patch.adiantamentoOk !== undefined) patch.adiantamentoOk = Boolean(patch.adiantamentoOk);
     if (patch.descarga !== undefined) patch.descarga = normalizeDescargaDateTime(patch.descarga);
     if (isViagemBloqueada(current)) {
       const isAdminUser = req.userProfile?.role === 'admin';
@@ -1614,6 +1588,8 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         }
         const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
         if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
+        const lockedNextData = applyFrotaContratoRule({ ...current, ...patch });
+        patch.status = calculateTripStatus(lockedNextData);
         const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
         broadcast({ type: 'viagem_atualizada', payload: updated });
         return res.json(updated);
@@ -1623,46 +1599,19 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (patch.conclusaoContrato !== undefined) {
       patch.conclusaoContrato = normalizeContratoConclusao(patch.conclusaoContrato);
     }
-    const statusWasSent = Object.prototype.hasOwnProperty.call(req.body, 'status');
-    const statusChanged = statusWasSent && normalizeUniqueValue(req.body.status) !== normalizeUniqueValue(current.status);
 
     const nextData = applyFrotaContratoRule({ ...current, ...patch });
     if (normalizeTipo(nextData.tipo) === 'FROTA') patch.contrato = nextData.contrato;
-    if (patch.conclusaoContrato && !hasDocumentosCompletos(nextData)) {
-      return res.status(400).json({ error: 'Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.' });
-    }
-    const autoStatus = !manualStatus && shouldApplyDocumentAutoStatus(patch) ? applyDocumentAutoStatus(nextData) : '';
-    if (autoStatus) patch.status = autoStatus;
-    const pamcardChangedToOk = Object.prototype.hasOwnProperty.call(patch, 'pamcard') &&
-      normalizeUniqueValue(nextData.pamcard) === 'PAMCARD OK';
-    const shouldPromoteCadastroAfterPamcard = !manualStatus &&
-      !autoStatus &&
-      pamcardChangedToOk &&
-      normalizeUniqueValue(current.status) === 'CONFERIR CADASTRO';
-    if (shouldPromoteCadastroAfterPamcard) {
-      patch.status = 'CRIAR DT';
-      nextData.status = 'CRIAR DT';
-    }
-    if (isViagemBloqueada(nextData)) {
-      patch.status = 'CONCLUIDO';
+    patch.status = calculateTripStatus(nextData);
+    nextData.status = patch.status;
+    if (patch.status === 'CONCLUIDO') {
       patch.usuario = '';
       if (!isViagemBloqueada(current)) {
         patch.marcadoAmarelo = false;
         nextData.marcadoAmarelo = false;
       }
-      nextData.status = 'CONCLUIDO';
       nextData.usuario = '';
-    } else if (normalizeUniqueValue(nextData.status) === 'CONCLUIDO') {
-      patch.status = statusOperacional(nextData);
-      nextData.status = patch.status;
-    } else if (normalizeContratoConclusao(nextData.conclusaoContrato) && !hasDocumentosCompletos(nextData)) {
-      patch.conclusaoContrato = '';
-      patch.status = '';
-      patch.usuario = '';
-      nextData.conclusaoContrato = '';
-      nextData.status = '';
-      nextData.usuario = '';
-    } else if (statusChanged || autoStatus || shouldPromoteCadastroAfterPamcard) {
+    } else if (normalizeUniqueValue(current.status) !== normalizeUniqueValue(patch.status)) {
       patch.usuario = profileDisplayName(req.userProfile);
       nextData.usuario = patch.usuario;
     }

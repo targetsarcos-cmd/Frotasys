@@ -182,7 +182,15 @@
   <section class="summary-layout">
     <div class="summary-panel" id="summary-arcos">
       <div class="summary-head">
-        <div class="summary-title">Resumo Consolidado</div>
+        <div class="summary-title-wrap">
+          <span class="summary-head-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M7 15l4-4 3 2 5-7"></path></svg>
+          </span>
+          <div>
+            <div class="summary-title">Resumo Consolidado</div>
+            <div class="summary-subtitle">Visão geral do desempenho por origem</div>
+          </div>
+        </div>
         <button type="button" class="summary-copy-btn" id="summary-copy-btn" title="Copiar resumo como imagem" aria-label="Copiar resumo como imagem">
           <span class="windows-copy-icon" aria-hidden="true"></span>
         </button>
@@ -264,7 +272,7 @@
             <option value="SEM PAMCARD">SEM PAMCARD</option>
           </select>
         </div>
-        <div class="form-group hidden-on-new">
+        <div class="form-group hidden-on-new is-hidden" style="display:none">
           <label>STATUS</label>
           <select id="f-status">
             <option value="">-</option>

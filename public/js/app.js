@@ -61,7 +61,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['CRIANDO DT', 'CADASTRANDO', 'AGUARDANDO CARREGAMENTO', 'MANIFESTO', 'S/ CADASTRO', 'FALTA ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO'];
+const STATUS = ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'CONFERIR MOTORISTA'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -101,12 +101,19 @@ const DEFAULT_CONFIG_COLORS = {
   status: {
     'CRIANDO DT': '#4f46e5',
     CADASTRANDO: '#0f766e',
-    'AGUARDANDO CARREGAMENTO': '#b7791f',
+    'CRIAR DT / PROGRAMAR': '#7c3aed',
+    'CRIAR DT': '#0f766e',
+    PROGRAMAR: '#7c3aed',
+    'AGUARDANDO CARREGAMENTO': '#0b2f5f',
+    'ADIANTAMENTO / DESCARGA': '#b7791f',
+    ADIANTAMENTO: '#b7791f',
+    'EMITIR CTE': '#2563eb',
     MANIFESTO: '#2563eb',
     'FALTA ADIANTAMENTO': '#b7791f',
     'AGENDAR DESCARGA': '#2563eb',
+    'SEM CADASTRO': '#c93434',
     'CONFERIR MOTORISTA': '#c93434',
-    CONCLUIDO: '#16803f'
+    CONCLUIDO: '#049135'
   },
   origem: {},
   destino: {}
@@ -618,16 +625,6 @@ function initUI() {
       }
     }
 
-    const statusCell = e.target.closest('td[data-field="status"]');
-    if (statusCell) {
-      const viagem = state.viagens.find(item => item._id === statusCell.dataset.id);
-      if (isAdmin() && isViagemConcluida(viagem)) {
-        e.stopPropagation();
-        showContratoMenu(e, statusCell);
-        return;
-      }
-    }
-
     const documentCell = e.target.closest('td[data-field="dt"]:not(.cell-select), td[data-field="cte"]:not(.cell-select), td[data-field="manifesto"]:not(.cell-select), td[data-field="contrato"]:not(.cell-select), td[data-field="nota"]:not(.cell-select), td[data-field="num_pedagio"]:not(.cell-select)');
     if (documentCell) {
       e.stopPropagation();
@@ -704,9 +701,7 @@ function canEditViagens() {
 }
 
 function isViagemConcluida(viagem) {
-  return hasDocumentosCompletos(viagem) &&
-    hasAdiantamentoLiberado(viagem) &&
-    Boolean(String(viagem?.descarga || '').trim());
+  return normalizeOption(viagem?.status) === 'CONCLUIDO';
 }
 
 function canEditViagem(viagem) {
@@ -2670,9 +2665,6 @@ function selectedViagem() {
 }
 
 function viagemStatusDisplay(viagem) {
-  if (hasDocumentosCompletos(viagem) && !hasAdiantamentoLiberado(viagem)) return 'FALTA ADIANTAMENTO';
-  if (hasDocumentosCompletos(viagem) && hasAdiantamentoLiberado(viagem) && !String(viagem?.descarga || '').trim()) return 'AGENDAR DESCARGA';
-  if (isViagemConcluida(viagem)) return 'CONCLUIDO';
   return String(viagem?.status || '').trim();
 }
 
@@ -2752,7 +2744,7 @@ function renderDrawerGerais() {
 }
 
 function renderDrawerDocuments() {
-  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')])}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
 }
 
 function renderDrawerAgendamento() {
@@ -2816,8 +2808,8 @@ function renderDrawerObservacoes() {
   return `<div class="drawer-card-grid single">${drawerCard('OBSERVA\u00c7\u00d5ES', [drawerTextarea('obs','Observa\u00e7\u00f5es')])}</div>`;
 }
 
-function drawerCard(title, content) {
-  return `<section class="drawer-card"><h3>${drawerCardIcon(title)}<span>${escapeHtml(title)}</span></h3>${content.join('')}</section>`;
+function drawerCard(title, content, action = '') {
+  return `<section class="drawer-card"><h3><span class="drawer-card-heading">${drawerCardIcon(title)}<span>${escapeHtml(title)}</span></span>${action}</h3>${content.join('')}</section>`;
 }
 
 function drawerFieldRow(...fields) {
@@ -2842,14 +2834,26 @@ function drawerField(field, label, type = 'text') {
   const isActive = state.drawerActiveField === field;
   const editable = canEditDrawerField(field);
   const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : drawerValue(field);
-  const display = field === 'peso' ? formatPeso(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
-  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
+  const display = field === 'peso' ? formatPeso(value) : field === 'vlr_pedagio' ? formatMoney(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
   const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'datetime-local' : 'text';
   return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" autofocus></label>`;
 }
 
 function drawerReadOnlyValue(label, value) {
   return `<label class="drawer-field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+}
+
+function drawerScheduledTruckButton() {
+  const viagem = selectedViagem();
+  const scheduled = viagem?.programado === true;
+  const disabled = !canEditDrawerViagem(viagem) || state.drawerSaving;
+  const label = scheduled ? 'Programado' : 'Programar';
+  const title = scheduled ? 'Viagem programada' : 'Marcar viagem como programada';
+  return `<button type="button" class="scheduled-truck ${scheduled ? 'active' : ''}" data-drawer-action="toggle-programado" aria-pressed="${scheduled ? 'true' : 'false'}" aria-label="${escapeAttr(scheduled ? 'Desmarcar viagem como programada' : 'Marcar viagem como programada')}" title="${escapeAttr(title)}"${disabled ? ' disabled' : ''}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v9H3z"></path><path d="M14 10h4l3 3v3h-7z"></path><path d="M5 16a2 2 0 1 0 4 0M16 16a2 2 0 1 0 4 0"></path><path d="M7 7V5h4"></path></svg>
+    <span>${label}</span>
+  </button>`;
 }
 
 function drawerSelect(field, label) {
@@ -2880,10 +2884,10 @@ function drawerAdvanceButton() {
   const viagem = selectedViagem();
   if (!hasDocumentosCompletos(viagem)) return '<div class="drawer-hint">Adiantamento liberado apos documentos completos.</div>';
   if (normalizeTipo(viagem?.tipo) === 'FROTA') return '<div class="drawer-hint">Adiantamento dispensado para frota.</div>';
-  const done = Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
-  if (done) return '<button type="button" class="drawer-action-pill is-done" data-drawer-advance-menu="true" title="Botao direito para opcoes">Adiantamento efetuado</button>';
+  const done = viagem?.adiantamentoOk === true || Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
+  if (done) return '<button type="button" class="drawer-action-pill is-done" data-drawer-advance-menu="true" title="Botao direito para opcoes">Adiantamento OK</button>';
   if (!canEditDrawerViagem(viagem)) return '<div class="drawer-hint">Adiantamento pendente.</div>';
-  return `<button type="button" class="drawer-action-pill" data-drawer-action="advance">Marcar adiantamento efetuado</button>`;
+  return `<button type="button" class="drawer-action-pill" data-drawer-action="advance">Marcar Adiantamento OK</button>`;
 }
 
 function whatsappHref(phone) {
@@ -2979,6 +2983,10 @@ async function handleDrawerClick(event) {
   const action = event.target.closest('[data-drawer-action]')?.dataset.drawerAction;
   if (!action) return;
   if (action === 'close') return closeTravelDrawer();
+  if (action === 'toggle-programado') {
+    await toggleDrawerProgramado();
+    return;
+  }
   if (action === 'advance') {
     await concluirViagemAdiantamento();
     return;
@@ -3047,7 +3055,7 @@ function canEditDrawerField(field) {
 }
 
 function canEditDrawerViagem(viagem) {
-  return Boolean(viagem) && !isViagemConcluida(viagem) && canEditViagem(viagem);
+  return Boolean(viagem) && (isAdmin() || !isViagemConcluida(viagem)) && canEditViagem(viagem);
 }
 
 async function commitActiveDrawerField() {
@@ -3084,14 +3092,27 @@ async function commitActiveDrawerField() {
 async function concluirViagemAdiantamento() {
   const viagem = selectedViagem();
   if (!viagem || !hasDocumentosCompletos(viagem)) return;
-  await updateViagemField(viagem._id, 'conclusaoContrato', 'ADIANTAMENTO EFETUADO');
+  await updateViagemField(viagem._id, 'adiantamentoOk', true);
+}
+
+async function toggleDrawerProgramado() {
+  const viagem = selectedViagem();
+  if (!viagem || state.drawerSaving || !canEditDrawerViagem(viagem)) return;
+  state.drawerSaving = true;
+  const updated = await updateViagemField(viagem._id, 'programado', viagem.programado !== true, { skipRender: true });
+  state.drawerSaving = false;
+  if (!updated) return renderAll();
+  state.selectedViagemDetails = updated;
+  const idx = state.viagens.findIndex(item => item._id === viagem._id);
+  if (idx !== -1) state.viagens[idx] = updated;
+  renderAll();
 }
 
 async function saveDrawerViagem() {
   const viagem = selectedViagem();
   if (!viagem || !state.drawerDraft || state.drawerSaving) return;
   const patch = {};
-  const fields = ['placa','nome','tipo','eixos','status','carroceria','pamcard','telefone','telefone2','origem','destino','produto','peso','agendamento','descarga','dt','cte','manifesto','contrato','nota','hora_nf','num_pedagio','valor_adiantamento','vlr_pedagio','obs','data'];
+  const fields = ['placa','nome','tipo','eixos','carroceria','pamcard','telefone','telefone2','origem','destino','produto','peso','agendamento','descarga','dt','cte','manifesto','contrato','nota','hora_nf','num_pedagio','valor_adiantamento','vlr_pedagio','obs','data'];
   fields.forEach(field => {
     const next = normalizeFieldValue(field, state.drawerDraft[field] || '');
     const current = normalizeFieldValue(field, viagem[field] || '');
@@ -3123,7 +3144,7 @@ const FIELDS = [
   { key: 'destino', label: 'DESTINO', select: true },
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
-  { key: 'status', label: 'STATUS', select: true }
+  { key: 'status', label: 'STATUS' }
 ];
 
 function renderTable(secao) {
@@ -3189,9 +3210,9 @@ function renderTableRow(v) {
       <strong>${escapeHtml(formatPeso(v.peso || '') || '-')}</strong>
     </td>
     <td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
-      <span class="modern-badge schedule-chip">${escapeHtml(normalizeHours(v.agendamento || '') || '-')}</span>
+      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(normalizeHours(v.agendamento || '') || '-')}</span></span>
     </td>
-    <td data-field="status" data-id="${escapeAttr(v._id)}" data-status-label="${escapeAttr(status || '-')}" class="status-cell" style="--status-font-size:${statusFontSize(status)}px;" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()">
+    <td data-field="status" data-id="${escapeAttr(v._id)}" data-status-label="${escapeAttr(status || '-')}" class="status-cell" style="--status-font-size:${statusFontSize(status)}px;">
       ${statusBadge}
     </td>
     <td class="master-actions" onclick="event.stopPropagation()">
@@ -3201,11 +3222,9 @@ function renderTableRow(v) {
 }
 
 function renderStatusButton(viagem, status) {
-  const canChange = canEditViagemField(viagem, 'status');
   const statusColor = statusHexColor(status);
   const style = `--status-color:${statusColor};--status-font-size:${statusFontSize(status)}px;`;
-  const disabled = canChange ? '' : ' disabled';
-  return `<select class="modern-badge status-chip status-select ${statusSlug(status)}" style="${escapeAttr(style)}" data-field="status" data-id="${escapeAttr(viagem._id)}" onchange="updateInlineSelect(this)" onclick="event.stopPropagation()" oncontextmenu="event.stopPropagation()" aria-label="Selecionar status"${disabled}>${renderOptions(getSelectOptions('status'), status)}</select>`;
+  return `<div class="modern-badge status-chip status-select status-badge ${statusSlug(status)}" style="${escapeAttr(style)}" aria-label="Status ${escapeAttr(status || '-')}">${escapeHtml(status || '-')}</div>`;
 }
 
 function statusFontSize(status) {
@@ -3421,7 +3440,7 @@ function renderTableHeader(secao) {
 }
 
 function hasDocumentosCompletos(viagem) {
-  return ['cte', 'nota', 'manifesto', 'contrato'].every(field => String(viagem[field] || '').trim() !== '');
+  return ['cte', 'manifesto', 'contrato'].every(field => String(viagem[field] || '').trim() !== '');
 }
 
 function normalizeContratoConclusao(value) {
@@ -3430,7 +3449,7 @@ function normalizeContratoConclusao(value) {
 }
 
 function hasAdiantamentoLiberado(viagem) {
-  return normalizeTipo(viagem?.tipo) === 'FROTA' || Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
+  return normalizeTipo(viagem?.tipo) === 'FROTA' || viagem?.adiantamentoOk === true || Boolean(normalizeContratoConclusao(viagem?.conclusaoContrato));
 }
 
 function hasNotaPreenchida(viagem) {
@@ -4778,14 +4797,29 @@ function renderOriginSummaryCard(operacao) {
         <small>% da Meta</small>
       </div>
     </div>
+    <div class="summary-progress-row" style="--percent:${percentFill}">
+      <div class="summary-progress-track"><span></span></div>
+      <strong>${percent}%</strong>
+    </div>
   </article>`;
 }
 
 function renderSummaryKpi(label, value, kind) {
   return `<div class="summary-kpi ${kind}">
-    <span>${label}</span>
+    <span><i class="summary-kpi-icon" aria-hidden="true">${summaryKpiIcon(kind)}</i>${label}</span>
     <strong>${formatKg(value)}</strong>
   </div>`;
+}
+
+function summaryKpiIcon(kind) {
+  const icons = {
+    meta: '&#9678;',
+    fat: '&#128462;',
+    agenc: '&#128101;',
+    total: '&Sigma;',
+    falta: '&#8722;'
+  };
+  return icons[kind] || '&#9678;';
 }
 
 function summaryIcon(origem) {
@@ -5177,7 +5211,7 @@ async function updateInlineSelect(select) {
   if (!canEditViagemField(viagem, field)) return renderAll();
   const value = normalizeFieldValue(field, select.value);
   select.disabled = true;
-  const updated = await updateViagemField(id, field, value, field === 'status' ? { manualStatus: true } : {});
+  const updated = await updateViagemField(id, field, value);
   select.disabled = false;
   if (!updated) renderAll();
 }
@@ -5390,7 +5424,6 @@ async function updateViagemField(id, field, value, options = {}) {
   const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
   const nextValue = normalizeFieldValue(field, value);
   const body = { [field]: nextValue };
-  if (options.manualStatus) body.__manualStatus = true;
   const updated = await apiFetch(`/api/viagens/${id}`, {
     method: 'PUT',
     body: JSON.stringify(body)
@@ -5429,6 +5462,8 @@ function cancelInlineEdit() {
 function normalizeFieldValue(field, value) {
   if (field === 'marcadoAmarelo') return Boolean(value);
   if (field === 'trocaMotoristaConcluida') return Boolean(value);
+  if (field === 'programado') return Boolean(value);
+  if (field === 'adiantamentoOk') return Boolean(value);
   if (field === 'descarga') return normalizeDescargaDateTime(value);
   if (TIME_FIELDS.includes(field)) return normalizeHours(value);
   if (field === 'telefone' || field === 'telefone2') return normalizePhoneList(value);
@@ -5537,7 +5572,7 @@ function openModal(viagem = null, defaults = {}) {
   document.getElementById('modal-title').textContent = viagem ? 'Editar Viagem' : 'Nova Viagem';
   document.querySelectorAll('#modal-overlay .hidden-on-new').forEach(el => el.classList.toggle('is-hidden', !viagem));
   document.querySelectorAll('#modal-overlay .bulk-only').forEach(el => el.classList.toggle('is-hidden', !!viagem));
-  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','status','usuario','agendamento','descarga','telefone','origem','destino','peso','obs'];
+  const fields = ['placa','nome','tipo','produto','secao','carroceria','kanguru','pamcard','usuario','agendamento','descarga','telefone','origem','destino','peso','obs'];
   fields.forEach(f => {
     const el = document.getElementById(`f-${f.replace('_','-')}`);
     if (!el) return;
@@ -5582,7 +5617,6 @@ async function autofillViagemByPlaca(placa, token) {
   const history = await apiFetch(`/api/viagens/placa/${encodeURIComponent(placa)}/latest`);
   if (state.editingId || token !== state.plateAutofillToken || v('f-placa').toUpperCase() !== placa) return;
   if (!history) {
-    setModalSelectValue('f-status', 'CONFERIR CADASTRO');
     return;
   }
 
@@ -5591,7 +5625,6 @@ async function autofillViagemByPlaca(placa, token) {
   setModalSelectValue('f-carroceria', history.carroceria || '');
   setModalSelectValue('f-pamcard', 'PAMCARD OK');
   setModalFieldValue('f-telefone', normalizePhoneList(history.telefone || ''));
-  setModalSelectValue('f-status', history.cadastroOk ? 'CRIAR DT' : 'CONFERIR CADASTRO');
 }
 
 function setModalFieldValue(id, value) {
@@ -5744,7 +5777,6 @@ async function saveViagem() {
     carroceria: v('f-carroceria'),
     kanguru: v('f-kanguru'),
     pamcard: v('f-pamcard'),
-    status: v('f-status'),
     descarga: normalizeDescargaDateTime(v('f-descarga')),
     agendamento: normalizeHours(v('f-agendamento')),
     telefone: normalizePhoneList(v('f-telefone')),
@@ -6047,17 +6079,17 @@ async function concluirContrato(tipo) {
   if (!id) return;
   const viagem = state.viagens.find(item => item._id === id);
   if (!hasDocumentosCompletos(viagem)) {
-    alert('Preencha CT-E, MANIFESTO, CONTRATO e NOTA antes de concluir.');
+    alert('Preencha CT-E, MANIFESTO e CONTRATO antes de concluir.');
     return;
   }
-  await updateViagemField(id, 'conclusaoContrato', tipo);
+  await updateViagemField(id, 'adiantamentoOk', true);
 }
 
 async function desfazerConclusaoContrato() {
   const id = state.contratoTargetId;
   hideContratoMenu();
   if (!id || !isAdmin()) return;
-  await updateViagemField(id, 'conclusaoContrato', '');
+  await updateViagemField(id, 'adiantamentoOk', false);
 }
 
 async function toggleAgendamentoVerde() {
