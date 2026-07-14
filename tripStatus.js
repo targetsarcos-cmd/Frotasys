@@ -33,8 +33,11 @@ function hasRegistrationPending(trip = {}) {
   if (isConferirMotoristaPendente(trip)) return 'CONFERIR MOTORISTA';
   if (hasPamcardOk(trip.pamcard)) return '';
   const status = normalizeText(trip.status);
-  if (['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO'].includes(status)) return 'SEM CADASTRO';
-  if (!normalizeText(trip.pamcard)) return 'SEM CADASTRO';
+  const hasDt = hasValue(trip.dt);
+  if (['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO', 'SEM CADASTRO / DT CRIADA'].includes(status)) {
+    return hasDt ? 'SEM CADASTRO / DT CRIADA' : 'SEM CADASTRO';
+  }
+  if (!normalizeText(trip.pamcard)) return hasDt ? 'SEM CADASTRO / DT CRIADA' : 'SEM CADASTRO';
   return '';
 }
 

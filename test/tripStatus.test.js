@@ -67,5 +67,6 @@ test('pendencia cadastral tem prioridade', () => {
     adiantamentoOk: true,
     descarga: '2026-07-11T15:00'
   };
-  assert.equal(calculateTripStatus(trip), 'SEM CADASTRO');
+  assert.equal(calculateTripStatus({ ...trip, dt: '' }), 'SEM CADASTRO');
+  assert.equal(calculateTripStatus(trip), 'SEM CADASTRO / DT CRIADA');
 });

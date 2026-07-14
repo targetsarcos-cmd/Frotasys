@@ -25,6 +25,9 @@ const state = {
   lembrete: { data: '', texto: '' },
   operationMessages: {},
   operationMessageSaveTimers: {},
+  workTypes: [],
+  workSessions: [],
+  workPopover: null,
   lembreteOpen: false,
   lembreteSaveTimer: null,
   metaGoalAlertsShown: new Set(),
@@ -63,7 +66,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'CONFERIR MOTORISTA'];
+const STATUS = ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -105,7 +108,7 @@ const DEFAULT_CONFIG_COLORS = {
     CADASTRANDO: '#0f766e',
     'CRIAR DT / PROGRAMAR': '#6D28D9',
     'CRIAR DT': '#7C3AED',
-    PROGRAMAR: '#9333EA',
+    PROGRAMAR: '#ABA110',
     'AGUARDANDO CARREGAMENTO': '#0B2F5F',
     'ADIANTAMENTO / DESCARGA': '#C2410C',
     ADIANTAMENTO: '#115927',
@@ -114,6 +117,7 @@ const DEFAULT_CONFIG_COLORS = {
     'FALTA ADIANTAMENTO': '#C2410C',
     'AGENDAR DESCARGA': '#39107B',
     'SEM CADASTRO': '#C93434',
+    'SEM CADASTRO / DT CRIADA': '#BE185D',
     'CONFERIR MOTORISTA': '#B91C1C',
     CONCLUIDO: '#049135'
   },
@@ -122,10 +126,11 @@ const DEFAULT_CONFIG_COLORS = {
 };
 const STATUS_COLOR_OVERRIDES = {
   'SEM CADASTRO': '#C93434',
+  'SEM CADASTRO / DT CRIADA': '#BE185D',
   'CONFERIR MOTORISTA': '#B91C1C',
   'CRIAR DT / PROGRAMAR': '#6D28D9',
   'CRIAR DT': '#7C3AED',
-  PROGRAMAR: '#9333EA',
+  PROGRAMAR: '#ABA110',
   'AGUARDANDO CARREGAMENTO': '#0B2F5F',
   'EMITIR CTE': '#2563EB',
   'ADIANTAMENTO / DESCARGA': '#C2410C',
@@ -391,6 +396,19 @@ function handleWsMessage(msg) {
   } else if (type === 'operation_messages_atualizadas') {
     state.operationMessages = normalizeOperationMessages(payload);
     if (!document.getElementById('settings-modal-overlay')?.classList.contains('hidden')) renderSettingsModal();
+  } else if (type === 'perfil_atualizado') {
+    if (payload?.userId && payload.userId === (state.userProfile?.user_id || state.userProfile?.id)) {
+      state.userProfile = { ...state.userProfile, ...payload.profile };
+      applyPermissions();
+      renderAllUnlessInlineEditing();
+    }
+  } else if (type === 'work_types_atualizados') {
+    state.workTypes = normalizeWorkTypes(payload);
+    if (!document.getElementById('settings-modal-overlay')?.classList.contains('hidden')) renderSettingsModal();
+    renderAllUnlessInlineEditing();
+  } else if (type === 'work_sessions_atualizadas') {
+    state.workSessions = normalizeWorkSessions(payload);
+    renderAllUnlessInlineEditing();
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
@@ -424,6 +442,8 @@ async function loadAll() {
   state.listaEspera = normalizeListaEspera(data.listaEspera);
   state.lembrete = normalizeLembrete(data.lembrete);
   state.operationMessages = normalizeOperationMessages(data.operationMessages);
+  state.workTypes = normalizeWorkTypes(data.workTypes);
+  state.workSessions = normalizeWorkSessions(data.workSessions);
   state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
   clearReminderStatus();
   renderAll();
@@ -742,16 +762,29 @@ function canDeleteViagem(viagem) {
 function applyPermissions() {
   document.body.dataset.role = state.userProfile?.role || 'visualizador';
   const loggedUser = document.getElementById('logged-user-name');
-  if (loggedUser) loggedUser.textContent = loggedUserDisplayName();
+  if (loggedUser) loggedUser.innerHTML = loggedUserBadgeHtml();
   updateUndoButton();
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
-  document.getElementById('btn-settings').classList.toggle('is-hidden', !isAdmin());
+  document.getElementById('btn-settings').classList.remove('is-hidden');
   updateThemeControls();
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
 }
 
 function loggedUserDisplayName() {
-  return String(state.userProfile?.nome || state.userProfile?.email || '').trim();
+  return String(state.userProfile?.displayName || state.userProfile?.nome || state.userProfile?.email || '').trim();
+}
+
+function loggedUserAvatarUrl() {
+  return String(state.userProfile?.avatarUrl || '').trim();
+}
+
+function loggedUserBadgeHtml() {
+  const name = loggedUserDisplayName();
+  const avatar = loggedUserAvatarUrl();
+  const visual = avatar
+    ? `<img src="${escapeAttr(avatar)}" alt="">`
+    : `<span>${escapeHtml(initialsFromName(name))}</span>`;
+  return `<span class="logged-user-avatar">${visual}</span><strong>${escapeHtml(name)}</strong>`;
 }
 
 function normalizeLembrete(lembrete = {}) {
@@ -773,6 +806,39 @@ function normalizeOperationMessages(payload = {}) {
     if (normalized) acc[normalized] = String(value || '');
     return acc;
   }, {});
+}
+
+function normalizeWorkTypes(payload = []) {
+  return (Array.isArray(payload) ? payload : []).map(item => ({
+    ...item,
+    _id: item._id || item.id || '',
+    name: String(item.name || '').trim(),
+    code: String(item.code || '').trim(),
+    color: isHexColor(item.color) ? item.color : '#2563eb',
+    icon: String(item.icon || 'play').trim() || 'play',
+    displayOrder: Number(item.displayOrder || 999),
+    isActive: item.isActive !== false,
+    allowPause: item.allowPause !== false,
+    allowMultipleUsers: Boolean(item.allowMultipleUsers),
+    usageCount: Number(item.usageCount || 0)
+  })).sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
+}
+
+function normalizeWorkSessions(payload = []) {
+  return (Array.isArray(payload) ? payload : []).map(item => ({
+    ...item,
+    _id: item._id || item.id || '',
+    tripId: String(item.tripId || ''),
+    workTypeId: String(item.workTypeId || ''),
+    userId: String(item.userId || ''),
+    userNameSnapshot: String(item.userNameSnapshot || ''),
+    userAvatarSnapshot: String(item.userAvatarSnapshot || ''),
+    status: String(item.status || ''),
+    startedAt: String(item.startedAt || ''),
+    pausedAt: String(item.pausedAt || ''),
+    resumedAt: String(item.resumedAt || ''),
+    workType: item.workType || null
+  }));
 }
 
 function stripReminderNumber(line) {
@@ -3240,7 +3306,8 @@ const FIELDS = [
   { key: 'destino', label: 'DESTINO', select: true },
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
-  { key: 'status', label: 'STATUS' }
+  { key: 'status', label: 'STATUS' },
+  { key: 'trabalho', label: 'TRABALHO', noSort: true }
 ];
 
 function renderTable(secao) {
@@ -3311,6 +3378,9 @@ function renderTableRow(v) {
     <td data-field="status" data-id="${escapeAttr(v._id)}" data-status-label="${escapeAttr(status || '-')}" class="status-cell" style="--status-font-size:${statusFontSize(status)}px;">
       ${statusBadge}
     </td>
+    <td class="work-cell" onclick="event.stopPropagation()">
+      ${renderWorkCell(v)}
+    </td>
     <td class="master-actions" onclick="event.stopPropagation()">
       ${rowActionMenu(v)}
     </td>
@@ -3321,6 +3391,221 @@ function renderStatusButton(viagem, status) {
   const statusColor = statusHexColor(status);
   const style = `--status-color:${statusColor};--status-font-size:${statusFontSize(status)}px;`;
   return `<div class="modern-badge status-chip status-select status-badge ${statusSlug(status)}" style="${escapeAttr(style)}" aria-label="Status ${escapeAttr(status || '-')}">${escapeHtml(status || '-')}</div>`;
+}
+
+function workSessionForTrip(tripId) {
+  return state.workSessions.find(session => session.tripId === tripId) || null;
+}
+
+function workTypeById(id) {
+  return state.workTypes.find(type => type._id === id || type.id === id) || null;
+}
+
+function currentUserWorkId() {
+  return String(state.userProfile?.user_id || state.userProfile?.id || '').trim();
+}
+
+function canManageWorkCell(session = {}) {
+  return isAdmin() || String(session.userId || '') === currentUserWorkId();
+}
+
+function initialsFromName(name = '') {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'U';
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+}
+
+function shortName(name = '') {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? `${parts[0]} ${parts[1]}` : (parts[0] || 'Usu\u00e1rio');
+}
+
+function workDurationLabel(startedAt) {
+  const start = new Date(startedAt || '');
+  if (Number.isNaN(start.getTime())) return '';
+  const minutes = Math.max(0, Math.floor((Date.now() - start.getTime()) / 60000));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}min` : `${hours}h`;
+}
+
+function formatTimeFromIso(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function workCellTitle(viagem, session, type) {
+  return [
+    session.userNameSnapshot || 'Usu\u00e1rio',
+    type?.name || 'Trabalho',
+    `Iniciado \u00e0s ${formatTimeFromIso(session.startedAt)}`,
+    `${session.status === 'paused' ? 'Pausado' : 'Em andamento'} h\u00e1 ${workDurationLabel(session.startedAt)}`,
+    `Viagem ${viagem.placa || '-'}`,
+    `Motorista: ${viagem.nome || '-'}`
+  ].join('\n');
+}
+
+function renderWorkCell(viagem) {
+  const session = workSessionForTrip(viagem._id);
+  if (!session) {
+    if (isViagemConcluida(viagem)) {
+      return `<button type="button" class="work-start-btn is-disabled" disabled title="Viagem conclu\u00edda"><span aria-hidden="true">&#9654;</span> Iniciar Trabalho</button>`;
+    }
+    return `<button type="button" class="work-start-btn" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}')" title="Iniciar trabalho"><span aria-hidden="true">&#9654;</span> Iniciar Trabalho</button>`;
+  }
+  const type = session.workType || workTypeById(session.workTypeId) || {};
+  const color = isHexColor(type.color) ? type.color : '#2563eb';
+  const paused = session.status === 'paused';
+  const manageable = canManageWorkCell(session);
+  const title = workCellTitle(viagem, session, type);
+  const avatar = session.userAvatarSnapshot
+    ? `<img src="${escapeAttr(session.userAvatarSnapshot)}" alt="">`
+    : escapeHtml(initialsFromName(session.userNameSnapshot));
+  return `<button type="button" class="work-session-card ${paused ? 'is-paused' : ''} ${manageable ? 'is-manageable' : ''}" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}')" style="--work-color:${escapeAttr(color)};${escapeAttr(colorPreviewStyle(color))}" title="${escapeAttr(title)}">
+    <span class="work-avatar">${avatar}</span>
+    <span class="work-info">
+      <strong>${escapeHtml(shortName(session.userNameSnapshot))}</strong>
+      <em>${escapeHtml(paused ? 'Pausado' : (type.name || 'Trabalho'))}</em>
+    </span>
+    <span class="work-arrow" aria-hidden="true">&#9654;</span>
+  </button>`;
+}
+
+function closeWorkPopover() {
+  document.querySelector('.work-popover')?.remove();
+  state.workPopover = null;
+}
+
+function positionWorkPopover(popover, anchor) {
+  const rect = anchor?.getBoundingClientRect?.();
+  if (!rect) return;
+  const width = Math.max(popover.offsetWidth || 220, 220);
+  const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+  const measuredHeight = Math.min(popover.scrollHeight || popover.offsetHeight || 280, window.innerHeight - 16);
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  const spaceAbove = rect.top - 8;
+  const opensAbove = spaceBelow < measuredHeight && spaceAbove > spaceBelow;
+  const availableHeight = Math.max(180, opensAbove ? spaceAbove : spaceBelow);
+  const finalHeight = Math.min(measuredHeight, availableHeight);
+  const top = opensAbove
+    ? Math.max(8, rect.top - finalHeight - 7)
+    : Math.min(rect.bottom + 7, window.innerHeight - finalHeight - 8);
+  popover.classList.toggle('opens-above', opensAbove);
+  popover.style.maxHeight = `${availableHeight}px`;
+  popover.style.left = `${left}px`;
+  popover.style.top = `${Math.max(8, top)}px`;
+}
+
+function openWorkPopover(event, tripId) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  closeWorkPopover();
+  const viagem = state.viagens.find(item => item._id === tripId);
+  if (!viagem) return;
+  const session = workSessionForTrip(tripId);
+  if (!session && isViagemConcluida(viagem)) return;
+  const popover = document.createElement('div');
+  popover.className = 'work-popover';
+  popover.addEventListener('click', e => e.stopPropagation());
+  popover.innerHTML = session ? renderWorkManagePopover(viagem, session) : renderWorkStartPopover(viagem);
+  document.body.appendChild(popover);
+  positionWorkPopover(popover, event.currentTarget);
+  state.workPopover = { tripId, sessionId: session?._id || '' };
+  setTimeout(() => document.addEventListener('click', closeWorkPopover, { once: true }), 0);
+}
+
+function renderWorkStartPopover(viagem) {
+  const types = state.workTypes.filter(type => type.isActive);
+  return `<div class="work-popover-head">
+      <strong>Iniciar trabalho</strong>
+      <span>${escapeHtml(viagem.placa || '')}</span>
+    </div>
+    <div class="work-type-list">
+      ${types.length ? types.map(type => renderWorkTypeOption(type, `startWorkSession('${escapeAttr(viagem._id)}','${escapeAttr(type._id)}')`)).join('') : '<div class="work-empty">Nenhuma atividade ativa cadastrada.</div>'}
+    </div>`;
+}
+
+function renderWorkManagePopover(viagem, session) {
+  const type = session.workType || workTypeById(session.workTypeId) || {};
+  const manageable = canManageWorkCell(session);
+  const paused = session.status === 'paused';
+  const details = `<div class="work-popover-head">
+      <strong>${escapeHtml(type.name || 'Trabalho')}</strong>
+      <span>${escapeHtml(session.userNameSnapshot || '')}</span>
+    </div>
+    <div class="work-detail">
+      <span>Iniciado \u00e0s ${escapeHtml(formatTimeFromIso(session.startedAt))}</span>
+      <span>${escapeHtml(paused ? 'Pausado' : 'Em andamento')} h\u00e1 ${escapeHtml(workDurationLabel(session.startedAt))}</span>
+      <span>${escapeHtml(viagem.placa || '-')} - ${escapeHtml(viagem.nome || '-')}</span>
+    </div>`;
+  if (!manageable) return `${details}<div class="work-empty">Esta viagem j\u00e1 est\u00e1 sendo trabalhada por outro usu\u00e1rio.</div>`;
+  return `${details}
+    <div class="work-actions">
+      ${paused ? `<button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','resume')">Retomar</button>` : `<button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','pause')">Pausar</button>`}
+      <button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','complete')">Finalizar</button>
+      <button type="button" class="danger" onclick="cancelWorkSession('${escapeAttr(session._id)}')">Cancelar</button>
+    </div>
+    <div class="work-popover-subtitle">Trocar atividade</div>
+    <div class="work-type-list">
+      ${state.workTypes.filter(typeItem => typeItem.isActive && typeItem._id !== session.workTypeId).map(typeItem => renderWorkTypeOption(typeItem, `changeWorkType('${escapeAttr(session._id)}','${escapeAttr(typeItem._id)}')`)).join('') || '<div class="work-empty">Sem outras atividades ativas.</div>'}
+    </div>`;
+}
+
+function renderWorkTypeOption(type, action) {
+  const color = isHexColor(type.color) ? type.color : '#2563eb';
+  return `<button type="button" class="work-type-option" onclick="${action}" style="--work-color:${escapeAttr(color)}">
+    <span style="background:${escapeAttr(color)}"></span>
+    <strong>${escapeHtml(type.name)}</strong>
+  </button>`;
+}
+
+async function startWorkSession(tripId, workTypeId) {
+  closeWorkPopover();
+  const created = await apiFetch(`/api/viagens/${encodeURIComponent(tripId)}/work-sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ workTypeId })
+  });
+  if (!created) return;
+  const sessions = await apiFetch('/api/work-sessions');
+  if (sessions) state.workSessions = normalizeWorkSessions(sessions);
+  renderAllUnlessInlineEditing();
+  const type = workTypeById(workTypeId);
+  const viagem = state.viagens.find(item => item._id === tripId);
+  showSummaryToast(`Atividade iniciada: ${type?.name || 'Trabalho'} na viagem ${viagem?.placa || ''}.`);
+}
+
+async function updateWorkSession(sessionId, action) {
+  closeWorkPopover();
+  const updated = await apiFetch(`/api/work-sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ action })
+  });
+  if (!updated) return;
+  const sessions = await apiFetch('/api/work-sessions');
+  if (sessions) state.workSessions = normalizeWorkSessions(sessions);
+  renderAllUnlessInlineEditing();
+  const labels = { pause: 'Trabalho pausado.', resume: 'Trabalho retomado.', complete: 'Trabalho finalizado.' };
+  showSummaryToast(labels[action] || 'Trabalho atualizado.');
+}
+
+async function changeWorkType(sessionId, workTypeId) {
+  closeWorkPopover();
+  const updated = await apiFetch(`/api/work-sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'change-type', workTypeId })
+  });
+  if (!updated) return;
+  const sessions = await apiFetch('/api/work-sessions');
+  if (sessions) state.workSessions = normalizeWorkSessions(sessions);
+  renderAllUnlessInlineEditing();
+  showSummaryToast('Atividade alterada.');
+}
+
+async function cancelWorkSession(sessionId) {
+  if (!confirm('Cancelar esta atividade?')) return;
+  await updateWorkSession(sessionId, 'cancel');
 }
 
 function statusFontSize(status) {
@@ -3520,6 +3805,7 @@ function renderTableHeader(secao) {
   if (!headRow) return;
 
   headRow.innerHTML = `${FIELDS.map(field => {
+    if (field.noSort) return `<th data-field="${escapeAttr(field.key)}">${escapeHtml(field.label)}</th>`;
     const criteria = normalizeTableSortCriteria();
     const sortIndex = criteria.findIndex(item => item.field === field.key);
     const active = sortIndex >= 0 ? 'is-sorted' : '';
@@ -3530,7 +3816,7 @@ function renderTableHeader(secao) {
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
   }).join('')}<th class="col-actions">A&Ccedil;&Otilde;ES</th>`;
 
-  headRow.querySelectorAll('th[data-field]').forEach(th => {
+  headRow.querySelectorAll('th[data-field]:not([data-field="trabalho"])').forEach(th => {
     th.onclick = () => sortTableBy(th.dataset.field);
   });
 }
@@ -3560,7 +3846,7 @@ function hasPamcardOk(pamcard = '') {
 function isCadastroPendente(viagem = {}) {
   if (hasPamcardOk(viagem.pamcard)) return false;
   const status = normalizeOption(viagem.status);
-  return ['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO'].includes(status) ||
+  return ['SEM CADASTRO', 'S/ CADASTRO', 'CONFERIR CADASTRO', 'SEM CADASTRO / DT CRIADA'].includes(status) ||
     (!normalizeOption(viagem.pamcard) && status !== 'CONFERIR MOTORISTA');
 }
 
@@ -3752,6 +4038,13 @@ function closeSettingsModal() {
 }
 
 function renderSettingsModal() {
+  const body = document.querySelector('#settings-modal-overlay .modal-body');
+  let profileTop = document.getElementById('settings-profile-top');
+  if (body && !profileTop) {
+    body.insertAdjacentHTML('afterbegin', '<div id="settings-profile-top" class="settings-profile-top"></div>');
+    profileTop = document.getElementById('settings-profile-top');
+  }
+  if (profileTop) profileTop.innerHTML = renderProfileSettingsSection();
   document.querySelector('.settings-export-section')?.classList.toggle('is-hidden', !isAdmin());
   const operations = document.getElementById('settings-operations');
   if (operations) operations.classList.toggle('is-hidden', !isAdmin());
@@ -3763,7 +4056,7 @@ function renderSettingsModal() {
     grid.innerHTML = themeSection;
     return;
   }
-  grid.innerHTML = themeSection + CONFIG_FIELDS.map(field => {
+  grid.innerHTML = themeSection + renderWorkSettingsSection() + CONFIG_FIELDS.map(field => {
     const values = configOptionList(field.key);
     const hasColors = CONFIG_COLOR_FIELDS.includes(field.key);
     return `<section class="settings-section ${hasColors ? 'has-colors' : ''}" data-field="${field.key}">
@@ -3788,6 +4081,187 @@ function renderSettingsModal() {
       </div>
     </section>`;
   }).join('');
+}
+
+function renderProfileSettingsSection() {
+  return `<section class="settings-section settings-profile-section">
+    <div class="settings-section-head">
+      <strong>PERFIL</strong>
+      <span>Coluna trabalho</span>
+    </div>
+    <div class="settings-profile-preview">
+      <span class="settings-profile-avatar">${loggedUserAvatarUrl() ? `<img src="${escapeAttr(loggedUserAvatarUrl())}" alt="">` : escapeHtml(initialsFromName(loggedUserDisplayName()))}</span>
+      <strong>${escapeHtml(loggedUserDisplayName())}</strong>
+    </div>
+    <label class="settings-profile-field">
+      <span>Nome</span>
+      <input type="text" id="profile-display-name" value="${escapeAttr(loggedUserDisplayName())}" placeholder="Nome para exibir">
+    </label>
+    <input type="hidden" id="profile-avatar-url" value="${escapeAttr(loggedUserAvatarUrl())}">
+    <label class="settings-profile-file">
+      <input type="file" id="profile-avatar-file" accept="image/*" onchange="handleProfileAvatarFile(this)">
+      <span>Escolher foto do computador</span>
+    </label>
+    <button type="button" class="settings-profile-save" onclick="saveUserProfileSettings()">Salvar perfil</button>
+  </section>`;
+}
+
+async function handleProfileAvatarFile(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showSummaryToast('Selecione uma imagem.', 'error');
+    input.value = '';
+    return;
+  }
+  try {
+    const dataUrl = await resizeAvatarFile(file);
+    const hidden = document.getElementById('profile-avatar-url');
+    if (hidden) hidden.value = dataUrl;
+    const avatar = document.querySelector('.settings-profile-avatar');
+    if (avatar) avatar.innerHTML = `<img src="${escapeAttr(dataUrl)}" alt="">`;
+  } catch (e) {
+    console.error('Erro ao carregar foto:', e);
+    showSummaryToast('Nao foi possivel carregar a foto.', 'error');
+  }
+}
+
+function resizeAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const size = 160;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const sourceSize = Math.min(img.width, img.height);
+        const sx = Math.max(0, (img.width - sourceSize) / 2);
+        const sy = Math.max(0, (img.height - sourceSize) / 2);
+        ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveUserProfileSettings() {
+  const displayName = String(document.getElementById('profile-display-name')?.value || '').trim();
+  const avatarUrl = String(document.getElementById('profile-avatar-url')?.value || '').trim();
+  const saved = await apiFetch('/api/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ displayName, avatarUrl })
+  });
+  if (!saved) return;
+  state.userProfile = { ...state.userProfile, ...saved };
+  applyPermissions();
+  renderSettingsModal();
+  renderAllUnlessInlineEditing();
+  showSummaryToast('Perfil atualizado.');
+}
+
+function renderWorkSettingsSection() {
+  const items = state.workTypes || [];
+  return `<section class="settings-section settings-work-section">
+    <div class="settings-section-head">
+      <strong>CONFIGURA&Ccedil;&Otilde;ES DE TRABALHO</strong>
+      <span>${items.length} tipos</span>
+    </div>
+    <div class="settings-work-add-row">
+      <input type="text" id="work-type-name" placeholder="Nome da atividade">
+      <input type="color" id="work-type-color" value="#2563eb" title="Cor">
+      <button type="button" onclick="addWorkType()">Adicionar</button>
+    </div>
+    <div class="settings-list settings-work-list">
+      ${items.map((type, index) => `<div class="settings-item settings-work-item ${type.isActive ? '' : 'is-disabled'}">
+        <span><i style="background:${escapeAttr(type.color)}"></i>${escapeHtml(type.name)}</span>
+        <label class="settings-color-control" title="Cor de ${escapeAttr(type.name)}">
+          <input type="color" value="${escapeAttr(type.color)}" onchange="updateWorkType('${escapeAttr(type._id)}', { color: this.value })">
+          <span style="${escapeAttr(colorPreviewStyle(type.color))}"></span>
+        </label>
+        <div class="settings-order-actions">
+          <button type="button" class="settings-move-btn" onclick="moveWorkType(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">&#8593;</button>
+          <button type="button" class="settings-move-btn" onclick="moveWorkType(${index}, 1)" ${index === items.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
+        </div>
+        <button type="button" onclick="updateWorkType('${escapeAttr(type._id)}', { isActive: ${type.isActive ? 'false' : 'true'} })">${type.isActive ? 'Desativar' : 'Ativar'}</button>
+        <button type="button" onclick="deleteWorkType('${escapeAttr(type._id)}')" title="Excluir">Excluir</button>
+        <small>${type.usageCount || 0} usos</small>
+      </div>`).join('') || '<div class="settings-empty">Nenhum tipo cadastrado.</div>'}
+    </div>
+  </section>`;
+}
+
+async function refreshWorkTypes() {
+  const types = await apiFetch('/api/work-types');
+  if (types) state.workTypes = normalizeWorkTypes(types);
+}
+
+async function addWorkType() {
+  if (!isAdmin()) return;
+  const nameInput = document.getElementById('work-type-name');
+  const colorInput = document.getElementById('work-type-color');
+  const name = String(nameInput?.value || '').trim();
+  if (!name) {
+    showSummaryToast('Informe o nome da atividade.', 'error');
+    return;
+  }
+  const created = await apiFetch('/api/work-types', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      color: colorInput?.value || '#2563eb',
+      displayOrder: (state.workTypes?.length || 0) + 1
+    })
+  });
+  if (!created) return;
+  if (nameInput) nameInput.value = '';
+  await refreshWorkTypes();
+  renderSettingsModal();
+}
+
+async function updateWorkType(id, patch) {
+  if (!isAdmin()) return;
+  const current = state.workTypes.find(type => type._id === id);
+  if (!current) return;
+  const updated = await apiFetch(`/api/work-types/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ ...current, ...patch })
+  });
+  if (!updated) return;
+  await refreshWorkTypes();
+  renderSettingsModal();
+  renderAllUnlessInlineEditing();
+}
+
+async function moveWorkType(index, delta) {
+  if (!isAdmin()) return;
+  const list = [...state.workTypes];
+  const nextIndex = index + delta;
+  if (!list[index] || !list[nextIndex]) return;
+  const [item] = list.splice(index, 1);
+  list.splice(nextIndex, 0, item);
+  await Promise.all(list.map((type, idx) => apiFetch(`/api/work-types/${encodeURIComponent(type._id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ ...type, displayOrder: idx + 1 })
+  })));
+  await refreshWorkTypes();
+  renderSettingsModal();
+}
+
+async function deleteWorkType(id) {
+  if (!isAdmin()) return;
+  const type = state.workTypes.find(item => item._id === id);
+  if (!type || !confirm(`Excluir o tipo de trabalho "${type.name}"?`)) return;
+  const removed = await apiFetch(`/api/work-types/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!removed) return;
+  await refreshWorkTypes();
+  renderSettingsModal();
 }
 
 function userPreferenceId() {
@@ -6032,7 +6506,10 @@ function copyViagemRows(viagem = {}) {
 }
 
 function copyViagemText(viagem = {}) {
-  return copyViagemRows(viagem).map(([label, value]) => `*${label}:* ${value}`).join('\n');
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const intro = `${greeting}, segue seu pedido. Favor conferir Placa, Motorista, Destino e Peso !`;
+  return `${intro}\n\n${copyViagemRows(viagem).map(([label, value]) => `*${label}:* ${value}`).join('\n')}`;
 }
 
 async function writeFormattedClipboard(text, html) {

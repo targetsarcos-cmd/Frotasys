@@ -56,6 +56,10 @@ CREATE INDEX IF NOT EXISTS idx_metas_data ON metas ((dados->>'data'));
 CREATE INDEX IF NOT EXISTS idx_metas_lookup ON metas ((dados->>'data'), (dados->>'destino'), (dados->>'tipo'));
 CREATE INDEX IF NOT EXISTS idx_config_options_field ON config_options ((dados->>'field'));
 CREATE INDEX IF NOT EXISTS idx_config_options_field_normalized ON config_options ((dados->>'field'), (dados->>'normalized'));
+CREATE INDEX IF NOT EXISTS idx_config_options_work_trip ON config_options ((dados->>'field'), (dados->>'tripId'));
+CREATE INDEX IF NOT EXISTS idx_config_options_work_user ON config_options ((dados->>'field'), (dados->>'userId'));
+CREATE INDEX IF NOT EXISTS idx_config_options_work_status ON config_options ((dados->>'field'), (dados->>'status'));
+CREATE INDEX IF NOT EXISTS idx_config_options_work_type ON config_options ((dados->>'field'), (dados->>'workTypeId'));
 
 DROP TRIGGER IF EXISTS trg_viagens_updated_at ON viagens;
 CREATE TRIGGER trg_viagens_updated_at

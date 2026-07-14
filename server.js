@@ -30,13 +30,31 @@ const CONFIG_SEED_MARKER_FIELD = '__system_seed';
 const CONFIG_SEED_MARKERS = {
   defaults: 'CONFIG_DEFAULTS_V1',
   kanguru: 'CONFIG_KANGURU_V1',
-  statusSemCadastro: 'CONFIG_STATUS_SEM_CADASTRO_V1'
+  statusSemCadastro: 'CONFIG_STATUS_SEM_CADASTRO_V1',
+  statusSemCadastroDtCriada: 'CONFIG_STATUS_SEM_CADASTRO_DT_CRIADA_V1'
 };
 const WAITLIST_FIELD = '__lista_espera';
 const FRETE_CONSULT_FIELD = '__frete_consultas';
 const LEMBRETE_FIELD = '__lembrete_diario';
 const OPERATION_MESSAGES_FIELD = '__operation_messages';
+const USER_PROFILE_SETTINGS_FIELD = '__user_profile_settings';
+const WORK_TYPE_FIELD = '__work_type';
+const WORK_SESSION_FIELD = '__trip_work_session';
+const WORK_EVENT_FIELD = '__trip_work_session_event';
 const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
+const DEFAULT_WORK_TYPES = [
+  { name: 'DT', code: 'DT', color: '#f97316', icon: 'play', displayOrder: 1 },
+  { name: 'CT-e', code: 'CTE', color: '#2563eb', icon: 'file', displayOrder: 2 },
+  { name: 'Manifesto', code: 'MANIFESTO', color: '#7c3aed', icon: 'file-text', displayOrder: 3 },
+  { name: 'Nota Fiscal', code: 'NOTA_FISCAL', color: '#16a34a', icon: 'receipt', displayOrder: 4 },
+  { name: 'Pedágio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
+  { name: 'Conferência', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
+  { name: 'Cadastro', code: 'CADASTRO', color: '#4f46e5', icon: 'user', displayOrder: 7 },
+  { name: 'Pendência', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
+  { name: 'Agendamento', code: 'AGENDAMENTO', color: '#059669', icon: 'calendar', displayOrder: 9 },
+  { name: 'Financeiro', code: 'FINANCEIRO', color: '#b7791f', icon: 'money', displayOrder: 10 },
+  { name: 'Outro', code: 'OUTRO', color: '#64748b', icon: 'dot', displayOrder: 11 }
+];
 const DEFAULT_FRETE_CONSULTAS = {
   terceiros: {
     title: 'TERCEIROS',
@@ -88,7 +106,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
   kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
-  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'CONFERIR MOTORISTA'],
+  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA']
 };
@@ -459,6 +477,20 @@ async function ensureDefaultConfigOptions() {
       }
       docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.statusSemCadastro));
     }
+
+    if (!markers.has(CONFIG_SEED_MARKERS.statusSemCadastroDtCriada)) {
+      const hasStatusSemCadastroDtCriada = existing.some(doc => doc.field === 'status' && normalizeUniqueValue(doc.value) === 'SEM CADASTRO / DT CRIADA');
+      if (!hasStatusSemCadastroDtCriada) {
+        const statusCount = existing.filter(doc => doc.field === 'status').length + docs.filter(doc => doc.field === 'status').length;
+        docs.push({
+          field: 'status',
+          value: 'SEM CADASTRO / DT CRIADA',
+          normalized: normalizeUniqueValue('SEM CADASTRO / DT CRIADA'),
+          ordem: statusCount + 1
+        });
+      }
+      docs.push(seedMarkerDoc(CONFIG_SEED_MARKERS.statusSemCadastroDtCriada));
+    }
   }
 
   if (docs.length) await insertDocs(TABLES.configOptions, docs);
@@ -695,6 +727,149 @@ async function saveOperationMessagesConfig(messages = {}) {
   return { messages: normalizeOperationMessages(saved.messages || {}) };
 }
 
+function normalizeWorkCode(value) {
+  return normalizeUniqueValue(value).replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function normalizeWorkType(data = {}, existing = {}) {
+  const name = String(data.name ?? data.nome ?? existing.name ?? '').trim();
+  const code = normalizeWorkCode(data.code || data.codigo || existing.code || name);
+  return {
+    field: WORK_TYPE_FIELD,
+    name,
+    code,
+    description: String(data.description ?? data.descricao ?? existing.description ?? '').trim(),
+    color: isHexColor(data.color) ? data.color : (isHexColor(existing.color) ? existing.color : '#2563eb'),
+    icon: String(data.icon ?? existing.icon ?? 'play').trim() || 'play',
+    displayOrder: Number(data.displayOrder ?? data.ordem ?? existing.displayOrder ?? 999) || 999,
+    isActive: data.isActive !== undefined ? data.isActive !== false : existing.isActive !== false,
+    requiresNote: Boolean(data.requiresNote ?? existing.requiresNote ?? false),
+    allowPause: data.allowPause !== undefined ? data.allowPause !== false : existing.allowPause !== false,
+    allowMultipleUsers: Boolean(data.allowMultipleUsers ?? existing.allowMultipleUsers ?? false),
+    suggestedMaxDurationMinutes: Number(data.suggestedMaxDurationMinutes ?? existing.suggestedMaxDurationMinutes ?? 0) || 0,
+    branchId: String(data.branchId ?? existing.branchId ?? '').trim(),
+    createdBy: existing.createdBy || String(data.createdBy || '').trim()
+  };
+}
+
+function publicWorkType(type = {}, usageCount = 0) {
+  return {
+    _id: type._id,
+    id: type._id,
+    name: type.name || '',
+    code: type.code || '',
+    description: type.description || '',
+    color: isHexColor(type.color) ? type.color : '#2563eb',
+    icon: type.icon || 'play',
+    displayOrder: Number(type.displayOrder || 999),
+    isActive: type.isActive !== false,
+    requiresNote: Boolean(type.requiresNote),
+    allowPause: type.allowPause !== false,
+    allowMultipleUsers: Boolean(type.allowMultipleUsers),
+    suggestedMaxDurationMinutes: Number(type.suggestedMaxDurationMinutes || 0),
+    branchId: type.branchId || '',
+    usageCount,
+    createdAt: type.createdAt || '',
+    updatedAt: type.updatedAt || ''
+  };
+}
+
+async function workTypeDocs({ includeDeleted = false } = {}) {
+  const docs = await selectDocsByJson(TABLES.configOptions, { field: WORK_TYPE_FIELD });
+  return docs
+    .filter(doc => includeDeleted || !doc.deletedAt)
+    .sort((a, b) => Number(a.displayOrder || 999) - Number(b.displayOrder || 999) || String(a.name || '').localeCompare(String(b.name || '')));
+}
+
+async function ensureDefaultWorkTypes() {
+  const existing = await workTypeDocs({ includeDeleted: true });
+  if (existing.length) return existing.filter(doc => !doc.deletedAt);
+  const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
+    ...normalizeWorkType(item),
+    createdBy: 'sistema'
+  })));
+  return created;
+}
+
+async function workTypesWithUsage() {
+  await ensureDefaultWorkTypes();
+  const [types, sessions] = await Promise.all([
+    workTypeDocs({ includeDeleted: false }),
+    selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD })
+  ]);
+  const counts = sessions.reduce((acc, session) => {
+    if (session.workTypeId) acc[session.workTypeId] = (acc[session.workTypeId] || 0) + 1;
+    return acc;
+  }, {});
+  return types.map(type => publicWorkType(type, counts[type._id] || 0));
+}
+
+function normalizeWorkSession(data = {}, profile = {}, existing = {}) {
+  const now = new Date().toISOString();
+  return {
+    field: WORK_SESSION_FIELD,
+    tripId: String(data.tripId ?? existing.tripId ?? '').trim(),
+    workTypeId: String(data.workTypeId ?? existing.workTypeId ?? '').trim(),
+    userId: String(data.userId ?? existing.userId ?? profile.user_id ?? profile.id ?? '').trim(),
+    userNameSnapshot: String(data.userNameSnapshot ?? existing.userNameSnapshot ?? profileDisplayName(profile)).trim(),
+    userAvatarSnapshot: normalizeAvatarUrl(data.userAvatarSnapshot ?? existing.userAvatarSnapshot ?? profile.avatarUrl ?? ''),
+    status: ['active', 'paused', 'completed', 'cancelled'].includes(String(data.status || existing.status || '').trim())
+      ? String(data.status || existing.status).trim()
+      : 'active',
+    startedAt: String(data.startedAt ?? existing.startedAt ?? now),
+    pausedAt: data.pausedAt !== undefined ? data.pausedAt : (existing.pausedAt || ''),
+    resumedAt: data.resumedAt !== undefined ? data.resumedAt : (existing.resumedAt || ''),
+    completedAt: data.completedAt !== undefined ? data.completedAt : (existing.completedAt || ''),
+    cancelledAt: data.cancelledAt !== undefined ? data.cancelledAt : (existing.cancelledAt || ''),
+    note: String(data.note ?? existing.note ?? '').trim(),
+    transferredFromUserId: String(data.transferredFromUserId ?? existing.transferredFromUserId ?? '').trim()
+  };
+}
+
+function isWorkSessionOpen(session = {}) {
+  return ['active', 'paused'].includes(String(session.status || ''));
+}
+
+async function activeWorkSessions() {
+  const docs = await selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD });
+  return docs.filter(session => !session.deletedAt && isWorkSessionOpen(session));
+}
+
+async function publicWorkSessions() {
+  const [sessions, types] = await Promise.all([activeWorkSessions(), workTypeDocs({ includeDeleted: true })]);
+  const typeMap = Object.fromEntries(types.map(type => [type._id, publicWorkType(type)]));
+  return sessions.map(session => ({
+    ...session,
+    workType: typeMap[session.workTypeId] || null
+  }));
+}
+
+async function openSessionForTrip(tripId) {
+  const sessions = await activeWorkSessions();
+  return sessions.find(session => session.tripId === tripId) || null;
+}
+
+function canManageWorkSession(session = {}, profile = {}, authUser = {}) {
+  const ownerId = String(session.userId || '');
+  return profile?.role === 'admin' || ownerId === String(profile?.user_id || '') || ownerId === String(authUser?.id || '') || ownerId === String(profile?.id || '');
+}
+
+async function createWorkEvent(session, eventType, profile, metadata = {}) {
+  return insertDoc(TABLES.configOptions, {
+    field: WORK_EVENT_FIELD,
+    workSessionId: session._id,
+    tripId: session.tripId,
+    workTypeId: session.workTypeId,
+    eventType,
+    userId: String(profile?.user_id || profile?.id || ''),
+    userName: profileDisplayName(profile),
+    previousValue: metadata.previousValue || '',
+    newValue: metadata.newValue || '',
+    metadata,
+    createdAt: new Date().toISOString()
+  });
+}
+
 function normalizeUniqueValue(value) {
   return String(value || '').trim().toUpperCase();
 }
@@ -853,10 +1028,11 @@ function exportFillFor(columnKey, value) {
   const normalized = normalizeUniqueValue(value);
   if (columnKey === 'status' && normalized === 'CONCLUIDO') return '049135';
   if (columnKey === 'status' && normalized === 'SEM CADASTRO') return 'c93434';
+  if (columnKey === 'status' && normalized === 'SEM CADASTRO / DT CRIADA') return 'be185d';
   if (columnKey === 'status' && normalized === 'CONFERIR MOTORISTA') return 'b91c1c';
   if (columnKey === 'status' && normalized === 'CRIAR DT / PROGRAMAR') return '6d28d9';
   if (columnKey === 'status' && normalized === 'CRIAR DT') return '7c3aed';
-  if (columnKey === 'status' && normalized === 'PROGRAMAR') return '9333ea';
+  if (columnKey === 'status' && normalized === 'PROGRAMAR') return 'aba110';
   if (columnKey === 'status' && normalized === 'AGUARDANDO CARREGAMENTO') return '0b2f5f';
   if (columnKey === 'status' && normalized === 'EMITIR CTE') return '2563eb';
   if (columnKey === 'status' && normalized === 'ADIANTAMENTO / DESCARGA') return 'c2410c';
@@ -1042,6 +1218,8 @@ function publicProfile(profile = {}) {
     id: profile.id,
     user_id: profile.user_id,
     nome: profile.nome || '',
+    displayName: profile.displayName || profile.nome || '',
+    avatarUrl: profile.avatarUrl || '',
     email: profile.email || '',
     role: profile.role || 'visualizador',
     ativo: profile.ativo !== false,
@@ -1050,7 +1228,46 @@ function publicProfile(profile = {}) {
 }
 
 function profileDisplayName(profile = {}) {
-  return String(profile.nome || profile.email || 'UsuÃ¡rio').trim();
+  return String(profile.displayName || profile.nome || profile.email || 'UsuÃ¡rio').trim();
+}
+
+function normalizeAvatarUrl(value = '') {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (url.length > 800000) return '';
+  return /^(https?:|data:image\/)/i.test(url) ? url : '';
+}
+
+async function userProfileSettings(userId) {
+  const key = String(userId || '').trim();
+  if (!key) return {};
+  const doc = await findOne(TABLES.configOptions, item =>
+    item.field === USER_PROFILE_SETTINGS_FIELD && item.userId === key
+  );
+  return {
+    displayName: String(doc?.displayName || '').trim(),
+    avatarUrl: normalizeAvatarUrl(doc?.avatarUrl || '')
+  };
+}
+
+async function saveUserProfileSettings(userId, data = {}) {
+  const key = String(userId || '').trim();
+  const existing = await findOne(TABLES.configOptions, item =>
+    item.field === USER_PROFILE_SETTINGS_FIELD && item.userId === key
+  );
+  const payload = {
+    field: USER_PROFILE_SETTINGS_FIELD,
+    userId: key,
+    displayName: String(data.displayName || '').trim().slice(0, 80),
+    avatarUrl: normalizeAvatarUrl(data.avatarUrl || '')
+  };
+  const saved = existing
+    ? await updateDoc(TABLES.configOptions, existing._id, payload)
+    : await insertDoc(TABLES.configOptions, payload);
+  return {
+    displayName: saved.displayName || '',
+    avatarUrl: saved.avatarUrl || ''
+  };
 }
 
 function normalizeContratoConclusao(value) {
@@ -1085,7 +1302,9 @@ async function profileForUser(userId) {
     .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
-  return data ? publicProfile(data) : null;
+  if (!data) return null;
+  const settings = await userProfileSettings(data.user_id);
+  return publicProfile({ ...data, ...settings });
 }
 
 function requireAuth(req, res, next) {
@@ -1139,6 +1358,34 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
+app.put('/api/auth/profile', async (req, res) => {
+  try {
+    const saved = await saveUserProfileSettings(req.authUser.id, {
+      displayName: req.body?.displayName,
+      avatarUrl: req.body?.avatarUrl
+    });
+    const profile = {
+      ...req.userProfile,
+      ...saved
+    };
+    await updateWhere(TABLES.configOptions, item =>
+      item.field === WORK_SESSION_FIELD &&
+      item.userId === req.authUser.id &&
+      isWorkSessionOpen(item),
+      {
+        userNameSnapshot: profileDisplayName(profile),
+        userAvatarSnapshot: profile.avatarUrl || ''
+      }
+    );
+    const sessions = await publicWorkSessions();
+    broadcast({ type: 'perfil_atualizado', payload: { userId: req.authUser.id, profile } });
+    broadcast({ type: 'work_sessions_atualizadas', payload: sessions });
+    res.json(profile);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/app-state', async (req, res) => {
   try {
     const data = String(req.query.data || '').trim();
@@ -1159,9 +1406,11 @@ app.get('/api/app-state', async (req, res) => {
     const listaEspera = await waitlistDocs();
     const lembrete = await lembreteGlobal();
     const operationMessages = await operationMessagesConfig();
+    const workTypes = await workTypesWithUsage();
+    const workSessions = await publicWorkSessions();
     const freteConsultas = await freteConsultasConfig();
 
-    res.json({ viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete, operationMessages, freteConsultas });
+    res.json({ viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete, operationMessages, workTypes, workSessions, freteConsultas });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1194,6 +1443,158 @@ app.put('/api/operation-messages', requireAdmin, async (req, res) => {
     invalidateCache('operation-messages');
     broadcast({ type: 'operation_messages_atualizadas', payload: saved });
     res.json(saved);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/work-types', async (req, res) => {
+  try {
+    res.json(await workTypesWithUsage());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/work-types', requireAdmin, async (req, res) => {
+  try {
+    const payload = normalizeWorkType(req.body || {});
+    if (!payload.name) return res.status(400).json({ error: 'Informe o nome do tipo de trabalho.' });
+    payload.createdBy = profileDisplayName(req.userProfile);
+    const inserted = await insertDoc(TABLES.configOptions, payload);
+    const workTypes = await workTypesWithUsage();
+    broadcast({ type: 'work_types_atualizados', payload: workTypes });
+    res.json(publicWorkType(inserted));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/work-types/:id', requireAdmin, async (req, res) => {
+  try {
+    const current = await findOneById(TABLES.configOptions, req.params.id);
+    if (!current || current.field !== WORK_TYPE_FIELD) return res.status(404).json({ error: 'Tipo de trabalho nÃ£o encontrado.' });
+    const patch = normalizeWorkType(req.body || {}, current);
+    const updated = await updateDoc(TABLES.configOptions, req.params.id, patch);
+    const workTypes = await workTypesWithUsage();
+    broadcast({ type: 'work_types_atualizados', payload: workTypes });
+    res.json(publicWorkType(updated));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/work-types/:id', requireAdmin, async (req, res) => {
+  try {
+    const current = await findOneById(TABLES.configOptions, req.params.id);
+    if (!current || current.field !== WORK_TYPE_FIELD) return res.status(404).json({ error: 'Tipo de trabalho nÃ£o encontrado.' });
+    await updateDoc(TABLES.configOptions, req.params.id, { deletedAt: new Date().toISOString(), isActive: false });
+    const workTypes = await workTypesWithUsage();
+    broadcast({ type: 'work_types_atualizados', payload: workTypes });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/work-sessions', async (req, res) => {
+  try {
+    res.json(await publicWorkSessions());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/viagens/:id/work-history', async (req, res) => {
+  try {
+    const sessions = await selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD, tripId: req.params.id });
+    const events = await selectDocsByJson(TABLES.configOptions, { field: WORK_EVENT_FIELD, tripId: req.params.id });
+    res.json({ sessions, events });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/viagens/:id/work-sessions', requireViagemEditor, async (req, res) => {
+  try {
+    const viagem = await findOneById(TABLES.viagens, req.params.id);
+    if (!viagem) return res.status(404).json({ error: 'Viagem nÃ£o encontrada.' });
+    const workType = await findOneById(TABLES.configOptions, req.body?.workTypeId);
+    if (!workType || workType.field !== WORK_TYPE_FIELD || workType.deletedAt || workType.isActive === false) {
+      return res.status(400).json({ error: 'Selecione um tipo de trabalho ativo.' });
+    }
+    const conflict = await openSessionForTrip(req.params.id);
+    if (conflict && !workType.allowMultipleUsers) {
+      const conflictType = await findOneById(TABLES.configOptions, conflict.workTypeId);
+      if (req.userProfile?.role !== 'admin') {
+        return res.status(409).json({
+          error: `Esta viagem jÃ¡ estÃ¡ sendo trabalhada por ${conflict.userNameSnapshot}. Atividade: ${conflictType?.name || 'Trabalho'}.`
+        });
+      }
+      await updateDoc(TABLES.configOptions, conflict._id, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        transferredFromUserId: conflict.userId
+      });
+      await createWorkEvent(conflict, 'transferred', req.userProfile, { newValue: profileDisplayName(req.userProfile) });
+    }
+
+    const inserted = await insertDoc(TABLES.configOptions, normalizeWorkSession({
+      tripId: req.params.id,
+      workTypeId: workType._id,
+      status: 'active'
+    }, req.userProfile));
+    await createWorkEvent(inserted, 'started', req.userProfile, { newValue: workType.name });
+    const sessions = await publicWorkSessions();
+    broadcast({ type: 'work_sessions_atualizadas', payload: sessions });
+    res.json(inserted);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/work-sessions/:id', requireViagemEditor, async (req, res) => {
+  try {
+    const current = await findOneById(TABLES.configOptions, req.params.id);
+    if (!current || current.field !== WORK_SESSION_FIELD) return res.status(404).json({ error: 'Trabalho nÃ£o encontrado.' });
+    if (!canManageWorkSession(current, req.userProfile, req.authUser)) {
+      return res.status(403).json({ error: 'VocÃª nÃ£o pode alterar o trabalho de outro usuÃ¡rio.' });
+    }
+
+    const action = String(req.body?.action || '').trim();
+    const now = new Date().toISOString();
+    const patch = {};
+    let eventType = action;
+    if (action === 'pause') {
+      patch.status = 'paused';
+      patch.pausedAt = now;
+    } else if (action === 'resume') {
+      patch.status = 'active';
+      patch.resumedAt = now;
+    } else if (action === 'complete') {
+      patch.status = 'completed';
+      patch.completedAt = now;
+    } else if (action === 'cancel') {
+      patch.status = 'cancelled';
+      patch.cancelledAt = now;
+    } else if (action === 'change-type') {
+      const workType = await findOneById(TABLES.configOptions, req.body?.workTypeId);
+      if (!workType || workType.field !== WORK_TYPE_FIELD || workType.deletedAt || workType.isActive === false) {
+        return res.status(400).json({ error: 'Selecione um tipo de trabalho ativo.' });
+      }
+      patch.workTypeId = workType._id;
+      patch.status = 'active';
+      patch.resumedAt = now;
+      eventType = 'changed_type';
+    } else {
+      return res.status(400).json({ error: 'AÃ§Ã£o invÃ¡lida.' });
+    }
+
+    const updated = await updateDoc(TABLES.configOptions, req.params.id, patch);
+    await createWorkEvent(updated, eventType, req.userProfile, { previousValue: current.status, newValue: updated.status });
+    const sessions = await publicWorkSessions();
+    broadcast({ type: 'work_sessions_atualizadas', payload: sessions });
+    res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
