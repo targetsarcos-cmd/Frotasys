@@ -2256,6 +2256,30 @@ body.theme-white .summary-progress-row strong {
   font-size: 11px;
 }
 
+#summary-arcos .summary-config-btn {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  border: 1px solid rgba(15, 48, 69, .28) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #0b3045 !important;
+  font-size: 17px !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .10) !important;
+  z-index: 2 !important;
+}
+
+#summary-arcos .summary-config-btn:hover {
+  border-color: #0b7669 !important;
+  color: #0b7669 !important;
+  background: #f8fafc !important;
+}
+
 .summary-config-btn:hover {
   border-color: var(--card-accent);
   color: var(--card-accent);
