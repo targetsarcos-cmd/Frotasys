@@ -5018,6 +5018,48 @@ body.theme-dark .report-summary-progress-row {
   overflow-y: auto;
 }
 
+.settings-operation-messages-section {
+  margin-top: 10px;
+}
+
+.operation-message-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.operation-message-field {
+  display: grid;
+  gap: 6px;
+}
+
+.operation-message-field span {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.operation-message-field textarea {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 9px 10px;
+  outline: none;
+}
+
+.operation-message-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
+}
+
 .settings-item {
   min-height: 32px;
   display: grid;
@@ -8231,6 +8273,105 @@ body.theme-white .data-table .type-chip {
   color: #06101f !important;
   -webkit-text-fill-color: #06101f !important;
   text-shadow: none !important;
+}
+
+body.travel-drawer-open .table-scroll-area {
+  overflow-x: hidden !important;
+}
+
+body.travel-drawer-open .data-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+
+body.travel-drawer-open .data-table th,
+body.travel-drawer-open .data-table td {
+  min-width: 0 !important;
+  padding-left: 5px !important;
+  padding-right: 5px !important;
+  overflow: hidden !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="placa"],
+body.travel-drawer-open .data-table td[data-field="placa"] {
+  width: 9.5% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="nome"],
+body.travel-drawer-open .data-table td[data-field="nome"] {
+  width: 14.5% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="tipo"],
+body.travel-drawer-open .data-table td[data-field="tipo"] {
+  width: 11% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="origem"],
+body.travel-drawer-open .data-table td[data-field="origem"] {
+  width: 10% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="destino"],
+body.travel-drawer-open .data-table td[data-field="destino"] {
+  width: 11.5% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="peso"],
+body.travel-drawer-open .data-table td[data-field="peso"] {
+  width: 6.5% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="agendamento"],
+body.travel-drawer-open .data-table td[data-field="agendamento"] {
+  width: 10% !important;
+}
+
+body.travel-drawer-open .data-table th[data-field="status"],
+body.travel-drawer-open .data-table td[data-field="status"] {
+  width: 21% !important;
+  min-width: 0 !important;
+}
+
+body.travel-drawer-open .data-table .col-actions,
+body.travel-drawer-open .data-table td.master-actions {
+  width: 6% !important;
+  min-width: 0 !important;
+}
+
+body.travel-drawer-open .data-table td.status-cell .status-select,
+body.travel-drawer-open .data-table td.status-cell .status-badge,
+body.travel-drawer-open .data-table td.status-cell .status-select.status-falta-adiantamento,
+body.travel-drawer-open .data-table td.status-cell .status-select.status-agendar-descarga,
+body.travel-drawer-open .data-table td.status-cell .status-select.status-conferir-cadastro,
+body.travel-drawer-open .data-table td.status-cell .status-select.status-conferir-motorista,
+body.travel-drawer-open .data-table td.status-cell .status-select.status-aguardando-carregamento {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+body.travel-drawer-open .data-table .type-chip {
+  width: min(100%, 118px) !important;
+  min-width: 0 !important;
+}
+
+body.travel-drawer-open .schedule-chip {
+  width: min(100%, 78px) !important;
+  min-width: 0 !important;
+}
+
+body.travel-drawer-open .row-actions,
+body.travel-drawer-open .row-action-wrap {
+  gap: 3px !important;
+}
+
+body.travel-drawer-open .row-action-view,
+body.travel-drawer-open .row-action-more,
+body.travel-drawer-open .row-action-menu summary {
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
 }
 
 .report-summary-card > .report-summary-head {

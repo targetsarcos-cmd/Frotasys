@@ -23,6 +23,8 @@ const state = {
   freteConsultas: {},
   listaEspera: [],
   lembrete: { data: '', texto: '' },
+  operationMessages: {},
+  operationMessageSaveTimers: {},
   lembreteOpen: false,
   lembreteSaveTimer: null,
   metaGoalAlertsShown: new Set(),
@@ -101,22 +103,36 @@ const DEFAULT_CONFIG_COLORS = {
   status: {
     'CRIANDO DT': '#4f46e5',
     CADASTRANDO: '#0f766e',
-    'CRIAR DT / PROGRAMAR': '#7c3aed',
-    'CRIAR DT': '#0f766e',
-    PROGRAMAR: '#7c3aed',
-    'AGUARDANDO CARREGAMENTO': '#0b2f5f',
-    'ADIANTAMENTO / DESCARGA': '#b7791f',
+    'CRIAR DT / PROGRAMAR': '#6D28D9',
+    'CRIAR DT': '#7C3AED',
+    PROGRAMAR: '#9333EA',
+    'AGUARDANDO CARREGAMENTO': '#0B2F5F',
+    'ADIANTAMENTO / DESCARGA': '#C2410C',
     ADIANTAMENTO: '#115927',
-    'EMITIR CTE': '#2563eb',
-    MANIFESTO: '#2563eb',
-    'FALTA ADIANTAMENTO': '#b7791f',
+    'EMITIR CTE': '#2563EB',
+    MANIFESTO: '#2563EB',
+    'FALTA ADIANTAMENTO': '#C2410C',
     'AGENDAR DESCARGA': '#39107B',
-    'SEM CADASTRO': '#c93434',
-    'CONFERIR MOTORISTA': '#c93434',
+    'SEM CADASTRO': '#C93434',
+    'CONFERIR MOTORISTA': '#B91C1C',
     CONCLUIDO: '#049135'
   },
   origem: {},
   destino: {}
+};
+const STATUS_COLOR_OVERRIDES = {
+  'SEM CADASTRO': '#C93434',
+  'CONFERIR MOTORISTA': '#B91C1C',
+  'CRIAR DT / PROGRAMAR': '#6D28D9',
+  'CRIAR DT': '#7C3AED',
+  PROGRAMAR: '#9333EA',
+  'AGUARDANDO CARREGAMENTO': '#0B2F5F',
+  'EMITIR CTE': '#2563EB',
+  'ADIANTAMENTO / DESCARGA': '#C2410C',
+  'FALTA ADIANTAMENTO': '#C2410C',
+  ADIANTAMENTO: '#115927',
+  'AGENDAR DESCARGA': '#39107B',
+  CONCLUIDO: '#049135'
 };
 const FALLBACK_CONFIG_COLORS = ['#2563eb', '#16803f', '#b7791f', '#c93434', '#0f766e', '#4f46e5', '#c05621', '#0891b2'];
 const FRETE_CONSULT_KEY = 'frotasys-consulta-frete';
@@ -372,6 +388,9 @@ function handleWsMessage(msg) {
   } else if (type === 'lembrete_atualizado') {
     state.lembrete = normalizeLembrete(payload);
     renderReminderNote();
+  } else if (type === 'operation_messages_atualizadas') {
+    state.operationMessages = normalizeOperationMessages(payload);
+    if (!document.getElementById('settings-modal-overlay')?.classList.contains('hidden')) renderSettingsModal();
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
@@ -404,6 +423,7 @@ async function loadAll() {
   state.operacoes = normalizeOperacoes(data.operacoes);
   state.listaEspera = normalizeListaEspera(data.listaEspera);
   state.lembrete = normalizeLembrete(data.lembrete);
+  state.operationMessages = normalizeOperationMessages(data.operationMessages);
   state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
   clearReminderStatus();
   renderAll();
@@ -740,6 +760,19 @@ function normalizeLembrete(lembrete = {}) {
     data: '',
     texto: cleanReminderText(safeLembrete.texto || '')
   };
+}
+
+function operationMessageKey(operation = {}) {
+  return normalizeOption(operation?.origem || operation?.metaTipo || operation?._id || '');
+}
+
+function normalizeOperationMessages(payload = {}) {
+  const messages = payload?.messages || payload || {};
+  return Object.entries(messages).reduce((acc, [key, value]) => {
+    const normalized = normalizeOption(key);
+    if (normalized) acc[normalized] = String(value || '');
+    return acc;
+  }, {});
 }
 
 function stripReminderNumber(line) {
@@ -2673,15 +2706,13 @@ function viagemStatusDisplay(viagem) {
 
 function statusColorStyle(status) {
   const normalized = normalizeOption(status);
-  if (normalized === 'FALTA ADIANTAMENTO') return 'color:#92400e;background:#fef3c7;border-color:#f59e0b;';
-  if (normalized === 'AGENDAR DESCARGA') return 'color:#1d4ed8;background:#dbeafe;border-color:#60a5fa;';
+  if (STATUS_COLOR_OVERRIDES[normalized]) return colorPreviewStyle(STATUS_COLOR_OVERRIDES[normalized]);
   return selectColorStyle('status', status);
 }
 
 function statusHexColor(status) {
   const normalized = normalizeOption(status);
-  if (normalized === 'FALTA ADIANTAMENTO') return '#f59e0b';
-  if (normalized === 'AGENDAR DESCARGA') return '#2563eb';
+  if (STATUS_COLOR_OVERRIDES[normalized]) return STATUS_COLOR_OVERRIDES[normalized];
   return configColor('status', status || 'STATUS');
 }
 
@@ -2898,14 +2929,13 @@ function whatsappHref(phone) {
   if (!digits) return '';
   const normalized = digits.length <= 11 ? `55${digits}` : digits;
   const viagem = selectedViagem();
-  const message = encodeURIComponent(copyViagemText(viagem));
-  return `https://wa.me/${normalized}?text=${message}`;
+  return whatsappSendHref(normalized, copyViagemText(viagem));
 }
 
 function rowWhatsappAction(viagem) {
   const href = whatsappHrefForViagem(viagem);
   if (!href) return '';
-  return `<a class="btn-row table-action-icon table-whatsapp-action" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="Abrir WhatsApp" aria-label="Abrir WhatsApp"><img src="img/whatsapp.jpg" alt=""></a>`;
+  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action" onclick="openWhatsAppForViagem(event,'${escapeAttr(viagem._id)}')" title="Abrir WhatsApp" aria-label="Abrir WhatsApp"><img src="img/whatsapp.jpg" alt=""></button>`;
 }
 
 function rowActionMenu(viagem) {
@@ -2913,7 +2943,7 @@ function rowActionMenu(viagem) {
   const href = whatsappHrefForViagem(viagem);
   const items = [
     isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
-    href ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp"><img src="img/whatsapp.jpg" alt=""></a>` : '',
+    href ? `<button type="button" onclick="openWhatsAppForViagem(event,'${id}')" title="WhatsApp" aria-label="WhatsApp"><img src="img/whatsapp.jpg" alt=""></button>` : '',
     viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
     viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
     `<button type="button" onclick="copyViagem(event,'${id}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>`,
@@ -2954,12 +2984,43 @@ function positionRowActionMenu(menu) {
   popover.style.top = `${top}px`;
 }
 
-function whatsappHrefForViagem(viagem = {}) {
+function whatsappHrefForViagem(viagem = {}, messageText = '') {
   const digits = String(firstPhone(viagem.telefone || '') || '').replace(/\D/g, '');
   if (!digits) return '';
   const normalized = digits.length <= 11 ? `55${digits}` : digits;
-  const message = encodeURIComponent(copyViagemText(viagem));
-  return `https://wa.me/${normalized}?text=${message}`;
+  return whatsappSendHref(normalized, messageText || copyViagemText(viagem));
+}
+
+function whatsappSendHref(phone, message) {
+  const url = new URL('https://api.whatsapp.com/send');
+  url.searchParams.set('phone', phone);
+  url.searchParams.set('text', String(message || ''));
+  return url.toString();
+}
+
+async function openWhatsAppForViagem(event, id) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const viagem = state.viagens.find(item => item._id === id) || (selectedViagem()?._id === id ? selectedViagem() : null);
+  if (!viagem) return;
+
+  const pendingWindow = window.open('about:blank', '_blank');
+  let message = copyViagemText(viagem);
+  const extra = await apiFetch(`/api/viagens/${encodeURIComponent(id)}/whatsapp-extra-message`);
+  const extraMessage = String(extra?.message || '').trim();
+  if (extraMessage) message = `${message}\n\n${extraMessage}`;
+
+  const href = whatsappHrefForViagem(viagem, message);
+  if (!href) {
+    pendingWindow?.close?.();
+    return;
+  }
+  if (pendingWindow) {
+    pendingWindow.opener = null;
+    pendingWindow.location.href = href;
+  } else {
+    window.open(href, '_blank', 'noopener');
+  }
 }
 
 function handleDrawerInput(event) {
@@ -3958,8 +4019,60 @@ function renderSettingsOperations() {
           <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir opera&ccedil;&atilde;o" aria-label="Excluir opera&ccedil;&atilde;o ${escapeAttr(titleCase(op.origem))}">&times;</button>
         </div>`;
       }).join('')}
+      </div>
+    </section>`;
+  renderSettingsOperationMessages(container, operations);
+}
+
+function renderSettingsOperationMessages(container, operations) {
+  const activeOperations = operations.filter(op => operationMessageKey(op));
+  const fields = activeOperations.map(op => {
+    const key = operationMessageKey(op);
+    const label = String(op.origem || op.metaTipo || key || '').trim();
+    return `<label class="operation-message-field">
+      <span>${escapeHtml(label)}</span>
+      <textarea rows="3" data-operation-message-key="${escapeAttr(key)}" oninput="handleOperationMessageInput(this)" onchange="saveOperationMessage(this)" placeholder="Mensagem de ${escapeAttr(titleCase(label))}">${escapeHtml(state.operationMessages[key] || '')}</textarea>
+    </label>`;
+  }).join('');
+
+  container.insertAdjacentHTML('beforeend', `<section class="settings-section settings-operation-messages-section">
+    <div class="settings-section-head">
+      <strong>Mensagens por opera&ccedil;&atilde;o</strong>
+      <span>${activeOperations.length} caixas</span>
     </div>
-  </section>`;
+    <div class="operation-message-grid">
+      ${fields || '<div class="settings-empty">Nenhuma opera&ccedil;&atilde;o cadastrada.</div>'}
+    </div>
+  </section>`);
+}
+
+function handleOperationMessageInput(textarea) {
+  const key = normalizeOption(textarea?.dataset?.operationMessageKey || '');
+  if (!key) return;
+  state.operationMessages = {
+    ...state.operationMessages,
+    [key]: String(textarea.value || '')
+  };
+  clearTimeout(state.operationMessageSaveTimers[key]);
+  state.operationMessageSaveTimers[key] = setTimeout(() => saveOperationMessage(textarea), 700);
+}
+
+async function saveOperationMessage(textarea) {
+  const key = normalizeOption(textarea?.dataset?.operationMessageKey || '');
+  if (!key) return;
+  clearTimeout(state.operationMessageSaveTimers[key]);
+  state.operationMessages = {
+    ...state.operationMessages,
+    [key]: String(textarea.value || '')
+  };
+  const activeKeys = new Set(operationsList().map(operationMessageKey).filter(Boolean));
+  const messages = Object.fromEntries(Object.entries(state.operationMessages).filter(([messageKey]) => activeKeys.has(messageKey)));
+  state.operationMessages = messages;
+  const saved = await apiFetch('/api/operation-messages', {
+    method: 'PUT',
+    body: JSON.stringify({ messages })
+  });
+  if (saved) state.operationMessages = normalizeOperationMessages(saved);
 }
 
 function renderConfigColorPicker(field, value) {

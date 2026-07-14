@@ -35,6 +35,7 @@ const CONFIG_SEED_MARKERS = {
 const WAITLIST_FIELD = '__lista_espera';
 const FRETE_CONSULT_FIELD = '__frete_consultas';
 const LEMBRETE_FIELD = '__lembrete_diario';
+const OPERATION_MESSAGES_FIELD = '__operation_messages';
 const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
 const DEFAULT_FRETE_CONSULTAS = {
   terceiros: {
@@ -504,6 +505,16 @@ async function latestViagemByPlaca(placa) {
     .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
 }
 
+async function latestAnyViagemByPlaca(placa, ignoreId = '') {
+  const normalizedPlaca = normalizeUniqueValue(placa);
+  if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
+  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT });
+  return docs
+    .filter(doc => doc._id !== ignoreId)
+    .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
+    .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+}
+
 function normalizeWaitlistItem(data = {}) {
   return {
     placa: normalizeUniqueValue(data.placa),
@@ -651,6 +662,37 @@ async function saveLembrete(texto) {
     ? await updateDoc(TABLES.configOptions, existing._id, payload)
     : await insertDoc(TABLES.configOptions, payload);
   return lembreteDocToFrontend(saved);
+}
+
+function normalizeOperationMessages(messages = {}) {
+  return Object.entries(messages || {}).reduce((acc, [key, value]) => {
+    const normalized = normalizeUniqueValue(key);
+    if (normalized) acc[normalized] = String(value || '').slice(0, 4000);
+    return acc;
+  }, {});
+}
+
+async function operationMessagesConfig() {
+  return cachedValue('operation-messages', async () => {
+    const doc = await findOne(TABLES.configOptions, item => item.field === OPERATION_MESSAGES_FIELD);
+    return { messages: normalizeOperationMessages(doc?.messages || {}) };
+  });
+}
+
+async function saveOperationMessagesConfig(messages = {}) {
+  const normalized = normalizeOperationMessages(messages);
+  const existing = await findOne(TABLES.configOptions, item => item.field === OPERATION_MESSAGES_FIELD);
+  const payload = {
+    field: OPERATION_MESSAGES_FIELD,
+    value: 'Mensagens por operacao',
+    normalized: OPERATION_MESSAGES_FIELD,
+    messages: normalized,
+    ordem: existing?.ordem || 1
+  };
+  const saved = existing
+    ? await updateDoc(TABLES.configOptions, existing._id, payload)
+    : await insertDoc(TABLES.configOptions, payload);
+  return { messages: normalizeOperationMessages(saved.messages || {}) };
 }
 
 function normalizeUniqueValue(value) {
@@ -809,9 +851,18 @@ function argb(hex) {
 
 function exportFillFor(columnKey, value) {
   const normalized = normalizeUniqueValue(value);
-  if (columnKey === 'status' && normalized === 'CONCLUIDO') return '16803f';
-  if (columnKey === 'status' && normalized === 'FALTA ADIANTAMENTO') return 'b7791f';
-  if (columnKey === 'status' && normalized === 'AGENDAR DESCARGA') return '2563eb';
+  if (columnKey === 'status' && normalized === 'CONCLUIDO') return '049135';
+  if (columnKey === 'status' && normalized === 'SEM CADASTRO') return 'c93434';
+  if (columnKey === 'status' && normalized === 'CONFERIR MOTORISTA') return 'b91c1c';
+  if (columnKey === 'status' && normalized === 'CRIAR DT / PROGRAMAR') return '6d28d9';
+  if (columnKey === 'status' && normalized === 'CRIAR DT') return '7c3aed';
+  if (columnKey === 'status' && normalized === 'PROGRAMAR') return '9333ea';
+  if (columnKey === 'status' && normalized === 'AGUARDANDO CARREGAMENTO') return '0b2f5f';
+  if (columnKey === 'status' && normalized === 'EMITIR CTE') return '2563eb';
+  if (columnKey === 'status' && normalized === 'ADIANTAMENTO / DESCARGA') return 'c2410c';
+  if (columnKey === 'status' && normalized === 'FALTA ADIANTAMENTO') return 'c2410c';
+  if (columnKey === 'status' && normalized === 'ADIANTAMENTO') return '115927';
+  if (columnKey === 'status' && normalized === 'AGENDAR DESCARGA') return '39107b';
   if (columnKey === 'status' && normalized) return '2563eb';
   if (columnKey === 'origem' && normalized) return '16803f';
   if (columnKey === 'destino' && normalized) return '8ab4f8';
@@ -1107,9 +1158,10 @@ app.get('/api/app-state', async (req, res) => {
     const configColors = await configColorsGrouped();
     const listaEspera = await waitlistDocs();
     const lembrete = await lembreteGlobal();
+    const operationMessages = await operationMessagesConfig();
     const freteConsultas = await freteConsultasConfig();
 
-    res.json({ viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete, freteConsultas });
+    res.json({ viagens, metas, operacoes, configOptions, configColors, listaEspera, lembrete, operationMessages, freteConsultas });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1130,6 +1182,17 @@ app.put('/api/lembretes', async (req, res) => {
     const body = req.body || {};
     const saved = await saveLembrete(body.texto);
     broadcast({ type: 'lembrete_atualizado', payload: saved });
+    res.json(saved);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/operation-messages', requireAdmin, async (req, res) => {
+  try {
+    const saved = await saveOperationMessagesConfig(req.body?.messages || {});
+    invalidateCache('operation-messages');
+    broadcast({ type: 'operation_messages_atualizadas', payload: saved });
     res.json(saved);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1448,6 +1511,40 @@ app.get('/api/viagens/placa/:placa/latest', requireViagemEditor, async (req, res
       carroceria: latest.carroceria || '',
       telefone: latest.telefone || '',
       cadastroOk: hasLoadedHistory(latest)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/viagens/:id/whatsapp-extra-message', async (req, res) => {
+  try {
+    const viagem = await findOneById(TABLES.viagens, req.params.id);
+    if (!viagem) return res.status(404).json({ error: 'Viagem n\u00e3o encontrada' });
+
+    const tipo = normalizeTipo(viagem.tipo);
+    if (tipo === 'FROTA' || tipo === 'AGREGADO') {
+      return res.json({ message: '', reason: 'tipo_ignorado' });
+    }
+
+    const operationKey = normalizeUniqueValue(viagem.origem);
+    const operationMessages = await operationMessagesConfig();
+    const message = String(operationMessages.messages?.[operationKey] || '').trim();
+    if (!message) return res.json({ message: '', reason: 'sem_mensagem' });
+
+    const latest = await latestAnyViagemByPlaca(viagem.placa, viagem._id);
+    if (!latest) return res.json({ message, reason: 'sem_registro' });
+
+    const latestDate = String(latest.data || latest.createdAt || '').slice(0, 10);
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const cutoff = threeMonthsAgo.toISOString().slice(0, 10);
+    const isOlderThanThreeMonths = latestDate && latestDate < cutoff;
+
+    return res.json({
+      message: isOlderThanThreeMonths ? message : '',
+      reason: isOlderThanThreeMonths ? 'registro_antigo' : 'registro_recente',
+      latestDate
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
