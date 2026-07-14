@@ -8184,8 +8184,8 @@ body.theme-dark .data-table .type-chip.tipo-frota,
 body.theme-white .data-table .type-chip.tipo-frota {
   background: rgba(55, 125, 34, .82) !important;
   border-color: #377D22 !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
+  color: #06101f !important;
+  -webkit-text-fill-color: #06101f !important;
   box-shadow: none !important;
   text-shadow: none !important;
 }
@@ -8195,9 +8195,17 @@ body.theme-dark .data-table .type-chip.tipo-carreteiro,
 body.theme-white .data-table .type-chip.tipo-carreteiro {
   background: rgba(222, 48, 34, .74) !important;
   border-color: #DE3022 !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
+  color: #06101f !important;
+  -webkit-text-fill-color: #06101f !important;
   box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.data-table .type-chip,
+body.theme-dark .data-table .type-chip,
+body.theme-white .data-table .type-chip {
+  color: #06101f !important;
+  -webkit-text-fill-color: #06101f !important;
   text-shadow: none !important;
 }
 
