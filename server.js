@@ -852,6 +852,24 @@ async function openSessionForTrip(tripId) {
   return sessions.find(session => session.tripId === tripId) || null;
 }
 
+async function completeOpenWorkSessionsForTrip(tripId, profile = {}) {
+  const sessions = (await activeWorkSessions()).filter(session => session.tripId === tripId);
+  if (!sessions.length) return false;
+
+  const now = new Date().toISOString();
+  await Promise.all(sessions.map(async session => {
+    const updated = await updateDoc(TABLES.configOptions, session._id, {
+      status: 'completed',
+      completedAt: now
+    });
+    await createWorkEvent(updated, 'auto_completed_by_trip', profile, {
+      previousValue: session.status,
+      newValue: 'completed'
+    });
+  }));
+  return true;
+}
+
 function canManageWorkSession(session = {}, profile = {}, authUser = {}) {
   const ownerId = String(session.userId || '');
   return profile?.role === 'admin' || ownerId === String(profile?.user_id || '') || ownerId === String(authUser?.id || '') || ownerId === String(profile?.id || '');
@@ -2108,7 +2126,11 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         const lockedNextData = applyFrotaContratoRule({ ...current, ...patch });
         patch.status = calculateTripStatus(lockedNextData);
         const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+        const workChanged = updated.status === 'CONCLUIDO'
+          ? await completeOpenWorkSessionsForTrip(req.params.id, req.userProfile)
+          : false;
         broadcast({ type: 'viagem_atualizada', payload: updated });
+        if (workChanged) broadcast({ type: 'work_sessions_atualizadas', payload: await publicWorkSessions() });
         return res.json(updated);
       }
     }
@@ -2144,7 +2166,11 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
     if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
     const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+    const workChanged = updated.status === 'CONCLUIDO'
+      ? await completeOpenWorkSessionsForTrip(req.params.id, req.userProfile)
+      : false;
     broadcast({ type: 'viagem_atualizada', payload: updated });
+    if (workChanged) broadcast({ type: 'work_sessions_atualizadas', payload: await publicWorkSessions() });
     res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
