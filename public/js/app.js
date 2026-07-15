@@ -92,9 +92,7 @@ const CONFIG_FIELDS = [
   { key: 'tipo', label: 'TIPO' },
   { key: 'produto', label: 'PRODUTO' },
   { key: 'carroceria', label: 'CARROCERIA' },
-  { key: 'kanguru', label: 'KANGURU' },
   { key: 'pamcard', label: 'PAMCARD' },
-  { key: 'status', label: 'STATUS' },
   { key: 'origem', label: 'ORIGEM' },
   { key: 'destino', label: 'DESTINO' }
 ];
@@ -4222,7 +4220,7 @@ function renderProfileSettingsSection() {
       <input type="file" id="profile-avatar-file" accept="image/*" onchange="handleProfileAvatarFile(this)">
       <span>Escolher foto do computador</span>
     </label>
-    <button type="button" class="settings-profile-save" onclick="saveUserProfileSettings()">Salvar perfil</button>
+    <button type="button" class="settings-profile-save" onclick="saveUserProfileSettings()">Salvar</button>
   </section>`;
 }
 
@@ -4283,7 +4281,7 @@ async function saveUserProfileSettings() {
   applyPermissions();
   renderSettingsModal();
   renderAllUnlessInlineEditing();
-  showSummaryToast('Perfil atualizado.');
+  showSummaryToast('Foto salva');
 }
 
 function renderWorkSettingsSection() {
