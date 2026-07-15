@@ -10,6 +10,8 @@ const state = {
   agendamentoTargetId: null,
   contratoTargetId: null,
   contratoTargetField: '',
+  contratoTargetCopyValue: '',
+  contratoTargetCopyType: '',
   productSummaryOpen: true,
   collapsedMetaProducts: {},
   collapsedTotalProducts: {},
@@ -2860,7 +2862,7 @@ function renderDrawerAgendamento() {
 
 function renderDrawerFinanceiro() {
   return `<div class="drawer-card-grid single">${drawerCard('FINANCEIRO', [
-    drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem())),
+    drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem()), 'money'),
     drawerField('valor_adiantamento','Valor adiantamento'),
     drawerAdvanceButton()
   ])}</div>`;
@@ -2942,13 +2944,13 @@ function drawerField(field, label, type = 'text') {
   const editable = canEditDrawerField(field);
   const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : drawerValue(field);
   const display = field === 'peso' ? formatPeso(value) : field === 'vlr_pedagio' ? formatMoney(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
-  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
   const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'datetime-local' : 'text';
-  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" autofocus></label>`;
+  return `<label class="drawer-field is-editing" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" autofocus></label>`;
 }
 
-function drawerReadOnlyValue(label, value) {
-  return `<label class="drawer-field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+function drawerReadOnlyValue(label, value, copyType = 'text') {
+  return `<label class="drawer-field" data-drawer-copy-value="${escapeAttr(value || '')}" data-drawer-copy-type="${escapeAttr(copyType)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
 }
 
 function drawerScheduledTruckButton() {
@@ -2967,24 +2969,34 @@ function drawerSelect(field, label) {
   const value = drawerValue(field);
   const editable = canEditDrawerField(field);
   const isActive = state.drawerActiveField === field;
-  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
-  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><select data-drawer-field="${escapeAttr(field)}" data-drawer-commit="change" autofocus>${renderOptions(getSelectOptions(field), value, true)}</select></label>`;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, value)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+  return `<label class="drawer-field is-editing" ${drawerCopyAttrs(field, value)}><span>${escapeHtml(label)}</span><select data-drawer-field="${escapeAttr(field)}" data-drawer-commit="change" autofocus>${renderOptions(getSelectOptions(field), value, true)}</select></label>`;
 }
 
 function drawerTextarea(field, label) {
   const value = drawerValue(field);
   const editable = canEditDrawerField(field);
   const isActive = state.drawerActiveField === field;
-  if (!isActive || !editable) return `<label class="drawer-field drawer-textarea ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
-  return `<label class="drawer-field drawer-textarea is-editing"><span>${escapeHtml(label)}</span><textarea data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" autofocus>${escapeHtml(value)}</textarea></label>`;
+  if (!isActive || !editable) return `<label class="drawer-field drawer-textarea ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, value)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '-')}</strong></label>`;
+  return `<label class="drawer-field drawer-textarea is-editing" ${drawerCopyAttrs(field, value)}><span>${escapeHtml(label)}</span><textarea data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" autofocus>${escapeHtml(value)}</textarea></label>`;
 }
 
 function drawerPhoneField(field = 'telefone', label = 'Telefone') {
   const phone = drawerValue(field);
   const editable = canEditDrawerField(field);
   const isActive = state.drawerActiveField === field;
-  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(phone || '-')}</strong></label>`;
-  return `<label class="drawer-field is-editing"><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="text" value="${escapeAttr(phone)}" autofocus></label>`;
+  if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, phone)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(phone || '-')}</strong></label>`;
+  return `<label class="drawer-field is-editing" ${drawerCopyAttrs(field, phone)}><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="text" value="${escapeAttr(phone)}" autofocus></label>`;
+}
+
+function drawerCopyAttrs(field, value) {
+  return `data-drawer-copy-field="${escapeAttr(field)}" data-drawer-copy-value="${escapeAttr(value || '')}" data-drawer-copy-type="${escapeAttr(drawerCopyType(field))}"`;
+}
+
+function drawerCopyType(field) {
+  if (['vlr_pedagio', 'valor_adiantamento'].includes(field)) return 'money';
+  if (isDocumentNumberField(field)) return 'document';
+  return 'text';
 }
 
 function drawerAdvanceButton() {
@@ -3137,13 +3149,16 @@ async function handleDrawerClick(event) {
 }
 
 function handleDrawerContextMenu(event) {
-  const drawerField = event.target.closest('[data-drawer-edit-field]');
-  if (state.drawerTab === 'documentos' && drawerField) {
-    const field = drawerField.dataset.drawerEditField;
+  const copyTarget = event.target.closest('[data-drawer-copy-field], [data-drawer-copy-value]');
+  if (copyTarget) {
     const viagem = selectedViagem();
-    if (viagem && isDrawerDocumentCopyField(field)) {
+    if (viagem) {
       event.preventDefault();
-      showDrawerDocumentCopyMenu(event, viagem._id, field);
+      showDrawerCopyMenu(event, viagem._id, {
+        field: copyTarget.dataset.drawerCopyField || '',
+        value: copyTarget.dataset.drawerCopyValue || '',
+        copyType: copyTarget.dataset.drawerCopyType || ''
+      });
       return;
     }
   }
@@ -3162,11 +3177,13 @@ function isDrawerDocumentCopyField(field) {
   return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field);
 }
 
-function showDrawerDocumentCopyMenu(event, id, field) {
+function showDrawerCopyMenu(event, id, { field = '', value = '', copyType = '' } = {}) {
   hideCtxMenu();
   hideAgendamentoMenu();
   state.contratoTargetId = id;
   state.contratoTargetField = field;
+  state.contratoTargetCopyValue = value;
+  state.contratoTargetCopyType = copyType || drawerCopyType(field);
 
   document.getElementById('contrato-copy').style.display = '';
   document.getElementById('contrato-adiantamento').style.display = 'none';
@@ -3177,6 +3194,15 @@ function showDrawerDocumentCopyMenu(event, id, field) {
   menu.style.left = `${Math.min(event.clientX, window.innerWidth - 180)}px`;
   menu.style.top = `${Math.min(event.clientY, window.innerHeight - 48)}px`;
   menu.classList.remove('hidden');
+}
+
+function showDrawerDocumentCopyMenu(event, id, field) {
+  const viagem = state.viagens.find(item => item._id === id) || selectedViagem();
+  showDrawerCopyMenu(event, id, {
+    field,
+    value: viagem?.[field] || '',
+    copyType: drawerCopyType(field)
+  });
 }
 
 function handleMasterCellDrawerShortcut(event) {
@@ -6845,17 +6871,21 @@ function hideContratoMenu() {
   document.getElementById('contrato-menu').classList.add('hidden');
   state.contratoTargetId = null;
   state.contratoTargetField = '';
+  state.contratoTargetCopyValue = '';
+  state.contratoTargetCopyType = '';
 }
 
 async function copyContratoMenuValue(event) {
   const id = state.contratoTargetId;
   const field = state.contratoTargetField;
+  const explicitValue = state.contratoTargetCopyValue;
+  const copyType = state.contratoTargetCopyType || drawerCopyType(field);
   const x = event?.clientX;
   const y = event?.clientY;
   hideContratoMenu();
-  if (!id || !field) return;
+  if (!id && !explicitValue) return;
   const viagem = state.viagens.find(item => item._id === id);
-  const text = copyDocumentValue(viagem?.[field] || '');
+  const text = copyDrawerValue(explicitValue || viagem?.[field] || '', copyType, field);
   try {
     await navigator.clipboard.writeText(text);
   } catch (e) {
@@ -6869,6 +6899,24 @@ async function copyContratoMenuValue(event) {
     textarea.remove();
   }
   showFloatingCopyBubble(x, y);
+}
+
+function copyDrawerValue(value, copyType = 'text', field = '') {
+  if (copyType === 'money') return formatMoneyCopyValue(value);
+  if (copyType === 'document' || isDocumentNumberField(field)) return copyDocumentValue(value);
+  return String(value || '').trim();
+}
+
+function formatMoneyCopyValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '-') return '';
+  const parsedFrete = parseFreteCurrency(raw);
+  const parsed = Number.isFinite(parsedFrete) ? parsedFrete : parseNumber(raw);
+  if (!Number.isFinite(parsed)) return raw.replace(/^R\$\s*/i, '').trim();
+  return parsed.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
 async function concluirContrato(tipo) {
