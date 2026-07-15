@@ -70,6 +70,12 @@
     <div class="origin-filters" id="origin-filters" aria-label="Filtros de origem">
     </div>
     <div class="date-tools">
+      <div class="column-picker-wrap">
+        <button type="button" class="column-picker-btn" id="btn-column-picker" title="Escolher colunas adicionais" aria-label="Escolher colunas adicionais">
+          <span></span><span></span><span></span><span></span>
+        </button>
+        <div class="column-picker-menu hidden" id="column-picker-menu"></div>
+      </div>
       <div class="date-nav">
         <span id="date-weekday" class="date-weekday">Hoje</span>
         <button id="btn-prev-date" class="nav-btn" aria-label="Dia anterior">&lsaquo;</button>
@@ -732,6 +738,7 @@
 
 <div id="agendamento-menu" class="ctx-menu hidden">
   <div class="ctx-item" id="agendamento-mark">Agendado</div>
+  <div class="ctx-item" id="agendamento-palete">Palete</div>
   <div class="ctx-item" id="agendamento-edit">Editar</div>
 </div>
 

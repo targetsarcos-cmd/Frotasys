@@ -1523,22 +1523,6 @@ app.post('/api/viagens/:id/work-sessions', requireViagemEditor, async (req, res)
     if (!workType || workType.field !== WORK_TYPE_FIELD || workType.deletedAt || workType.isActive === false) {
       return res.status(400).json({ error: 'Selecione um tipo de trabalho ativo.' });
     }
-    const conflict = await openSessionForTrip(req.params.id);
-    if (conflict && !workType.allowMultipleUsers) {
-      const conflictType = await findOneById(TABLES.configOptions, conflict.workTypeId);
-      if (req.userProfile?.role !== 'admin') {
-        return res.status(409).json({
-          error: `Esta viagem jÃ¡ estÃ¡ sendo trabalhada por ${conflict.userNameSnapshot}. Atividade: ${conflictType?.name || 'Trabalho'}.`
-        });
-      }
-      await updateDoc(TABLES.configOptions, conflict._id, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-        transferredFromUserId: conflict.userId
-      });
-      await createWorkEvent(conflict, 'transferred', req.userProfile, { newValue: profileDisplayName(req.userProfile) });
-    }
-
     const inserted = await insertDoc(TABLES.configOptions, normalizeWorkSession({
       tripId: req.params.id,
       workTypeId: workType._id,
@@ -2018,6 +2002,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const cadastroStatus = ['SEM CADASTRO', 'CONFERIR CADASTRO'].includes(rawCadastroStatus) ? 'SEM CADASTRO' : '';
     payload.status = cadastroStatus;
     if (payload.marcadoAmarelo !== undefined) payload.marcadoAmarelo = Boolean(payload.marcadoAmarelo);
+    if (payload.agendamentoVerde !== undefined) payload.agendamentoVerde = Boolean(payload.agendamentoVerde);
     if (payload.programado !== undefined) payload.programado = Boolean(payload.programado);
     if (payload.adiantamentoOk !== undefined) payload.adiantamentoOk = Boolean(payload.adiantamentoOk);
     if (payload.conclusaoContrato !== undefined) {
@@ -2065,6 +2050,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     delete patch.usuario;
     delete patch.historico;
     if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
+    if (patch.agendamentoVerde !== undefined) patch.agendamentoVerde = Boolean(patch.agendamentoVerde);
     if (patch.trocaMotoristaConcluida !== undefined) patch.trocaMotoristaConcluida = Boolean(patch.trocaMotoristaConcluida);
     if (patch.programado !== undefined) patch.programado = Boolean(patch.programado);
     if (patch.adiantamentoOk !== undefined) patch.adiantamentoOk = Boolean(patch.adiantamentoOk);

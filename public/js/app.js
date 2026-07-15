@@ -19,6 +19,7 @@ const state = {
   configOptions: {},
   configColors: {},
   tableSort: [],
+  additionalColumns: [],
   freteSort: {},
   freteConsultas: {},
   listaEspera: [],
@@ -81,6 +82,7 @@ const DEFAULT_CONFIG_OPTIONS = {
 };
 const THEME_STORAGE_KEY = 'frotasys-theme';
 const TABLE_SORT_STORAGE_KEY = 'frotasys-table-sort';
+const TABLE_COLUMNS_STORAGE_KEY = 'frotasys-table-columns';
 const USER_PREFS_STORAGE_PREFIX = 'frotasys-user-pref';
 const THEME_OPTIONS = ['dark', 'white'];
 
@@ -314,6 +316,7 @@ async function startApp() {
   if (!auth.profile) return;
   state.userProfile = auth.profile;
   applyTheme(loadThemePreference(), { persist: false });
+  loadTableColumnsPreference();
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
@@ -632,6 +635,7 @@ function initUI() {
   });
   document.addEventListener('click', e => {
     if (!e.target.closest('.row-action-menu')) closeRowActionMenus();
+    if (!e.target.closest('.column-picker-wrap')) closeColumnPicker();
     if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
@@ -687,6 +691,8 @@ function initUI() {
   document.getElementById('ctx-yellow').addEventListener('click', toggleLinhaAmarela);
   document.getElementById('ctx-driver-swap').addEventListener('click', concluirTrocaMotorista);
   document.getElementById('agendamento-mark').addEventListener('click', toggleAgendamentoVerde);
+  document.getElementById('agendamento-palete').addEventListener('click', marcarAgendamentoPalete);
+  document.getElementById('btn-column-picker')?.addEventListener('click', toggleColumnPicker);
   document.getElementById('agendamento-edit').addEventListener('click', () => {
     const id = state.agendamentoTargetId;
     hideAgendamentoMenu();
@@ -2689,6 +2695,7 @@ function changeDate(delta) {
 
 // â”€â”€â”€ RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderAll() {
+  applyAdditionalColumnState();
   syncDynamicSelects();
   renderOriginFilters();
   renderDateWeekday();
@@ -3087,6 +3094,12 @@ async function openWhatsAppForViagem(event, id) {
   } else {
     window.open(href, '_blank', 'noopener');
   }
+
+  if (viagem.secao === 'agenciando' && canEditViagem(viagem)) {
+    closeRowActionMenus();
+    const updated = await updateViagemField(id, 'secao', 'arcos');
+    if (updated) showSummaryToast('Viagem enviada para Faturado.');
+  }
 }
 
 function handleDrawerInput(event) {
@@ -3298,7 +3311,7 @@ async function saveDrawerViagem() {
   renderAll();
 }
 
-const FIELDS = [
+const BASE_FIELDS = [
   { key: 'placa', label: 'PLACA', quick: true },
   { key: 'nome', label: 'MOTORISTA', quick: true },
   { key: 'tipo', label: 'TIPO', select: true },
@@ -3310,16 +3323,42 @@ const FIELDS = [
   { key: 'trabalho', label: 'TRABALHO', noSort: true }
 ];
 
+const EXTRA_FIELDS = [
+  { key: 'eixos', label: 'EIXOS', quick: true, number: true },
+  { key: 'carroceria', label: 'CARROCERIA', select: true },
+  { key: 'pamcard', label: 'PAMCARD', select: true },
+  { key: 'telefone', label: 'TELEFONE', quick: true },
+  { key: 'telefone2', label: 'TELEFONE 2', quick: true },
+  { key: 'produto', label: 'PRODUTO', select: true },
+  { key: 'descarga', label: 'DESCARGA', quick: true },
+  { key: 'dt', label: 'DT', quick: true },
+  { key: 'cte', label: 'CT-E', quick: true },
+  { key: 'manifesto', label: 'MANIFESTO', quick: true },
+  { key: 'contrato', label: 'CONTRATO', quick: true },
+  { key: 'nota', label: 'NOTA', quick: true },
+  { key: 'hora_nf', label: 'HORA NF', quick: true, time: true },
+  { key: 'num_pedagio', label: 'N\u00ba PED\u00c1GIO', quick: true },
+  { key: 'vlr_pedagio', label: 'VLR PED\u00c1GIO', quick: true, number: true },
+  { key: 'valor_adiantamento', label: 'ADIANTAMENTO', quick: true, number: true },
+  { key: 'horas', label: 'HORAS', quick: true },
+  { key: 'usuario', label: 'USU\u00c1RIO' },
+  { key: 'data', label: 'DATA', quick: true },
+  { key: 'obs', label: 'OBSERVA\u00c7\u00c3O', quick: true }
+];
+
+const FIELDS = BASE_FIELDS;
+
 function renderTable(secao) {
   renderTableHeader(secao);
   const tbody = document.getElementById(`tbody-${secao}`);
   const rows = filteredRows(secao);
   const count = document.getElementById(`count-${secao}`);
+  const fields = visibleTableFields();
 
   if (count) count.textContent = `${rows.length} ${rows.length === 1 ? 'registro' : 'registros'}`;
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="${FIELDS.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${fields.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
     updateTableScrollControls(secao);
     return;
   }
@@ -3327,7 +3366,7 @@ function renderTable(secao) {
   const completedRows = rows.filter(isViagemConcluida);
   const pendingRows = rows.filter(v => !isViagemConcluida(v));
   const separator = completedRows.length && pendingRows.length
-    ? `<tr class="table-completion-separator" aria-hidden="true"><td colspan="${FIELDS.length + 1}"></td></tr>`
+    ? `<tr class="table-completion-separator" aria-hidden="true"><td colspan="${fields.length + 1}"></td></tr>`
     : '';
 
   tbody.innerHTML = [
@@ -3352,39 +3391,74 @@ function renderTableRow(v) {
     : '';
 
   return `<tr data-id="${escapeHtml(v._id)}" class="origin-row master-row ${originClass} ${completeClass} ${semCadastroClass} ${conferirMotoristaClass} ${yellowClass} ${selectedClass}" onclick="selectViagem('${escapeAttr(v._id)}')" oncontextmenu="showCtxMenu(event,'${escapeAttr(v._id)}')">
-    <td data-field="placa" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.placa || '')}" class="quick-edit placa-cell">
-      <strong class="master-plate">${obsIndicator}${escapeHtml(v.placa || '-')}</strong>
-    </td>
-    <td data-field="nome" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.nome || '')}" class="quick-edit">
-      <div class="driver-cell">
-        <strong>${escapeHtml(String(v.nome || '-').toUpperCase())}</strong>
-      </div>
-    </td>
-    <td data-field="tipo" data-id="${escapeAttr(v._id)}">
-      <span class="modern-badge type-chip ${tipoSlug(v.tipo)}" style="${escapeAttr(selectColorStyle('tipo', normalizeTipo(v.tipo)))}">${escapeHtml(normalizeTipo(v.tipo) || '-')}</span>
-    </td>
-    <td data-field="origem" data-id="${escapeAttr(v._id)}">
-      <div class="route-cell"><strong>${escapeHtml(String(v.origem || '-').toUpperCase())}</strong></div>
-    </td>
-    <td data-field="destino" data-id="${escapeAttr(v._id)}">
-      <div class="route-cell"><strong>${escapeHtml(String(v.destino || '-').toUpperCase())}</strong></div>
-    </td>
-    <td data-field="peso" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.peso || '')}" class="quick-edit">
-      <strong>${escapeHtml(formatPeso(v.peso || '') || '-')}</strong>
-    </td>
-    <td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
-      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(normalizeHours(v.agendamento || '') || '-')}</span></span>
-    </td>
-    <td data-field="status" data-id="${escapeAttr(v._id)}" data-status-label="${escapeAttr(status || '-')}" class="status-cell" style="--status-font-size:${statusFontSize(status)}px;">
-      ${statusBadge}
-    </td>
-    <td class="work-cell" onclick="event.stopPropagation()">
-      ${renderWorkCell(v)}
-    </td>
+    ${visibleTableFields().map(field => renderTableCell(v, field, { status, statusBadge, obsIndicator })).join('')}
     <td class="master-actions" onclick="event.stopPropagation()">
       ${rowActionMenu(v)}
     </td>
   </tr>`;
+}
+
+function visibleTableFields() {
+  const selected = new Set((state.additionalColumns || []).map(String));
+  const extras = EXTRA_FIELDS.filter(field => selected.has(field.key));
+  const agendamentoIndex = BASE_FIELDS.findIndex(field => field.key === 'agendamento');
+  if (agendamentoIndex === -1) return [...BASE_FIELDS, ...extras];
+  return [
+    ...BASE_FIELDS.slice(0, agendamentoIndex + 1),
+    ...extras,
+    ...BASE_FIELDS.slice(agendamentoIndex + 1)
+  ];
+}
+
+function allSortableTableFields() {
+  return [...BASE_FIELDS, ...EXTRA_FIELDS];
+}
+
+function renderTableCell(v, field, context = {}) {
+  const raw = v[field.key] || '';
+  const quickClass = field.quick ? 'quick-edit' : '';
+  if (field.key === 'placa') {
+    return `<td data-field="placa" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.placa || '')}" class="quick-edit placa-cell">
+      <strong class="master-plate">${context.obsIndicator || ''}${escapeHtml(v.placa || '-')}</strong>
+    </td>`;
+  }
+  if (field.key === 'nome') {
+    return `<td data-field="nome" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.nome || '')}" class="quick-edit">
+      <div class="driver-cell"><strong>${escapeHtml(String(v.nome || '-').toUpperCase())}</strong></div>
+    </td>`;
+  }
+  if (field.key === 'tipo') {
+    return `<td data-field="tipo" data-id="${escapeAttr(v._id)}">
+      <span class="modern-badge type-chip ${tipoSlug(v.tipo)}" style="${escapeAttr(selectColorStyle('tipo', normalizeTipo(v.tipo)))}">${escapeHtml(normalizeTipo(v.tipo) || '-')}</span>
+    </td>`;
+  }
+  if (field.key === 'origem' || field.key === 'destino') {
+    return `<td data-field="${escapeAttr(field.key)}" data-id="${escapeAttr(v._id)}">
+      <div class="route-cell"><strong>${escapeHtml(String(raw || '-').toUpperCase())}</strong></div>
+    </td>`;
+  }
+  if (field.key === 'peso') {
+    return `<td data-field="peso" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.peso || '')}" class="quick-edit">
+      <strong>${escapeHtml(formatPeso(v.peso || '') || '-')}</strong>
+    </td>`;
+  }
+  if (field.key === 'agendamento') {
+    return `<td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
+      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(formatAgendamentoDisplay(v.agendamento || '') || '-')}</span></span>
+    </td>`;
+  }
+  if (field.key === 'status') {
+    const status = context.status || viagemStatusDisplay(v);
+    const statusBadge = context.statusBadge || renderStatusButton(v, status);
+    return `<td data-field="status" data-id="${escapeAttr(v._id)}" data-status-label="${escapeAttr(status || '-')}" class="status-cell" style="--status-font-size:${statusFontSize(status)}px;">${statusBadge}</td>`;
+  }
+  if (field.key === 'trabalho') {
+    return `<td class="work-cell" onclick="event.stopPropagation()">${renderWorkCell(v)}</td>`;
+  }
+  const value = formatCellValue(field.key, raw);
+  return `<td data-field="${escapeAttr(field.key)}" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(raw)}" class="${quickClass}">
+    <strong>${escapeHtml(value || '-')}</strong>
+  </td>`;
 }
 
 function renderStatusButton(viagem, status) {
@@ -3395,6 +3469,10 @@ function renderStatusButton(viagem, status) {
 
 function workSessionForTrip(tripId) {
   return state.workSessions.find(session => session.tripId === tripId) || null;
+}
+
+function workSessionsForTrip(tripId) {
+  return state.workSessions.filter(session => session.tripId === tripId);
 }
 
 function workTypeById(id) {
@@ -3441,20 +3519,25 @@ function workCellTitle(viagem, session, type) {
     session.userNameSnapshot || 'Usu\u00e1rio',
     type?.name || 'Trabalho',
     `Iniciado \u00e0s ${formatTimeFromIso(session.startedAt)}`,
-    `${session.status === 'paused' ? 'Pausado' : 'Em andamento'} h\u00e1 ${workDurationLabel(session.startedAt)}`,
-    `Viagem ${viagem.placa || '-'}`,
-    `Motorista: ${viagem.nome || '-'}`
+    `${session.status === 'paused' ? 'Pausado' : 'Em andamento'} h\u00e1 ${workDurationLabel(session.startedAt)}`
   ].join('\n');
 }
 
 function renderWorkCell(viagem) {
-  const session = workSessionForTrip(viagem._id);
-  if (!session) {
+  const sessions = workSessionsForTrip(viagem._id);
+  if (!sessions.length) {
     if (isViagemConcluida(viagem)) {
       return `<button type="button" class="work-start-btn is-disabled" disabled title="Viagem conclu\u00edda"><span aria-hidden="true">&#9654;</span> Iniciar Trabalho</button>`;
     }
     return `<button type="button" class="work-start-btn" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}')" title="Iniciar trabalho"><span aria-hidden="true">&#9654;</span> Iniciar Trabalho</button>`;
   }
+  if (sessions.length > 1) {
+    const avatars = sessions.slice(0, 5).map(session => renderWorkAvatarButton(viagem, session)).join('');
+    const extra = sessions.length > 5 ? `<span class="work-avatar-extra">+${sessions.length - 5}</span>` : '';
+    const addButton = isViagemConcluida(viagem) ? '' : `<button type="button" class="work-add-mini" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}')" title="Iniciar outro trabalho">+</button>`;
+    return `<div class="work-avatar-stack">${avatars}${extra}${addButton}</div>`;
+  }
+  const session = sessions[0];
   const type = session.workType || workTypeById(session.workTypeId) || {};
   const color = isHexColor(type.color) ? type.color : '#2563eb';
   const paused = session.status === 'paused';
@@ -3471,6 +3554,16 @@ function renderWorkCell(viagem) {
     </span>
     <span class="work-arrow" aria-hidden="true">&#9654;</span>
   </button>`;
+}
+
+function renderWorkAvatarButton(viagem, session) {
+  const type = session.workType || workTypeById(session.workTypeId) || {};
+  const color = isHexColor(type.color) ? type.color : '#2563eb';
+  const title = workCellTitle(viagem, session, type);
+  const avatar = session.userAvatarSnapshot
+    ? `<img src="${escapeAttr(session.userAvatarSnapshot)}" alt="">`
+    : escapeHtml(initialsFromName(session.userNameSnapshot));
+  return `<button type="button" class="work-avatar-mini ${canManageWorkCell(session) ? 'is-manageable' : ''}" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}','${escapeAttr(session._id)}')" style="--work-color:${escapeAttr(color)}" title="${escapeAttr(title)}">${avatar}</button>`;
 }
 
 function closeWorkPopover() {
@@ -3498,13 +3591,16 @@ function positionWorkPopover(popover, anchor) {
   popover.style.top = `${Math.max(8, top)}px`;
 }
 
-function openWorkPopover(event, tripId) {
+function openWorkPopover(event, tripId, sessionId = '') {
   event?.preventDefault?.();
   event?.stopPropagation?.();
   closeWorkPopover();
   const viagem = state.viagens.find(item => item._id === tripId);
   if (!viagem) return;
-  const session = workSessionForTrip(tripId);
+  const sessions = workSessionsForTrip(tripId);
+  const session = sessionId
+    ? sessions.find(item => item._id === sessionId)
+    : (sessions.length === 1 ? sessions[0] : null);
   if (!session && isViagemConcluida(viagem)) return;
   const popover = document.createElement('div');
   popover.className = 'work-popover';
@@ -3538,14 +3634,16 @@ function renderWorkManagePopover(viagem, session) {
     <div class="work-detail">
       <span>Iniciado \u00e0s ${escapeHtml(formatTimeFromIso(session.startedAt))}</span>
       <span>${escapeHtml(paused ? 'Pausado' : 'Em andamento')} h\u00e1 ${escapeHtml(workDurationLabel(session.startedAt))}</span>
-      <span>${escapeHtml(viagem.placa || '-')} - ${escapeHtml(viagem.nome || '-')}</span>
     </div>`;
-  if (!manageable) return `${details}<div class="work-empty">Esta viagem j\u00e1 est\u00e1 sendo trabalhada por outro usu\u00e1rio.</div>`;
+  if (!manageable) return `${details}
+    <div class="work-popover-subtitle">Iniciar trabalho</div>
+    <div class="work-type-list">
+      ${state.workTypes.filter(typeItem => typeItem.isActive).map(typeItem => renderWorkTypeOption(typeItem, `startWorkSession('${escapeAttr(viagem._id)}','${escapeAttr(typeItem._id)}')`)).join('') || '<div class="work-empty">Sem atividades ativas.</div>'}
+    </div>`;
   return `${details}
     <div class="work-actions">
       ${paused ? `<button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','resume')">Retomar</button>` : `<button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','pause')">Pausar</button>`}
       <button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','complete')">Finalizar</button>
-      <button type="button" class="danger" onclick="cancelWorkSession('${escapeAttr(session._id)}')">Cancelar</button>
     </div>
     <div class="work-popover-subtitle">Trocar atividade</div>
     <div class="work-type-list">
@@ -3601,11 +3699,6 @@ async function changeWorkType(sessionId, workTypeId) {
   if (sessions) state.workSessions = normalizeWorkSessions(sessions);
   renderAllUnlessInlineEditing();
   showSummaryToast('Atividade alterada.');
-}
-
-async function cancelWorkSession(sessionId) {
-  if (!confirm('Cancelar esta atividade?')) return;
-  await updateWorkSession(sessionId, 'cancel');
 }
 
 function statusFontSize(status) {
@@ -3803,8 +3896,9 @@ function renderTableHeader(secao) {
   const table = document.getElementById(`table-${secao}`);
   const headRow = table?.querySelector('thead tr');
   if (!headRow) return;
+  const fields = visibleTableFields();
 
-  headRow.innerHTML = `${FIELDS.map(field => {
+  headRow.innerHTML = `${fields.map(field => {
     if (field.noSort) return `<th data-field="${escapeAttr(field.key)}">${escapeHtml(field.label)}</th>`;
     const criteria = normalizeTableSortCriteria();
     const sortIndex = criteria.findIndex(item => item.field === field.key);
@@ -4633,7 +4727,7 @@ function filteredRows(secao) {
 }
 
 function sortTableBy(fieldKey) {
-  const field = FIELDS.find(item => item.key === fieldKey);
+  const field = allSortableTableFields().find(item => item.key === fieldKey);
   if (!field) return;
   const criteria = normalizeTableSortCriteria();
   const existing = criteria.find(item => item.field === fieldKey);
@@ -4686,7 +4780,7 @@ function normalizeTableSortCriteria() {
     : state.tableSort?.field
       ? [state.tableSort]
       : [];
-  const allowed = new Set(FIELDS.map(field => field.key));
+  const allowed = new Set(allSortableTableFields().map(field => field.key));
   const seen = new Set();
   return raw
     .filter(item => item?.field && allowed.has(item.field) && !seen.has(item.field) && seen.add(item.field))
@@ -4712,6 +4806,73 @@ function saveTableSortPreference() {
   } catch (e) {
     // Keep sorting usable if storage is unavailable.
   }
+}
+
+function normalizeAdditionalColumns(values) {
+  const allowed = new Set(EXTRA_FIELDS.map(field => field.key));
+  const seen = new Set();
+  return (Array.isArray(values) ? values : [])
+    .map(String)
+    .filter(key => allowed.has(key) && !seen.has(key) && seen.add(key));
+}
+
+function loadTableColumnsPreference() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(userPreferenceStorageKey(TABLE_COLUMNS_STORAGE_KEY)) || '[]');
+    state.additionalColumns = normalizeAdditionalColumns(saved);
+  } catch (e) {
+    state.additionalColumns = [];
+  }
+}
+
+function saveTableColumnsPreference() {
+  try {
+    localStorage.setItem(userPreferenceStorageKey(TABLE_COLUMNS_STORAGE_KEY), JSON.stringify(normalizeAdditionalColumns(state.additionalColumns)));
+  } catch (e) {
+    // Keep table usable if storage is unavailable.
+  }
+}
+
+function renderColumnPicker() {
+  const menu = document.getElementById('column-picker-menu');
+  if (!menu) return;
+  const selected = new Set(state.additionalColumns || []);
+  menu.innerHTML = `<div class="column-picker-title">Adicionar colunas</div>
+    <div class="column-picker-fixed">As colunas atuais ficam sempre vis&iacute;veis.</div>
+    <div class="column-picker-options">
+      ${EXTRA_FIELDS.map(field => `<label class="column-picker-option">
+        <input type="checkbox" value="${escapeAttr(field.key)}" ${selected.has(field.key) ? 'checked' : ''} onchange="toggleAdditionalColumn('${escapeAttr(field.key)}', this.checked)">
+        <span>${escapeHtml(field.label)}</span>
+      </label>`).join('')}
+    </div>`;
+}
+
+function toggleColumnPicker(event) {
+  event?.stopPropagation?.();
+  const menu = document.getElementById('column-picker-menu');
+  if (!menu) return;
+  renderColumnPicker();
+  menu.classList.toggle('hidden');
+}
+
+function closeColumnPicker() {
+  document.getElementById('column-picker-menu')?.classList.add('hidden');
+}
+
+function toggleAdditionalColumn(key, enabled) {
+  const current = new Set(state.additionalColumns || []);
+  if (enabled) current.add(key);
+  else current.delete(key);
+  state.additionalColumns = normalizeAdditionalColumns([...current]);
+  applyAdditionalColumnState();
+  saveTableColumnsPreference();
+  renderTable('arcos');
+  renderTable('agenciando');
+  requestAnimationFrame(updateAllTableScrollControls);
+}
+
+function applyAdditionalColumnState() {
+  document.body.classList.toggle('has-extra-table-columns', normalizeAdditionalColumns(state.additionalColumns).length > 0);
 }
 
 function sortValue(viagem, field) {
@@ -6082,6 +6243,7 @@ function cancelInlineEdit() {
 
 function normalizeFieldValue(field, value) {
   if (field === 'marcadoAmarelo') return Boolean(value);
+  if (field === 'agendamentoVerde') return Boolean(value);
   if (field === 'trocaMotoristaConcluida') return Boolean(value);
   if (field === 'programado') return Boolean(value);
   if (field === 'adiantamentoOk') return Boolean(value);
@@ -6100,10 +6262,15 @@ function formatCellValue(field, value) {
   if (field === 'vlr_pedagio' && value !== '') return formatMoney(value);
   if (field === 'peso' && value !== '') return formatPeso(value);
   if (field === 'descarga' && value !== '') return formatDescargaDateTime(value);
+  if (field === 'agendamento' && value !== '') return formatAgendamentoDisplay(value);
   if (TIME_FIELDS.includes(field) && value !== '') return normalizeHours(value);
   if ((field === 'telefone' || field === 'telefone2') && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
   return value || '';
+}
+
+function formatAgendamentoDisplay(value) {
+  return normalizeOption(value) === 'PALETE' ? 'Palete' : normalizeHours(value);
 }
 
 function inputPlaceholder(field) {
@@ -6501,7 +6668,7 @@ function copyViagemRows(viagem = {}) {
     ['PESO', formatPeso(viagem.peso || '')],
     ['PRODUTO', viagem.produto || ''],
     ['DT', viagem.dt || ''],
-    ['AGENDAMENTO', normalizeHours(viagem.agendamento || '')]
+    ['AGENDAMENTO', formatAgendamentoDisplay(viagem.agendamento || '')]
   ];
 }
 
@@ -6633,11 +6800,12 @@ function showAgendamentoMenu(e, cell) {
   const viagem = state.viagens.find(item => item._id === state.agendamentoTargetId);
   const mark = document.getElementById('agendamento-mark');
   mark.textContent = viagem?.agendamentoVerde ? 'Remover agendamento' : 'Agendado';
+  document.getElementById('agendamento-palete').textContent = normalizeOption(viagem?.agendamento) === 'PALETE' ? 'Remover Palete' : 'Palete';
   document.getElementById('agendamento-edit').textContent = 'Editar';
 
   const menu = document.getElementById('agendamento-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 170)}px`;
-  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 95)}px`;
+  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 125)}px`;
   menu.classList.remove('hidden');
 }
 
@@ -6728,6 +6896,17 @@ async function toggleAgendamentoVerde() {
   const viagem = state.viagens.find(item => item._id === id);
   hideAgendamentoMenu();
   await updateViagemField(id, 'agendamentoVerde', !viagem?.agendamentoVerde);
+}
+
+async function marcarAgendamentoPalete() {
+  const id = state.agendamentoTargetId;
+  if (!id) return;
+  const viagem = state.viagens.find(item => item._id === id);
+  const isPalete = normalizeOption(viagem?.agendamento) === 'PALETE';
+  hideAgendamentoMenu();
+  const updated = await updateViagemField(id, 'agendamento', isPalete ? '' : 'PALETE', { skipRender: true });
+  if (!updated) return renderAll();
+  await updateViagemField(id, 'agendamentoVerde', !isPalete);
 }
 
 // â”€â”€â”€ METAS SAVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
