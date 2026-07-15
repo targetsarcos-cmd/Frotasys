@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs/promises');
 const ExcelJS = require('exceljs');
 const supabase = require('./supabaseClient');
 const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
@@ -41,6 +42,8 @@ const USER_PROFILE_SETTINGS_FIELD = '__user_profile_settings';
 const WORK_TYPE_FIELD = '__work_type';
 const WORK_SESSION_FIELD = '__trip_work_session';
 const WORK_EVENT_FIELD = '__trip_work_session_event';
+const AVATAR_UPLOAD_DIR = path.join(__dirname, 'public', 'uploads', 'avatars');
+const AVATAR_PUBLIC_PREFIX = '/uploads/avatars';
 const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
 const DEFAULT_WORK_TYPES = [
   { name: 'DT', code: 'DT', color: '#f97316', icon: 'play', displayOrder: 1 },
@@ -1235,7 +1238,28 @@ function normalizeAvatarUrl(value = '') {
   const url = String(value || '').trim();
   if (!url) return '';
   if (url.length > 800000) return '';
-  return /^(https?:|data:image\/)/i.test(url) ? url : '';
+  return /^(https?:|data:image\/)/i.test(url) || url.startsWith(`${AVATAR_PUBLIC_PREFIX}/`) ? url : '';
+}
+
+function safeAvatarUserId(userId = '') {
+  return String(userId || 'user').replace(/[^a-z0-9_-]/gi, '_').slice(0, 80) || 'user';
+}
+
+async function persistAvatarUrl(userId, value = '') {
+  const url = normalizeAvatarUrl(value);
+  if (!url || !url.startsWith('data:image/')) return url;
+
+  const match = url.match(/^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) return '';
+
+  const ext = match[1].toLowerCase().replace('jpeg', 'jpg');
+  const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+  if (!buffer.length || buffer.length > 250 * 1024) return '';
+
+  await fs.mkdir(AVATAR_UPLOAD_DIR, { recursive: true });
+  const filename = `${safeAvatarUserId(userId)}-${Date.now()}.${ext}`;
+  await fs.writeFile(path.join(AVATAR_UPLOAD_DIR, filename), buffer);
+  return `${AVATAR_PUBLIC_PREFIX}/${filename}`;
 }
 
 async function userProfileSettings(userId) {
@@ -1244,9 +1268,14 @@ async function userProfileSettings(userId) {
   const doc = await findOne(TABLES.configOptions, item =>
     item.field === USER_PROFILE_SETTINGS_FIELD && item.userId === key
   );
+  let avatarUrl = normalizeAvatarUrl(doc?.avatarUrl || '');
+  if (doc?._id && avatarUrl.startsWith('data:image/')) {
+    avatarUrl = await persistAvatarUrl(key, avatarUrl);
+    if (avatarUrl) await updateDoc(TABLES.configOptions, doc._id, { avatarUrl });
+  }
   return {
     displayName: String(doc?.displayName || '').trim(),
-    avatarUrl: normalizeAvatarUrl(doc?.avatarUrl || '')
+    avatarUrl
   };
 }
 
@@ -1255,11 +1284,12 @@ async function saveUserProfileSettings(userId, data = {}) {
   const existing = await findOne(TABLES.configOptions, item =>
     item.field === USER_PROFILE_SETTINGS_FIELD && item.userId === key
   );
+  const avatarUrl = await persistAvatarUrl(key, data.avatarUrl || '');
   const payload = {
     field: USER_PROFILE_SETTINGS_FIELD,
     userId: key,
     displayName: String(data.displayName || '').trim().slice(0, 80),
-    avatarUrl: normalizeAvatarUrl(data.avatarUrl || '')
+    avatarUrl
   };
   const saved = existing
     ? await updateDoc(TABLES.configOptions, existing._id, payload)
