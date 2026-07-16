@@ -3134,11 +3134,17 @@ function showPhoneChoiceMenu(event, id, mode = 'conversation') {
   const menuWidth = 190;
   const menuHeight = (44 * phones.length) + 10;
   const baseLeft = triggerRect ? triggerRect.left : (event?.clientX || window.innerWidth / 2);
-  const baseTop = triggerRect ? triggerRect.bottom + 8 : (event?.clientY || window.innerHeight / 2);
+  const spaceBelow = triggerRect ? window.innerHeight - triggerRect.bottom - 8 : window.innerHeight;
+  const spaceAbove = triggerRect ? triggerRect.top - 8 : 0;
+  const opensAbove = triggerRect && spaceBelow < menuHeight && spaceAbove > spaceBelow;
+  const baseTop = triggerRect
+    ? (opensAbove ? triggerRect.top - menuHeight - 8 : triggerRect.bottom + 8)
+    : (event?.clientY || window.innerHeight / 2);
   const left = Math.min(baseLeft, window.innerWidth - menuWidth - 8);
   const top = Math.min(baseTop, window.innerHeight - menuHeight - 8);
   menu.style.left = `${Math.max(8, left)}px`;
   menu.style.top = `${Math.max(8, top)}px`;
+  menu.classList.toggle('opens-above', opensAbove);
   menu.classList.remove('hidden');
 }
 

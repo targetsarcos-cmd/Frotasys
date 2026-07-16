@@ -1891,6 +1891,11 @@ body.reports-page-active .main {
   width: 190px;
   padding: 5px;
   overflow: visible;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, .22);
+}
+
+.phone-choice-menu.opens-above {
+  box-shadow: 0 -14px 34px rgba(15, 23, 42, .18);
 }
 
 .phone-choice-menu .ctx-item {
