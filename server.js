@@ -815,7 +815,7 @@ function normalizeWorkSession(data = {}, profile = {}, existing = {}) {
     workTypeId: String(data.workTypeId ?? existing.workTypeId ?? '').trim(),
     userId: String(data.userId ?? existing.userId ?? profile.user_id ?? profile.id ?? '').trim(),
     userNameSnapshot: String(data.userNameSnapshot ?? existing.userNameSnapshot ?? profileDisplayName(profile)).trim(),
-    userAvatarSnapshot: normalizeAvatarUrl(data.userAvatarSnapshot ?? existing.userAvatarSnapshot ?? profile.avatarUrl ?? ''),
+    userAvatarSnapshot: '',
     status: ['active', 'paused', 'completed', 'cancelled'].includes(String(data.status || existing.status || '').trim())
       ? String(data.status || existing.status).trim()
       : 'active',
@@ -843,6 +843,7 @@ async function publicWorkSessions() {
   const typeMap = Object.fromEntries(types.map(type => [type._id, publicWorkType(type)]));
   return sessions.map(session => ({
     ...session,
+    userAvatarSnapshot: '',
     workType: typeMap[session.workTypeId] || null
   }));
 }
@@ -1240,7 +1241,7 @@ function publicProfile(profile = {}) {
     user_id: profile.user_id,
     nome: profile.nome || '',
     displayName: profile.displayName || profile.nome || '',
-    avatarUrl: profile.avatarUrl || '',
+    avatarUrl: '',
     email: profile.email || '',
     role: profile.role || 'visualizador',
     ativo: profile.ativo !== false,
@@ -1409,8 +1410,7 @@ app.get('/api/auth/me', (req, res) => {
 app.put('/api/auth/profile', async (req, res) => {
   try {
     const saved = await saveUserProfileSettings(req.authUser.id, {
-      displayName: req.body?.displayName,
-      avatarUrl: req.body?.avatarUrl
+      displayName: req.body?.displayName
     });
     const profile = {
       ...req.userProfile,
@@ -1422,7 +1422,7 @@ app.put('/api/auth/profile', async (req, res) => {
       isWorkSessionOpen(item),
       {
         userNameSnapshot: profileDisplayName(profile),
-        userAvatarSnapshot: profile.avatarUrl || ''
+        userAvatarSnapshot: ''
       }
     );
     const sessions = await publicWorkSessions();

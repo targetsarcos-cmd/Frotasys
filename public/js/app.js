@@ -779,17 +779,9 @@ function loggedUserDisplayName() {
   return String(state.userProfile?.displayName || state.userProfile?.nome || state.userProfile?.email || '').trim();
 }
 
-function loggedUserAvatarUrl() {
-  return String(state.userProfile?.avatarUrl || '').trim();
-}
-
 function loggedUserBadgeHtml() {
   const name = loggedUserDisplayName();
-  const avatar = loggedUserAvatarUrl();
-  const visual = avatar
-    ? `<img src="${escapeAttr(avatar)}" alt="">`
-    : `<span>${escapeHtml(initialsFromName(name))}</span>`;
-  return `<span class="logged-user-avatar">${visual}</span><strong>${escapeHtml(name)}</strong>`;
+  return `<span class="logged-user-avatar"><span>${escapeHtml(initialsFromName(name))}</span></span><strong>${escapeHtml(name)}</strong>`;
 }
 
 function normalizeLembrete(lembrete = {}) {
@@ -837,7 +829,7 @@ function normalizeWorkSessions(payload = []) {
     workTypeId: String(item.workTypeId || ''),
     userId: String(item.userId || ''),
     userNameSnapshot: String(item.userNameSnapshot || ''),
-    userAvatarSnapshot: String(item.userAvatarSnapshot || ''),
+    userAvatarSnapshot: '',
     status: String(item.status || ''),
     startedAt: String(item.startedAt || ''),
     pausedAt: String(item.pausedAt || ''),
@@ -3659,9 +3651,7 @@ function renderWorkCell(viagem) {
   const paused = session.status === 'paused';
   const manageable = canManageWorkCell(session);
   const title = workCellTitle(viagem, session, type);
-  const avatar = session.userAvatarSnapshot
-    ? `<img src="${escapeAttr(session.userAvatarSnapshot)}" alt="">`
-    : escapeHtml(initialsFromName(session.userNameSnapshot));
+  const avatar = escapeHtml(initialsFromName(session.userNameSnapshot));
   return `<button type="button" class="work-session-card ${paused ? 'is-paused' : ''} ${manageable ? 'is-manageable' : ''}" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}')" style="--work-color:${escapeAttr(color)};${escapeAttr(colorPreviewStyle(color))}" title="${escapeAttr(title)}">
     <span class="work-avatar">${avatar}</span>
     <span class="work-info">
@@ -3676,9 +3666,7 @@ function renderWorkAvatarButton(viagem, session) {
   const type = session.workType || workTypeById(session.workTypeId) || {};
   const color = isHexColor(type.color) ? type.color : '#2563eb';
   const title = workCellTitle(viagem, session, type);
-  const avatar = session.userAvatarSnapshot
-    ? `<img src="${escapeAttr(session.userAvatarSnapshot)}" alt="">`
-    : escapeHtml(initialsFromName(session.userNameSnapshot));
+  const avatar = escapeHtml(initialsFromName(session.userNameSnapshot));
   return `<button type="button" class="work-avatar-mini ${canManageWorkCell(session) ? 'is-manageable' : ''}" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}','${escapeAttr(session._id)}')" style="--work-color:${escapeAttr(color)}" title="${escapeAttr(title)}">${avatar}</button>`;
 }
 
@@ -4299,80 +4287,29 @@ function renderProfileSettingsSection() {
       <span>Coluna trabalho</span>
     </div>
     <div class="settings-profile-preview">
-      <span class="settings-profile-avatar">${loggedUserAvatarUrl() ? `<img src="${escapeAttr(loggedUserAvatarUrl())}" alt="">` : escapeHtml(initialsFromName(loggedUserDisplayName()))}</span>
+      <span class="settings-profile-avatar">${escapeHtml(initialsFromName(loggedUserDisplayName()))}</span>
       <strong>${escapeHtml(loggedUserDisplayName())}</strong>
     </div>
     <label class="settings-profile-field">
       <span>Nome</span>
       <input type="text" id="profile-display-name" value="${escapeAttr(loggedUserDisplayName())}" placeholder="Nome para exibir">
     </label>
-    <input type="hidden" id="profile-avatar-url" value="${escapeAttr(loggedUserAvatarUrl())}">
-    <label class="settings-profile-file">
-      <input type="file" id="profile-avatar-file" accept="image/*" onchange="handleProfileAvatarFile(this)">
-      <span>Escolher foto do computador</span>
-    </label>
     <button type="button" class="settings-profile-save" onclick="saveUserProfileSettings()">Salvar</button>
   </section>`;
 }
 
-async function handleProfileAvatarFile(input) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    showSummaryToast('Selecione uma imagem.', 'error');
-    input.value = '';
-    return;
-  }
-  try {
-    const dataUrl = await resizeAvatarFile(file);
-    const hidden = document.getElementById('profile-avatar-url');
-    if (hidden) hidden.value = dataUrl;
-    const avatar = document.querySelector('.settings-profile-avatar');
-    if (avatar) avatar.innerHTML = `<img src="${escapeAttr(dataUrl)}" alt="">`;
-  } catch (e) {
-    console.error('Erro ao carregar foto:', e);
-    showSummaryToast('Nao foi possivel carregar a foto.', 'error');
-  }
-}
-
-function resizeAvatarFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const size = 160;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        const sourceSize = Math.min(img.width, img.height);
-        const sx = Math.max(0, (img.width - sourceSize) / 2);
-        const sy = Math.max(0, (img.height - sourceSize) / 2);
-        ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 async function saveUserProfileSettings() {
   const displayName = String(document.getElementById('profile-display-name')?.value || '').trim();
-  const avatarUrl = String(document.getElementById('profile-avatar-url')?.value || '').trim();
   const saved = await apiFetch('/api/auth/profile', {
     method: 'PUT',
-    body: JSON.stringify({ displayName, avatarUrl })
+    body: JSON.stringify({ displayName })
   });
   if (!saved) return;
   state.userProfile = { ...state.userProfile, ...saved };
   applyPermissions();
   renderSettingsModal();
   renderAllUnlessInlineEditing();
-  showSummaryToast('Foto salva');
+  showSummaryToast('Perfil salvo');
 }
 
 function renderWorkSettingsSection() {
