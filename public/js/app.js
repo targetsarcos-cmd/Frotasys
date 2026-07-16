@@ -12,6 +12,7 @@ const state = {
   contratoTargetField: '',
   contratoTargetCopyValue: '',
   contratoTargetCopyType: '',
+  phoneChoiceTargetId: null,
   productSummaryOpen: true,
   collapsedMetaProducts: {},
   collapsedTotalProducts: {},
@@ -82,11 +83,9 @@ const DEFAULT_CONFIG_OPTIONS = {
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: DEFAULT_DESTINOS
 };
-const THEME_STORAGE_KEY = 'frotasys-theme';
 const TABLE_SORT_STORAGE_KEY = 'frotasys-table-sort';
 const TABLE_COLUMNS_STORAGE_KEY = 'frotasys-table-columns';
 const USER_PREFS_STORAGE_PREFIX = 'frotasys-user-pref';
-const THEME_OPTIONS = ['dark', 'white'];
 
 const CONFIG_FIELDS = [
   { key: 'tipo', label: 'TIPO' },
@@ -309,13 +308,13 @@ function applyViewportGuard() {
 async function startApp() {
   if (appStarted || !isDesktopViewport()) return;
   appStarted = true;
-  applyTheme(loadThemePreference(), { persist: false });
+  applyWhiteTheme();
   document.getElementById('date-picker').value = state.currentDate;
   renderDateWeekday();
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
-  applyTheme(loadThemePreference(), { persist: false });
+  applyWhiteTheme();
   loadTableColumnsPreference();
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
@@ -555,7 +554,6 @@ function initUI() {
   summaryCopyBtn?.addEventListener('pointerdown', prepareSummaryCopyImage);
   summaryCopyBtn?.addEventListener('click', copySummaryAsImage);
 
-  document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleTheme);
   document.getElementById('btn-settings').addEventListener('click', openSettingsModal);
   document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
   document.getElementById('settings-btn-close').addEventListener('click', closeSettingsModal);
@@ -640,6 +638,7 @@ function initUI() {
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (!e.target.closest('#contrato-menu')) hideContratoMenu();
+    if (!e.target.closest('#phone-choice-menu') && !e.target.closest('[data-phone-choice-trigger]')) hidePhoneChoiceMenu();
     if (e.target.matches('input, select, button')) return;
     if (e.target.closest('.master-row')) return;
     const td = e.target.closest('td[data-field]:not(.cell-select)');
@@ -733,6 +732,7 @@ function initUI() {
       hideCtxMenu();
       hideAgendamentoMenu();
       hideContratoMenu();
+      hidePhoneChoiceMenu();
       cancelInlineEdit();
     }
   });
@@ -772,7 +772,6 @@ function applyPermissions() {
   updateUndoButton();
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-settings').classList.remove('is-hidden');
-  updateThemeControls();
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
 }
 
@@ -3016,17 +3015,26 @@ function whatsappHref(phone) {
 }
 
 function rowWhatsappAction(viagem) {
-  const href = whatsappHrefForViagem(viagem);
-  if (!href) return '';
-  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action" onclick="openWhatsAppForViagem(event,'${escapeAttr(viagem._id)}')" title="Abrir WhatsApp" aria-label="Abrir WhatsApp"><img src="img/whatsapp.jpg" alt=""></button>`;
+  if (!hasConversationPhone(viagem)) return '';
+  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${escapeAttr(viagem._id)}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.png" alt=""></button>`;
+}
+
+function hasConversationPhone(viagem = {}) {
+  return Boolean(phoneDigitsForWhatsapp(viagem.telefone) || phoneDigitsForWhatsapp(viagem.telefone2));
+}
+
+function rowConversationAction(viagem) {
+  if (!hasConversationPhone(viagem)) return '';
+  return `<button type="button" class="conversation-action" data-phone-choice-trigger="true" onclick="showConversationPhoneMenu(event,'${escapeAttr(viagem._id)}')" title="Iniciar conversa" aria-label="Iniciar conversa"><img src="img/whatsapp.jpg" alt=""></button>`;
 }
 
 function rowActionMenu(viagem) {
   const id = escapeAttr(viagem._id);
-  const href = whatsappHrefForViagem(viagem);
+  const hasPhone = hasConversationPhone(viagem);
   const items = [
     isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
-    href ? `<button type="button" onclick="openWhatsAppForViagem(event,'${id}')" title="WhatsApp" aria-label="WhatsApp"><img src="img/whatsapp.jpg" alt=""></button>` : '',
+    hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.png" alt=""></button>` : '',
+    rowConversationAction(viagem),
     viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
     viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
     `<button type="button" onclick="copyViagem(event,'${id}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>`,
@@ -3067,11 +3075,16 @@ function positionRowActionMenu(menu) {
   popover.style.top = `${top}px`;
 }
 
-function whatsappHrefForViagem(viagem = {}, messageText = '') {
-  const digits = String(firstPhone(viagem.telefone || '') || '').replace(/\D/g, '');
-  if (!digits) return '';
-  const normalized = digits.length <= 11 ? `55${digits}` : digits;
+function whatsappHrefForViagem(viagem = {}, messageText = '', phoneField = 'telefone') {
+  const normalized = phoneDigitsForWhatsapp(viagem[phoneField] || viagem.telefone);
+  if (!normalized) return '';
   return whatsappSendHref(normalized, messageText || copyViagemText(viagem));
+}
+
+function phoneDigitsForWhatsapp(phone) {
+  const digits = String(firstPhone(phone || '') || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length <= 11 ? `55${digits}` : digits;
 }
 
 function whatsappSendHref(phone, message) {
@@ -3081,7 +3094,80 @@ function whatsappSendHref(phone, message) {
   return url.toString();
 }
 
-async function openWhatsAppForViagem(event, id) {
+function greetingForNow() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+function showConversationPhoneMenu(event, id) {
+  showPhoneChoiceMenu(event, id, 'conversation');
+}
+
+function showRequestPhoneMenu(event, id) {
+  showPhoneChoiceMenu(event, id, 'request');
+}
+
+function showPhoneChoiceMenu(event, id, mode = 'conversation') {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const viagem = state.viagens.find(item => item._id === id) || (selectedViagem()?._id === id ? selectedViagem() : null);
+  if (!viagem) return;
+  const phones = [
+    { field: 'telefone', label: 'Telefone 1', value: viagem.telefone },
+    { field: 'telefone2', label: 'Telefone 2', value: viagem.telefone2 }
+  ].filter(item => phoneDigitsForWhatsapp(item.value));
+  if (!phones.length) return;
+
+  state.phoneChoiceTargetId = id;
+  hideCtxMenu();
+  hideAgendamentoMenu();
+  hideContratoMenu();
+  const menu = document.getElementById('phone-choice-menu');
+  const handler = mode === 'request' ? 'openRequestWhatsApp' : 'openConversationWhatsApp';
+  menu.innerHTML = phones.map(item => `<button type="button" class="ctx-item" onclick="${handler}(event,'${escapeAttr(id)}','${escapeAttr(item.field)}')">
+    <span>${escapeHtml(item.label)}</span>
+    <small>${escapeHtml(firstPhone(item.value) || item.value || '')}</small>
+  </button>`).join('');
+  const triggerRect = event?.currentTarget?.getBoundingClientRect?.();
+  const menuWidth = 190;
+  const menuHeight = (44 * phones.length) + 10;
+  const baseLeft = triggerRect ? triggerRect.left : (event?.clientX || window.innerWidth / 2);
+  const baseTop = triggerRect ? triggerRect.bottom + 8 : (event?.clientY || window.innerHeight / 2);
+  const left = Math.min(baseLeft, window.innerWidth - menuWidth - 8);
+  const top = Math.min(baseTop, window.innerHeight - menuHeight - 8);
+  menu.style.left = `${Math.max(8, left)}px`;
+  menu.style.top = `${Math.max(8, top)}px`;
+  menu.classList.remove('hidden');
+}
+
+function hidePhoneChoiceMenu() {
+  const menu = document.getElementById('phone-choice-menu');
+  if (menu) {
+    menu.classList.add('hidden');
+    menu.innerHTML = '';
+  }
+  state.phoneChoiceTargetId = null;
+}
+
+function openConversationWhatsApp(event, id, field) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const viagem = state.viagens.find(item => item._id === id) || (selectedViagem()?._id === id ? selectedViagem() : null);
+  const phone = viagem?.[field];
+  const normalized = phoneDigitsForWhatsapp(phone);
+  hidePhoneChoiceMenu();
+  if (!normalized) return;
+  window.open(whatsappSendHref(normalized, `${greetingForNow()}!`), '_blank', 'noopener');
+}
+
+async function openRequestWhatsApp(event, id, field = 'telefone') {
+  hidePhoneChoiceMenu();
+  await openWhatsAppForViagem(event, id, field);
+}
+
+async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
   event?.preventDefault?.();
   event?.stopPropagation?.();
   const viagem = state.viagens.find(item => item._id === id) || (selectedViagem()?._id === id ? selectedViagem() : null);
@@ -3093,7 +3179,7 @@ async function openWhatsAppForViagem(event, id) {
   const extraMessage = String(extra?.message || '').trim();
   if (extraMessage) message = `${message}\n\n${extraMessage}`;
 
-  const href = whatsappHrefForViagem(viagem, message);
+  const href = whatsappHrefForViagem(viagem, message, phoneField);
   if (!href) {
     pendingWindow?.close?.();
     return;
@@ -4169,12 +4255,11 @@ function renderSettingsModal() {
   if (isAdmin()) renderSettingsOperations();
   else if (operations) operations.innerHTML = '';
   const grid = document.getElementById('settings-grid');
-  const themeSection = renderThemeSettingsSection();
   if (!isAdmin()) {
-    grid.innerHTML = themeSection;
+    grid.innerHTML = '';
     return;
   }
-  grid.innerHTML = themeSection + renderWorkSettingsSection() + CONFIG_FIELDS.map(field => {
+  grid.innerHTML = renderWorkSettingsSection() + CONFIG_FIELDS.map(field => {
     const values = configOptionList(field.key);
     const hasColors = CONFIG_COLOR_FIELDS.includes(field.key);
     return `<section class="settings-section ${hasColors ? 'has-colors' : ''}" data-field="${field.key}">
@@ -4392,68 +4477,16 @@ function userPreferenceStorageKey(key) {
   return userId ? `${USER_PREFS_STORAGE_PREFIX}:${userId}:${key}` : key;
 }
 
-function loadThemePreference() {
+function applyWhiteTheme() {
+  document.body.classList.remove('theme-dark');
+  document.body.classList.add('theme-white');
   try {
-    const userKey = userPreferenceStorageKey(THEME_STORAGE_KEY);
-    const saved = localStorage.getItem(userKey) || localStorage.getItem(THEME_STORAGE_KEY);
-    return THEME_OPTIONS.includes(saved) ? saved : 'dark';
+    Object.keys(localStorage)
+      .filter(key => key === 'frotasys-theme' || key.endsWith(':frotasys-theme'))
+      .forEach(key => localStorage.removeItem(key));
   } catch (e) {
-    return 'dark';
+    // Storage cleanup is optional; the interface must stay available.
   }
-}
-
-function saveThemePreference(theme) {
-  try {
-    localStorage.setItem(userPreferenceStorageKey(THEME_STORAGE_KEY), theme);
-    if (!userPreferenceId()) localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch (e) {
-    // Prefer keeping the interface usable if storage is unavailable.
-  }
-}
-
-function currentTheme() {
-  return document.body.classList.contains('theme-white') ? 'white' : 'dark';
-}
-
-function applyTheme(theme, options = {}) {
-  const shouldPersist = options.persist !== false;
-  const safeTheme = THEME_OPTIONS.includes(theme) ? theme : 'dark';
-  document.body.classList.toggle('theme-dark', safeTheme === 'dark');
-  document.body.classList.toggle('theme-white', safeTheme === 'white');
-  if (shouldPersist) saveThemePreference(safeTheme);
-  updateThemeControls();
-}
-
-function toggleTheme() {
-  applyTheme(currentTheme() === 'dark' ? 'white' : 'dark');
-  renderSettingsModal();
-}
-
-function updateThemeControls() {
-  const theme = currentTheme();
-  const btn = document.getElementById('btn-theme-toggle');
-  if (btn) {
-    btn.dataset.theme = theme;
-    btn.title = theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark';
-    btn.setAttribute('aria-label', btn.title);
-  }
-  const modalBtn = document.getElementById('settings-theme-toggle');
-  if (modalBtn) {
-    modalBtn.dataset.theme = theme;
-    modalBtn.title = theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark';
-    modalBtn.setAttribute('aria-label', modalBtn.title);
-  }
-}
-
-function renderThemeSettingsSection() {
-  const theme = currentTheme();
-  return `<section class="settings-section settings-theme-section">
-    <div class="settings-section-head">
-      <strong>TEMA</strong>
-      <span>${theme === 'dark' ? 'Dark' : 'White'}</span>
-    </div>
-    <button type="button" id="settings-theme-toggle" class="theme-toggle-btn" data-theme="${escapeAttr(theme)}" onclick="toggleTheme()" title="${theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark'}" aria-label="${theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema dark'}"></button>
-  </section>`;
 }
 
 function resetExportViagensForm() {
@@ -6697,9 +6730,7 @@ function copyViagemRows(viagem = {}) {
 }
 
 function copyViagemText(viagem = {}) {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
-  const intro = `${greeting}, segue seu pedido. Favor conferir Placa, Motorista, Destino e Peso !`;
+  const intro = `${greetingForNow()}, segue seu pedido. Favor conferir Placa, Motorista, Destino e Peso !`;
   return `${intro}\n\n${copyViagemRows(viagem).map(([label, value]) => `*${label}:* ${value}`).join('\n')}`;
 }
 
