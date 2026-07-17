@@ -3482,8 +3482,7 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
 
   if (viagem.secao === 'agenciando' && canEditViagem(viagem)) {
     closeRowActionMenus();
-    const updated = await updateViagemField(id, 'secao', 'arcos');
-    if (updated) showSummaryToast('Viagem enviada para Faturado.');
+    await updateViagemField(id, 'secao', 'arcos');
   }
 }
 
