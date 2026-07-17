@@ -3623,8 +3623,10 @@ function focusDrawerActiveField() {
 
 function canEditDrawerField(field) {
   const viagem = selectedViagem();
+  if (!viagem || field === 'usuario') return false;
+  if (field === 'descarga') return canEditViagemField(viagem, field);
   if (!canEditDrawerViagem(viagem)) return false;
-  return canEditViagemField(viagem, field) && field !== 'usuario';
+  return canEditViagemField(viagem, field);
 }
 
 function canEditDrawerViagem(viagem) {
