@@ -3138,7 +3138,8 @@ function renderDrawerFinanceiro() {
   const valores = freteValuesForViagem(selectedViagem());
   return `<div class="drawer-card-grid single">${drawerCard('FINANCEIRO', [
     drawerReadOnlyValue('Valor PJ', valores.pj, 'money'),
-    drawerReadOnlyValue('Valor PF', valores.pf, 'money')
+    drawerReadOnlyValue('Valor PF', valores.pf, 'money'),
+    drawerAdvanceButton()
   ])}</div>`;
 }
 
@@ -3298,7 +3299,7 @@ function whatsappHref(phone) {
 
 function rowWhatsappAction(viagem) {
   if (!hasConversationPhone(viagem)) return '';
-  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${escapeAttr(viagem._id)}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.svg" alt=""></button>`;
+  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${escapeAttr(viagem._id)}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/enviarpedido.png?v=20260717" alt=""></button>`;
 }
 
 function hasConversationPhone(viagem = {}) {
@@ -3315,7 +3316,7 @@ function rowActionMenu(viagem) {
   const hasPhone = hasConversationPhone(viagem);
   const items = [
     isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
-    hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.svg" alt=""></button>` : '',
+    hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/enviarpedido.png?v=20260717" alt=""></button>` : '',
     rowConversationAction(viagem),
     viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
     viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
