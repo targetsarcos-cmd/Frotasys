@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="/icons/favicon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0f766e">
-<link rel="stylesheet" href="css/style.css?v=20260616-compact-rows">
+<link rel="stylesheet" href="css/style.css?v=20260716-frete-admin-delete">
 </head>
 <body>
 <div class="mobile-blocker" aria-live="polite">
@@ -473,27 +473,61 @@
       <button class="modal-close" id="reports-close" aria-label="Fechar">&times;</button>
     </div>
     <div class="modal-body reports-body">
-      <section class="reports-filters">
-        <label>
-          <span>PER&Iacute;ODO INICIAL</span>
+      <section class="reports-toolbar">
+        <div class="reports-date-range">
+          <span aria-hidden="true">&#128197;</span>
           <input type="date" id="report-start-date">
-        </label>
-        <label>
-          <span>PER&Iacute;ODO FINAL</span>
+          <span class="reports-date-separator">-</span>
           <input type="date" id="report-end-date">
-        </label>
-        <label>
-          <span>OPERA&Ccedil;&Atilde;O</span>
-          <select id="report-operation"></select>
-        </label>
-        <div class="reports-filter-actions">
-          <button type="button" class="btn-primary reports-refresh" id="reports-refresh">Atualizar</button>
-          <button type="button" class="btn-cancel reports-export-btn" id="reports-export-pdf">Exportar PDF</button>
         </div>
+        <button type="button" class="reports-export-btn visually-hidden" id="reports-export-pdf">Exportar PDF</button>
       </section>
       <div class="reports-status" id="reports-status"></div>
-      <section class="reports-grid">
-        <article class="report-card report-card-large">
+      <section class="reports-kpis" id="reports-kpis">
+        <article class="report-kpi-card report-kpi-meta">
+          <span class="report-kpi-icon" aria-hidden="true">&#9678;</span>
+          <div>
+            <span>Meta</span>
+            <strong id="report-kpi-meta">0</strong>
+            <small>Definida para o per&iacute;odo</small>
+          </div>
+        </article>
+        <article class="report-kpi-card report-kpi-agenciado">
+          <span class="report-kpi-icon" aria-hidden="true">&#8599;</span>
+          <div>
+            <span>Agenciado</span>
+            <strong id="report-kpi-agenciado">0</strong>
+            <small id="report-kpi-agenciado-sub">0% do faturado</small>
+          </div>
+        </article>
+        <article class="report-kpi-card report-kpi-faturado">
+          <span class="report-kpi-icon" aria-hidden="true">$</span>
+          <div>
+            <span>Faturado</span>
+            <strong id="report-kpi-faturado">0</strong>
+            <small id="report-kpi-faturado-sub">0% da meta</small>
+            <div class="report-kpi-progress"><span id="report-kpi-faturado-bar"></span></div>
+          </div>
+        </article>
+        <article class="report-kpi-card report-kpi-falta">
+          <span class="report-kpi-icon" aria-hidden="true">&#9675;</span>
+          <div>
+            <span>Falta</span>
+            <strong id="report-kpi-falta">0</strong>
+            <small id="report-kpi-falta-sub">0% da meta</small>
+          </div>
+        </article>
+        <label class="report-kpi-card report-operation-select-card">
+          <span class="report-operation-initial" id="report-operation-initial">A</span>
+          <div>
+            <span>Opera&ccedil;&atilde;o</span>
+            <select id="report-operation"></select>
+            <small>Unidade selecionada</small>
+          </div>
+        </label>
+      </section>
+      <section class="reports-dashboard-grid">
+        <article class="report-card report-card-modalidade">
           <div class="report-card-head">
             <strong>Modalidade</strong>
             <span>Participa&ccedil;&atilde;o por cadastro</span>
@@ -520,7 +554,7 @@
           </div>
           <div class="report-summary-compact" id="report-summary-compact"></div>
         </article>
-        <article class="report-card report-card-wide">
+        <article class="report-card report-card-destinos">
           <div class="report-card-head">
             <strong>Meta por destino</strong>
             <span>Percentual carregado por pra&ccedil;a</span>
@@ -534,7 +568,9 @@
           </div>
           <div class="report-chart-wrap"><canvas id="chart-report-registro"></canvas></div>
         </article>
-        <article class="report-card report-card-wide">
+        <article class="report-card report-highlight-card" id="report-highlight-card"></article>
+        <article class="report-card report-mini-trends" id="report-mini-trends"></article>
+        <article class="report-card report-card-evolucao">
           <div class="report-card-head">
             <strong>Evolu&ccedil;&atilde;o di&aacute;ria</strong>
             <span>Carregado x meta</span>
@@ -751,10 +787,8 @@
 <div id="phone-choice-menu" class="ctx-menu phone-choice-menu hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/vendor/html2canvas/html2canvas.min.js"></script>
-<script src="/vendor/chart.js/chart.umd.js"></script>
 <script src="js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20260616-date-limit"></script>
+<script src="js/app.js?v=20260716-frete-admin-delete"></script>
 </body>
 </html>
 

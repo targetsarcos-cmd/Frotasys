@@ -1,4 +1,4 @@
-﻿// â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── STATE ────────────────────────────────────────────────────────────────────
 const state = {
   viagens: [],
   metas: [],
@@ -61,7 +61,8 @@ const state = {
   drawerDraft: null,
   drawerSaving: false,
   plateAutofillTimer: null,
-  plateAutofillToken: 0
+  plateAutofillToken: 0,
+  staticDataLoaded: false
 };
 
 const DEFAULT_DESTINOS = ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA'];
@@ -155,52 +156,56 @@ const UNDO_FIELD_LABELS = {
   manifesto: 'MANIFESTO',
   contrato: 'CONTRATO'
 };
-const FRETE_COLUMNS = ['ORIGEM', 'DESTINO', '5 EIXO', '6 EIXO', '7 EIXO', '9 EIXO'];
-const DEFAULT_FRETE_CONSULTAS = {
-  terceiros: {
-    title: 'TERCEIROS',
-    tone: 'terceiros',
-    rows: [
-      ['ARCOS', 'SOROCABA', 'R$ 4.650,00', 'R$ 5.082,00', 'R$ 6.250,00', 'R$ 6.400,00'],
-      ['ARCOS', 'AMERICANA', 'R$ 3.650,00', 'R$ 4.000,00', 'R$ 4.600,00', 'R$ 5.800,00'],
-      ['ARCOS', 'OSASCO', 'R$ 4.040,00', 'R$ 4.400,00', 'R$ 5.000,00', 'R$ 6.200,00'],
-      ['ARCOS', 'RIBEIR\u00c3O P.', 'R$ 2.696,00', 'R$ 3.200,00', 'R$ 3.600,00', 'R$ 4.200,00'],
-      ['ARCOS', 'SJRP', 'R$ 3.800,00', 'R$ 4.480,00', 'R$ 5.320,00', 'R$ 6.720,00'],
-      ['BARROSO', 'PINDA', 'R$ 3.730,00', 'R$ 4.066,07', 'R$ 4.548,94', 'R$ 5.135,12'],
-      ['BARROSO', 'SJRP', 'R$ 5.167,00', 'R$ 5.667,14', 'R$ 6.303,98', 'R$ 7.132,39'],
-      ['BARROSO', 'AMERICANA', 'R$ 4.240,00', '', '', ''],
-      ['BARROSO', 'SOROCABA', 'R$ 4.475,00', 'R$ 4.890,00', 'R$ 5.451,00', 'R$ 6.165,00'],
-      ['PEDRO L', 'AMERICANA', '--', 'R$ 5.555,96', 'R$ 6.182,10', 'R$ 6.993,69'],
-      ['PEDRO L', 'SJRP', 'R$ 5.380,00', 'R$ 5.890,00', 'R$ 6.548,00', 'R$ 7.410,00'],
-      ['PEDRO L', 'SOROCABA', 'R$ 5.536,00', 'R$ 6.061,00', 'R$ 6.735,00', 'R$ 7.623,00']
-    ]
-  },
-  agregados: {
-    title: 'AGREGADOS',
-    tone: 'agregados',
-    rows: [
-      ['ARCOS', 'SOROCABA', '--', '4.518,00', 'R$ 4.848,00', 'R$ 6.022,00'],
-      ['ARCOS', 'AMERICANA', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
-      ['ARCOS', 'OSASCO', '--', '4.350,00', 'R$ 4.750,00', 'R$ 6.000,00'],
-      ['ARCOS', 'RIBEIR\u00c3O P.', '--', '3.300,00', 'R$ 3.600,00', 'R$ 4.500,00'],
-      ['ARCOS', 'SJRP', '--', '4.350,00', 'R$ 5.000,00', 'R$ 6.000,00'],
-      ['BARROSO', 'PINDA', '--', '--', '--', '--'],
-      ['BARROSO', 'SJRP', '--', '--', '--', '--'],
-      ['BARROSO', 'AMERICANA', '--', '--', '--', '--'],
-      ['BARROSO', 'SOROCABA', '--', 'R$ 4.719,00', 'R$ 5.064,00', 'R$ 6.291,00'],
-      ['PEDRO L', 'AMERICANA', '--', '--', 'R$ 5.545,00', 'R$ 6.883,00'],
-      ['PEDRO L', 'SJRP', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
-      ['PEDRO L', 'SOROCABA', '', '', 'R$ 5.884,00', 'R$ 6.974,00'],
-      ['PEDRO L', 'OSASCO', '', '', 'R$ 5.517,00', 'R$ 6.852,00'],
-      ['PEDRO L', 'MAU\u00c1', '', '', 'R$ 5.515,00', 'R$ 6.850,00'],
-      ['PEDRO L', 'S\u00c3O J. DOS CAMPOS', '', '', 'R$ 5.541,00', 'R$ 6.879,00'],
-      ['PEDRO L', 'MOGI DAS CRUZES', '', '', 'R$ 5.545,00', 'R$ 6.883,00'],
-      ['PEDRO L', 'PINDA', '', '', 'R$ 5.333,00', 'R$ 6.619,00'],
-      ['PEDRO L', 'S\u00c3O JOS\u00c9 DO RIO PRETO', '', '', 'R$ 5.721,00', 'R$ 6.347,00'],
-      ['PEDRO L', 'SANTO ANDR\u00c9', '', '', 'R$ 5.514,00', 'R$ 6.848,00']
-    ]
-  }
-};
+const FRETE_COLUMNS = ['ROTA', 'EIXOS', 'VALOR PJ', 'VALOR PF'];
+const DEFAULT_FRETE_ROUTES = [
+  ['ARCOS X AMERICANA', [[5, 4207, 4207], [6, 4000, 4110.34], [7, 4600, 4600.02], [9, 5800, 5800]]],
+  ['ARCOS X OSASCO', [[5, 4040, 4129.74], [6, 4400, 4506.48], [7, 5000, 5035], [9, 6200, 6200]]],
+  ['ARCOS X SAO JOSE DO RIO PRETO', [[5, 3898, 3944], [6, 4480, 4480], [7, 5320, 5320], [9, 6720, 6720]]],
+  ['ARCOS X SOROCABA', [[5, 4212.90, 4329.81], [6, 4700, 4727.41], [7, 5133.95, 5276.42], [9, 5800.88, 5961.86]]],
+  ['BARROSO X AMERICANA', [[5, 4239.75, 4329.81], [6, 4629.41, 4727.41], [7, 5166.45, 5276.42], [9, 5837.86, 5961.86]]],
+  ['BARROSO X OSASCO', [[5, 4098.78, 4212.53], [6, 4554.56, 4554.56], [7, 4995.82, 5134.46], [9, 5643.69, 5800.30]]],
+  ['BARROSO X PINDAMONHANGABA', [[5, 3730, 3730], [6, 4066.07, 4066.07], [7, 4548.94, 4548.94], [9, 5135.12, 5135.12]]],
+  ['BARROSO X SAO JOSE DO RIO PRETO', [[5, 5179.51, 5323.25], [6, 5667.14, 5824.41], [7, 6304, 6478.92], [9, 7133, 7330.32]]],
+  ['BARROSO X SOROCABA', [[5, 4475, 4598.87], [6, 4890, 5024.51], [7, 5451, 5602.10], [9, 6165, 6332.48]]],
+  ['PEDRO LEOPOLDO X AMERICANA', [[5, 5078.82, 5157.67], [6, 5555.96, 5641.58], [7, 6182.10, 6278.50], [9, 6993.69, 7102.24]]],
+  ['PEDRO LEOPOLDO X OSASCO', [[5, 4925, 5061.09], [6, 5386, 5534.93], [7, 5996, 6161.60], [9, 6794, 6969.20]]],
+  ['PEDRO LEOPOLDO X SAO JOSE DO RIO PRETO', [[5, 5380, 5516.42], [6, 5890, 6037.72], [7, 6548, 6712.74], [9, 7410, 7596.41]]],
+  ['PEDRO LEOPOLDO X SOROCABA', [[5, 5536, 5550.91], [6, 6061, 6075.81], [7, 6735, 6754.49], [9, 7623, 7643.92]]]
+].map(([rota, rows]) => ({ rota, ...splitFreteRoute(rota), rows: rows.map(([eixos, pj, pf]) => ({ eixos, pj, pf })) }));
+const DEFAULT_FRETE_CONSULTAS = { updatedAt: '', source: 'padrao', routes: DEFAULT_FRETE_ROUTES };
+
+const dynamicScriptPromises = {};
+
+function loadScriptOnce(src, globalName = '') {
+  if (globalName && window[globalName]) return Promise.resolve(window[globalName]);
+  if (dynamicScriptPromises[src]) return dynamicScriptPromises[src];
+  dynamicScriptPromises[src] = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(globalName ? window[globalName] : true), { once: true });
+      existing.addEventListener('error', reject, { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve(globalName ? window[globalName] : true);
+    script.onerror = () => {
+      delete dynamicScriptPromises[src];
+      reject(new Error(`Falha ao carregar ${src}`));
+    };
+    document.head.appendChild(script);
+  });
+  return dynamicScriptPromises[src];
+}
+
+function ensureHtml2Canvas() {
+  return loadScriptOnce('/vendor/html2canvas/html2canvas.min.js', 'html2canvas');
+}
+
+function ensureChartJs() {
+  return loadScriptOnce('/vendor/chart.js/chart.umd.js', 'Chart');
+}
 
 const SEARCH_RESULT_FIELDS = [
   { key: 'placa', label: 'PLACA' },
@@ -282,7 +287,7 @@ function renderDateWeekday() {
   if (label) label.textContent = weekdayLabel(state.currentDate);
 }
 
-// â”€â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── INIT ─────────────────────────────────────────────────────────────────────
 let appStarted = false;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -325,7 +330,7 @@ async function startApp() {
   loadAll();
 }
 
-// â”€â”€â”€ WEBSOCKET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── WEBSOCKET ────────────────────────────────────────────────────────────────
 function initWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${proto}://${location.host}`;
@@ -385,7 +390,8 @@ function handleWsMessage(msg) {
     renderAll();
   } else if (type === 'config_atualizada') {
     state.configOptions = normalizeConfigOptions(payload);
-    loadAll();
+    renderAll();
+    if (!document.getElementById('settings-modal-overlay')?.classList.contains('hidden')) renderSettingsModal();
   } else if (type === 'config_cores_atualizadas') {
     state.configColors = mergeConfigColors(payload);
     renderAll();
@@ -411,6 +417,9 @@ function handleWsMessage(msg) {
   } else if (type === 'work_sessions_atualizadas') {
     state.workSessions = normalizeWorkSessions(payload);
     renderAllUnlessInlineEditing();
+  } else if (type === 'work_session_atualizada') {
+    upsertWorkSession(payload);
+    renderAllUnlessInlineEditing();
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
     if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
@@ -432,21 +441,23 @@ function flushPendingInlineRender() {
   renderAll();
 }
 
-// â”€â”€â”€ DATA LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── DATA LOADING ─────────────────────────────────────────────────────────────
 async function loadAll() {
-  const data = await apiFetch(`/api/app-state?data=${state.currentDate}`);
+  const mode = state.staticDataLoaded ? '&lite=1' : '';
+  const data = await apiFetch(`/api/app-state?data=${state.currentDate}${mode}`);
   if (!data) return;
   state.viagens = data.viagens || [];
   state.metas = data.metas || [];
-  state.configOptions = normalizeConfigOptions(data.configOptions);
-  state.configColors = mergeConfigColors(data.configColors);
-  state.operacoes = normalizeOperacoes(data.operacoes);
-  state.listaEspera = normalizeListaEspera(data.listaEspera);
-  state.lembrete = normalizeLembrete(data.lembrete);
-  state.operationMessages = normalizeOperationMessages(data.operationMessages);
-  state.workTypes = normalizeWorkTypes(data.workTypes);
-  state.workSessions = normalizeWorkSessions(data.workSessions);
-  state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
+  if ('configOptions' in data) state.configOptions = normalizeConfigOptions(data.configOptions);
+  if ('configColors' in data) state.configColors = mergeConfigColors(data.configColors);
+  if ('operacoes' in data) state.operacoes = normalizeOperacoes(data.operacoes);
+  if ('listaEspera' in data) state.listaEspera = normalizeListaEspera(data.listaEspera);
+  if ('lembrete' in data) state.lembrete = normalizeLembrete(data.lembrete);
+  if ('operationMessages' in data) state.operationMessages = normalizeOperationMessages(data.operationMessages);
+  if ('workTypes' in data) state.workTypes = normalizeWorkTypes(data.workTypes);
+  if ('workSessions' in data) state.workSessions = normalizeWorkSessions(data.workSessions);
+  if ('freteConsultas' in data) state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
+  state.staticDataLoaded = true;
   clearReminderStatus();
   renderAll();
 }
@@ -476,7 +487,7 @@ async function apiFetch(url, opts = {}) {
   }
 }
 
-// â”€â”€â”€ UI INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── UI INIT ──────────────────────────────────────────────────────────────────
 function initUI() {
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;
@@ -509,7 +520,7 @@ function initUI() {
   document.getElementById('btn-relatorios').addEventListener('click', openReportsModal);
   document.getElementById('reports-close').addEventListener('click', closeReportsModal);
   document.getElementById('reports-btn-close').addEventListener('click', closeReportsModal);
-  document.getElementById('reports-refresh').addEventListener('click', updateReports);
+  document.getElementById('reports-refresh')?.addEventListener('click', updateReports);
   document.getElementById('reports-export-pdf')?.addEventListener('click', exportReportsPdf);
   document.getElementById('report-summary-copy')?.addEventListener('pointerdown', prepareReportSummaryCopyImage);
   document.getElementById('report-summary-copy')?.addEventListener('click', copyReportSummaryAsImage);
@@ -710,6 +721,19 @@ function initUI() {
   });
 
   document.addEventListener('keydown', e => {
+    const freteCell = e.target.closest?.('[data-frete-field][contenteditable="true"]');
+    if (freteCell && e.key === 'Enter') {
+      e.preventDefault();
+      freteCell.blur();
+      return;
+    }
+    if (freteCell && e.key === 'Escape') {
+      e.preventDefault();
+      freteCell.textContent = freteCell.dataset.value || '';
+      freteCell.blur();
+      return;
+    }
+
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
       if (shouldHandleUndoShortcut(e)) {
         e.preventDefault();
@@ -735,6 +759,16 @@ function initUI() {
       hidePhoneChoiceMenu();
       cancelInlineEdit();
     }
+  });
+
+  document.addEventListener('focusin', e => {
+    const freteCell = e.target.closest?.('[data-frete-field][contenteditable="true"]');
+    if (freteCell) freteCell.dataset.value = freteCell.textContent.trim();
+  });
+
+  document.addEventListener('focusout', e => {
+    const freteCell = e.target.closest?.('[data-frete-field][contenteditable="true"]');
+    if (freteCell) runBlurCommit(e, freteCell, () => commitFreteBoardEdit(freteCell));
   });
 }
 
@@ -836,6 +870,22 @@ function normalizeWorkSessions(payload = []) {
     resumedAt: String(item.resumedAt || ''),
     workType: item.workType || null
   }));
+}
+
+function isOpenWorkSession(session = {}) {
+  return ['active', 'paused'].includes(String(session.status || ''));
+}
+
+function upsertWorkSession(session) {
+  if (!session?._id) return;
+  const normalized = normalizeWorkSessions([session])[0];
+  const index = state.workSessions.findIndex(item => item._id === normalized._id);
+  if (!isOpenWorkSession(normalized)) {
+    if (index !== -1) state.workSessions.splice(index, 1);
+    return;
+  }
+  if (index === -1) state.workSessions.push(normalized);
+  else state.workSessions[index] = normalized;
 }
 
 function stripReminderNumber(line) {
@@ -1210,26 +1260,35 @@ async function updateReports() {
     return;
   }
 
-  button.disabled = true;
-  button.textContent = 'Atualizando...';
+  if (button) {
+    button.disabled = true;
+    button.dataset.label = button.textContent;
+    button.textContent = 'Atualizando...';
+  }
   setReportsStatus('Carregando dados do per\u00edodo...');
 
   try {
     const params = new URLSearchParams({ dataInicio: start, dataFim: end });
     const metaParams = new URLSearchParams({ dataInicio: start, dataFim: end });
+    if (operation) {
+      params.set('origem', operation);
+      metaParams.set('tipo', metaTipo(operation));
+    }
     const [viagens, metas] = await Promise.all([
       apiFetch(`/api/viagens/search?${params.toString()}`),
       apiFetch(`/api/metas?${metaParams.toString()}`)
     ]);
     const report = buildReportsData(Array.isArray(viagens) ? viagens : [], Array.isArray(metas) ? metas : [], { start, end, operation });
-    renderReports(report);
+    await renderReports(report);
     setReportsStatus(report.rows.length ? '' : 'Nenhuma viagem encontrada para os filtros selecionados.');
   } catch (error) {
     console.error('Erro ao atualizar relat\u00f3rios:', error);
     setReportsStatus('N\u00e3o foi poss\u00edvel carregar os relat\u00f3rios.', true);
   } finally {
-    button.disabled = false;
-    button.textContent = 'Atualizar';
+    if (button) {
+      button.disabled = false;
+      button.textContent = button.dataset.label || 'Filtros';
+    }
   }
 }
 
@@ -1237,13 +1296,19 @@ async function exportReportsPdf() {
   const start = document.getElementById('report-start-date')?.value;
   const end = document.getElementById('report-end-date')?.value;
   const pdfBtn = document.getElementById('reports-export-pdf');
-  const reportArea = document.querySelector('.reports-grid');
+  const reportArea = document.querySelector('.reports-dashboard-grid');
 
   if (!isValidDateRange(start, end)) {
     setReportsStatus('Informe um per\u00edodo v\u00e1lido de at\u00e9 366 dias.', true);
     return;
   }
-  if (!window.html2canvas || !reportArea) {
+  try {
+    await ensureHtml2Canvas();
+  } catch (error) {
+    setReportsStatus('N\u00e3o foi poss\u00edvel preparar a imagem do relat\u00f3rio.', true);
+    return;
+  }
+  if (!reportArea) {
     setReportsStatus('N\u00e3o foi poss\u00edvel preparar a imagem do relat\u00f3rio.', true);
     return;
   }
@@ -1445,6 +1510,8 @@ function buildReportsData(viagens, metas, filters) {
   const fatRows = rows.filter(v => v.secao === 'arcos' && hasNotaPreenchida(v));
   const agencRows = rows.filter(v => v.secao === 'agenciando' || (v.secao === 'arcos' && !hasNotaPreenchida(v)));
   const loadedTotal = sumPeso(rows);
+  const fatTotal = sumPeso(fatRows);
+  const agencTotal = sumPeso(agencRows);
 
   const metaByDestination = {};
   const loadedByDestination = {};
@@ -1482,27 +1549,44 @@ function buildReportsData(viagens, metas, filters) {
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
 
+  const destinosData = destinos.map(destino => ({
+    destino,
+    meta: metaByDestination[destino] || 0,
+    loaded: loadedByDestination[destino] || 0,
+    faturado: sumPeso(fatRows.filter(row => row.destino === destino)),
+    agenciado: sumPeso(agencRows.filter(row => row.destino === destino)),
+    percent: metaByDestination[destino] > 0 ? ((loadedByDestination[destino] || 0) / metaByDestination[destino]) * 100 : 0
+  }));
+  const bestDestination = [...destinosData]
+    .filter(item => item.meta > 0)
+    .sort((a, b) => b.percent - a.percent || b.loaded - a.loaded)[0] || destinosData[0] || null;
+  const topRevenueDestination = [...destinosData]
+    .sort((a, b) => b.faturado - a.faturado || b.loaded - a.loaded)[0] || null;
+
   return {
     rows,
     operations,
     dates,
     metaTotal,
     loadedTotal,
+    fatTotal,
+    agencTotal,
+    faltaTotal: metaTotal - loadedTotal,
     atendimento: metaTotal > 0 ? (loadedTotal / metaTotal) * 100 : 0,
+    faturadoAtendimento: metaTotal > 0 ? (fatTotal / metaTotal) * 100 : 0,
     typeCounts,
     registro,
-    destinos: destinos.map(destino => ({
-      destino,
-      meta: metaByDestination[destino] || 0,
-      loaded: loadedByDestination[destino] || 0,
-      percent: metaByDestination[destino] > 0 ? ((loadedByDestination[destino] || 0) / metaByDestination[destino]) * 100 : 0
-    })),
+    destinos: destinosData,
     daily: dates.map(date => ({
       date,
       meta: metaByDate[date] || 0,
       loaded: loadedByDate[date] || 0
     })),
     summaryCards: buildReportSummaryCards(rows, metas, dates, operations),
+    highlights: {
+      bestDestination,
+      topRevenueDestination
+    },
     filters
   };
 }
@@ -1601,10 +1685,82 @@ function reportMetaForDestination(metas, date, operation, destino) {
   }, 0);
 }
 
-function renderReports(report) {
+async function renderReports(report) {
   state.reportData = report;
+  renderReportDashboardKpis(report);
+  renderReportHighlights(report);
   renderReportSummary(report);
-  renderReportCharts(report);
+  try {
+    await ensureChartJs();
+    renderReportCharts(report);
+  } catch (error) {
+    console.warn('Chart.js indispon\u00edvel:', error);
+    setReportsStatus('Biblioteca de gr\u00e1ficos indispon\u00edvel neste navegador.', true);
+  }
+}
+
+function renderReportDashboardKpis(report) {
+  const operation = report.operations?.[0]?.origem || report.filters?.operation || '';
+  const percentFaturado = Math.round(report.faturadoAtendimento || 0);
+  const agenciadoPercent = report.fatTotal > 0 ? Math.round((report.agencTotal / report.fatTotal) * 100) : 0;
+  const faltaPercent = report.metaTotal > 0 ? Math.round((Math.max(0, report.faltaTotal) / report.metaTotal) * 100) : 0;
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  setText('report-kpi-faturado', formatKg(report.fatTotal));
+  setText('report-kpi-faturado-sub', `${percentFaturado}% da meta`);
+  setText('report-kpi-meta', formatKg(report.metaTotal));
+  setText('report-kpi-agenciado', formatKg(report.agencTotal));
+  setText('report-kpi-agenciado-sub', `${agenciadoPercent}% do faturado`);
+  setText('report-kpi-falta', formatKg(Math.max(0, report.faltaTotal)));
+  setText('report-kpi-falta-sub', `${faltaPercent}% da meta`);
+  setText('report-operation-initial', summaryIcon(operation));
+
+  const bar = document.getElementById('report-kpi-faturado-bar');
+  if (bar) bar.style.width = `${Math.min(100, Math.max(0, percentFaturado))}%`;
+}
+
+function renderReportHighlights(report) {
+  const highlight = document.getElementById('report-highlight-card');
+  const mini = document.getElementById('report-mini-trends');
+  const best = report.highlights?.bestDestination;
+  const top = report.highlights?.topRevenueDestination;
+  if (highlight) {
+    highlight.innerHTML = `<div class="report-highlight-content">
+      <span class="report-highlight-kicker">&#9813; Destaque do per&iacute;odo</span>
+      <div>
+        <small>Melhor desempenho</small>
+        <strong>${escapeHtml(best?.destino || '-')}</strong>
+        <span>${Math.round(best?.percent || 0)}% da meta</span>
+      </div>
+      <div>
+        <small>Maior faturamento</small>
+        <strong>${escapeHtml(top?.destino || '-')}</strong>
+        <span>${formatKg(top?.faturado || 0)} carregado</span>
+      </div>
+      <svg class="report-highlight-spark" viewBox="0 0 140 54" aria-hidden="true">
+        <polyline points="0,45 18,42 34,35 52,38 70,24 88,28 106,14 124,18 140,10"></polyline>
+      </svg>
+    </div>`;
+  }
+  if (mini) {
+    mini.innerHTML = `<article>
+      <div class="report-mini-line">
+        <span>Total Carregado</span>
+        <strong>${formatKg(report.loadedTotal)}</strong>
+      </div>
+      <svg viewBox="0 0 94 26" aria-hidden="true"><polyline points="0,22 12,19 24,21 36,14 48,16 60,9 72,12 84,5 94,8"></polyline></svg>
+    </article>
+    <article>
+      <div class="report-mini-line">
+        <span>Total Meta</span>
+        <strong>${formatKg(report.metaTotal)}</strong>
+      </div>
+      <svg viewBox="0 0 94 26" aria-hidden="true"><polyline points="0,22 12,18 24,20 36,16 48,12 60,13 72,9 84,7 94,4"></polyline></svg>
+    </article>`;
+  }
 }
 
 function renderReportCharts(report) {
@@ -2115,13 +2271,28 @@ function loadFreteConsultas() {
 }
 
 function mergeFreteConsultas(saved = {}) {
-  return Object.fromEntries(Object.entries(DEFAULT_FRETE_CONSULTAS).map(([key, table]) => {
-    const savedTable = saved[key];
-    const rows = Array.isArray(savedTable?.rows) && savedTable.rows.length
-      ? savedTable.rows.map(row => FRETE_COLUMNS.map((_, index) => String(row?.[index] || '')))
-      : table.rows.map(row => [...row]);
-    return [key, { ...table, rows }];
-  }));
+  if (Array.isArray(saved?.routes)) {
+    const routes = saved.routes.map(normalizeFreteRoute).filter(route => route.rota && route.rows.length);
+    return {
+      updatedAt: String(saved.updatedAt || ''),
+      source: String(saved.source || ''),
+      routes: routes.length ? routes : DEFAULT_FRETE_ROUTES.map(normalizeFreteRoute)
+    };
+  }
+
+  const legacyRows = Object.values(saved || {}).flatMap(table => Array.isArray(table?.rows) ? table.rows : []);
+  const routes = legacyRows.map(row => {
+    const origem = normalizeOption(row?.[0]);
+    const destino = normalizeOption(row?.[1]);
+    const rota = origem && destino ? `${origem} X ${destino}` : '';
+    return {
+      rota,
+      origem,
+      destino,
+      rows: [5, 6, 7, 9].map((eixos, index) => ({ eixos, pj: parseFreteCurrency(row?.[index + 2]), pf: parseFreteCurrency(row?.[index + 2]) }))
+    };
+  }).filter(route => route.rota);
+  return { updatedAt: '', source: '', routes: routes.length ? routes : DEFAULT_FRETE_ROUTES.map(normalizeFreteRoute) };
 }
 
 async function saveFreteConsultas() {
@@ -2135,13 +2306,42 @@ async function saveFreteConsultas() {
 
 function renderFreteConsultas() {
   const grid = document.getElementById('frete-consult-grid');
+  const routeFilter = document.getElementById('frete-route-filter')?.value || '';
+  const routes = filteredFreteRoutes(routeFilter);
   grid.innerHTML = `
-    ${renderFreteQueryPanel()}
-    ${isAdmin() ? `<div class="frete-admin-grid">${Object.entries(state.freteConsultas)
-      .map(([key, table]) => renderFreteConsultTable(key, table))
-      .join('')}</div>` : ''}
+    <section class="frete-board">
+      <div class="frete-board-head">
+        <div>
+          <h2>Tabela de Fretes</h2>
+          <p>Consulte os valores por eixo e por rota</p>
+        </div>
+        <button type="button" class="frete-refresh-btn" onclick="refreshFreteConsultas()" title="Atualizar fretes" aria-label="Atualizar fretes">&#10227;</button>
+      </div>
+      ${renderFreteQueryPanel()}
+      ${renderFreteTools(routeFilter)}
+      <div id="frete-route-board-host">${renderFreteRouteBoard(routes)}</div>
+    </section>
   `;
   updateFreteQueryDestinations();
+  const filter = document.getElementById('frete-route-filter');
+  if (filter) filter.value = routeFilter;
+}
+
+function renderFreteTools(routeFilter = '') {
+  return `<section class="frete-tools">
+    <label class="frete-route-search">
+      <span>FILTRAR ROTA</span>
+      <input type="search" id="frete-route-filter" value="${escapeAttr(routeFilter)}" placeholder="Digite origem ou destino" oninput="updateFreteRouteBoard()">
+    </label>
+    <button type="button" onclick="toggleFreteAlphabeticSort()" class="${state.freteSort?.alphabetic ? 'is-active' : ''}">A-Z</button>
+    ${isAdmin() ? '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
+  </section>`;
+}
+
+function updateFreteRouteBoard() {
+  const host = document.getElementById('frete-route-board-host');
+  if (!host) return;
+  host.innerHTML = renderFreteRouteBoard(filteredFreteRoutes(document.getElementById('frete-route-filter')?.value || ''));
 }
 
 function renderFreteQueryPanel() {
@@ -2166,7 +2366,7 @@ function renderFreteQueryPanel() {
       <label>
         <span>EIXOS</span>
         <select id="frete-query-eixo">
-          ${renderOptions(['', ...FRETE_COLUMNS.slice(2)], '')}
+          ${renderOptions(['', ...freteEixosOptions().map(eixo => `${eixo} EIXO`)], '')}
         </select>
       </label>
       <button type="button" class="btn-primary" onclick="consultarFreteValor()">Consultar</button>
@@ -2175,80 +2375,240 @@ function renderFreteQueryPanel() {
   </section>`;
 }
 
-function renderFreteConsultTable(key, table) {
-  const header = `${FRETE_COLUMNS.map((col, colIndex) => renderFreteConsultHeader(key, col, colIndex)).join('')}<th>A&Ccedil;&Otilde;ES</th>`;
-  const rows = table.rows.map((row, rowIndex) => {
-    const rowTone = freteOriginTone(row[0]);
-    const cells = row.map((value, colIndex) => `
-      <td contenteditable="true" spellcheck="false" class="frete-cell-${freteColumnType(colIndex)}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" data-col="${colIndex}" data-type="${freteColumnType(colIndex)}" data-value="${escapeAttr(formatFreteCellValue(value, colIndex))}">${escapeHtml(formatFreteCellValue(value, colIndex))}</td>
-    `).join('');
-    return `<tr class="${rowTone}" data-table="${escapeAttr(key)}" data-row="${rowIndex}" ondragover="handleFreteRowDragOver(event)" ondragleave="handleFreteRowDragLeave(event)" ondrop="dropFreteRow(event,'${escapeAttr(key)}',${rowIndex})">${cells}<td class="frete-row-actions">
-      <button type="button" class="frete-drag-handle" draggable="true" ondragstart="startFreteRowDrag(event,'${escapeAttr(key)}',${rowIndex})" ondragend="endFreteRowDrag(event)" title="Arrastar linha">&#8597;</button>
-      <button type="button" class="frete-row-delete" onclick="deleteFreteConsultRow('${escapeAttr(key)}', ${rowIndex})" title="Excluir linha">Excluir</button>
-    </td></tr>`;
+function renderFreteRouteBoard(routes) {
+  const canEditFrete = isAdmin();
+  const routeRows = routes.map((route, index) => {
+    const routeIndex = freteRoutes().indexOf(route);
+    return `
+      <div class="frete-route-pair">
+        <div class="frete-route-card ${canEditFrete ? 'has-actions' : ''}" data-route-index="${routeIndex}">
+          <span class="frete-route-icon frete-route-icon-${freteRouteToneIndex(route)}">${freteRouteIcon(route)}</span>
+          <strong contenteditable="${canEditFrete}" spellcheck="false" data-frete-field="rota" data-route-index="${routeIndex}" data-value="${escapeAttr(route.rota)}">${escapeHtml(route.rota)}</strong>
+          <em>&rsaquo;</em>
+          ${canEditFrete ? `<button type="button" class="frete-delete-route" onclick="deleteFreteRoute(${routeIndex})" title="Excluir rota" aria-label="Excluir rota">&times;</button>` : ''}
+        </div>
+        <div class="frete-route-values ${canEditFrete ? 'has-actions' : ''}">
+          ${(route.rows || []).map((row, rowIndex) => `
+            <div class="frete-value-row">
+              <span class="frete-eixo" contenteditable="${canEditFrete}" spellcheck="false" data-frete-field="eixos" data-route-index="${routeIndex}" data-row-index="${rowIndex}" data-value="${escapeAttr(row.eixos)}">${escapeHtml(row.eixos)}</span>
+              <span class="frete-pj" contenteditable="${canEditFrete}" spellcheck="false" data-frete-field="pj" data-route-index="${routeIndex}" data-row-index="${rowIndex}" data-value="${escapeAttr(formatFreteAccounting(row.pj))}">${escapeHtml(formatFreteAccounting(row.pj))}</span>
+              <span class="frete-pf" contenteditable="${canEditFrete}" spellcheck="false" data-frete-field="pf" data-route-index="${routeIndex}" data-row-index="${rowIndex}" data-value="${escapeAttr(formatFreteAccounting(row.pf))}">${escapeHtml(formatFreteAccounting(row.pf))}</span>
+              ${canEditFrete ? `<button type="button" class="frete-delete-eixo" onclick="deleteFreteEixo(${routeIndex}, ${rowIndex})" title="Excluir eixo" aria-label="Excluir eixo">&times;</button>` : ''}
+            </div>
+          `).join('')}
+          ${canEditFrete ? `<button type="button" class="frete-add-eixo" onclick="addFreteEixo(${routeIndex})">+ Eixo</button>` : ''}
+        </div>
+      </div>
+    `;
   }).join('');
 
-  return `<section class="frete-consult-card frete-consult-${escapeAttr(table.tone)}">
-    <div class="frete-consult-title">
-      <span>${escapeHtml(table.title)}</span>
-      <button type="button" onclick="addFreteConsultRow('${escapeAttr(key)}')">Adicionar linha</button>
+  return `<div class="frete-route-board">
+    <div class="frete-route-board-head">
+      <button type="button" class="frete-board-label frete-board-label-route" onclick="toggleFreteAlphabeticSort()">ROTA<span>${state.freteSort?.alphabetic ? '&uarr;' : '&#8597;'}</span></button>
+      <div class="frete-value-header ${canEditFrete ? 'has-actions' : ''}">
+        <span>EIXOS</span>
+        <span>VALOR PJ</span>
+        <span>VALOR PF</span>
+        ${canEditFrete ? '<span></span>' : ''}
+      </div>
     </div>
-    <div class="frete-consult-table-wrap">
-      <table class="frete-consult-table">
-        <thead><tr>${header}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  </section>`;
+    ${routeRows || '<div class="frete-empty">Nenhuma rota cadastrada na planilha.</div>'}
+  </div>`;
 }
 
-function renderFreteConsultHeader(tableKey, label, colIndex) {
-  if (colIndex > 1) return `<th>${escapeHtml(label)}</th>`;
-  const sort = state.freteSort?.[tableKey];
-  const isActive = sort?.col === colIndex;
-  const nextDirection = isActive && sort.direction === 'asc' ? 'desc' : 'asc';
-  const indicator = isActive ? (sort.direction === 'asc' ? 'A-Z' : 'Z-A') : '&#8597;';
-  const title = `${label}: ordenar ${nextDirection === 'asc' ? 'A a Z' : 'Z a A'}`;
-  return `<th>
-    <button type="button" class="frete-sort-btn ${isActive ? 'is-active' : ''}" onclick="sortFreteConsultTable('${escapeAttr(tableKey)}', ${colIndex})" title="${escapeAttr(title)}">
-      <span>${escapeHtml(label)}</span>
-      <em>${indicator}</em>
-    </button>
-  </th>`;
+function freteRouteIcon(route) {
+  const origem = normalizeOption(route?.origem || splitFreteRoute(route?.rota || '').origem);
+  if (origem === 'ARCOS') return 'A';
+  if (origem === 'PEDRO LEOPOLDO') return 'P';
+  if (origem === 'BARROSO') return 'B';
+  return origem.slice(0, 1) || '?';
 }
 
-async function sortFreteConsultTable(tableKey, colIndex) {
-  if (!isAdmin()) return;
-  const table = state.freteConsultas[tableKey];
-  if (!table?.rows) return;
-  const current = state.freteSort[tableKey];
-  const direction = current?.col === colIndex && current.direction === 'asc' ? 'desc' : 'asc';
-  state.freteSort[tableKey] = { col: colIndex, direction };
-  table.rows.sort((a, b) => {
-    const textA = normalizeOption(a[colIndex]);
-    const textB = normalizeOption(b[colIndex]);
-    const result = textA.localeCompare(textB, 'pt-BR', { sensitivity: 'base' });
-    return direction === 'asc' ? result : -result;
-  });
+function freteRouteToneIndex(route) {
+  const origem = normalizeOption(route?.origem || splitFreteRoute(route?.rota || '').origem);
+  if (origem === 'ARCOS') return 0;
+  if (origem === 'PEDRO LEOPOLDO') return 3;
+  if (origem === 'BARROSO') return 1;
+  return 2;
+}
+
+async function refreshFreteConsultas() {
+  const saved = await apiFetch('/api/frete-consultas');
+  state.freteConsultas = saved ? mergeFreteConsultas(saved) : loadFreteConsultas();
   renderFreteConsultas();
+}
+
+function normalizeFreteRoute(route = {}) {
+  const rota = normalizeFreteRouteName(route.rota || route.route || '');
+  const parts = splitFreteRoute(rota);
+  return {
+    rota,
+    origem: normalizeOption(route.origem || parts.origem),
+    destino: normalizeOption(route.destino || parts.destino),
+    rows: (Array.isArray(route.rows) ? route.rows : []).map(row => {
+      const pj = parseFreteCurrency(row.pj ?? row.valorPj ?? row.valor_pj);
+      const pf = parseFreteCurrency(row.pf ?? row.valorPf ?? row.valor_pf);
+      return {
+        eixos: Number(row.eixos || row.eixo || 0) || 0,
+        pj: Number.isFinite(pj) ? pj : null,
+        pf: Number.isFinite(pf) ? pf : null
+      };
+    }).filter(row => row.eixos).sort((a, b) => a.eixos - b.eixos)
+  };
+}
+
+function normalizeFreteRouteName(value = '') {
+  return normalizeOption(value).replace(/\s+X\s+/g, ' X ').replace(/\s+/g, ' ').trim();
+}
+
+function splitFreteRoute(route = '') {
+  const [origem = '', destino = ''] = normalizeFreteRouteName(route).split(/\s+X\s+/);
+  return { origem, destino };
+}
+
+function freteRoutes() {
+  return Array.isArray(state.freteConsultas?.routes) ? state.freteConsultas.routes : [];
+}
+
+function filteredFreteRoutes(filter = '') {
+  const normalizedFilter = normalizeOption(filter);
+  let routes = freteRoutes();
+  if (normalizedFilter) {
+    routes = routes.filter(route =>
+      normalizeOption(route.rota).includes(normalizedFilter) ||
+      normalizeOption(route.origem).includes(normalizedFilter) ||
+      normalizeOption(route.destino).includes(normalizedFilter)
+    );
+  }
+  if (state.freteSort?.alphabetic) {
+    routes = [...routes].sort((a, b) => normalizeOption(a.rota).localeCompare(normalizeOption(b.rota), 'pt-BR'));
+  }
+  return routes;
+}
+
+function toggleFreteAlphabeticSort() {
+  state.freteSort = { ...(state.freteSort || {}), alphabetic: !state.freteSort?.alphabetic };
+  renderFreteConsultas();
+}
+
+async function addFreteRoute() {
+  if (!isAdmin()) return;
+  const routes = freteRoutes();
+  const typed = window.prompt('Digite o nome da rota. Ex: Arcos X Americana');
+  const base = normalizeFreteRouteName(typed || '');
+  if (!base) return;
+  if (!/\s+X\s+/.test(base)) {
+    alert('Informe a rota no formato ORIGEM X DESTINO. Ex: Arcos X Americana');
+    return;
+  }
+  if (routes.some(route => normalizeOption(route.rota) === normalizeOption(base))) {
+    alert('Essa rota ja existe.');
+    return;
+  }
+  const parts = splitFreteRoute(base);
+  routes.push({
+    rota: base,
+    origem: parts.origem,
+    destino: parts.destino,
+    rows: [5, 6, 7, 9].map(eixos => ({ eixos, pj: null, pf: null }))
+  });
   await saveFreteConsultas();
+  renderFreteConsultas();
 }
 
-function freteColumnType(colIndex) {
-  return colIndex < 2 ? 'text' : 'accounting';
+async function addFreteEixo(routeIndex) {
+  if (!isAdmin()) return;
+  const route = freteRoutes()[routeIndex];
+  if (!route) return;
+  const existing = new Set((route.rows || []).map(row => Number(row.eixos)));
+  let next = 5;
+  while (existing.has(next)) next += 1;
+  route.rows = [...(route.rows || []), { eixos: next, pj: null, pf: null }]
+    .sort((a, b) => Number(a.eixos) - Number(b.eixos));
+  await saveFreteConsultas();
+  renderFreteConsultas();
 }
 
-function formatFreteCellValue(value, colIndex) {
-  const raw = String(value || '').trim();
-  if (freteColumnType(colIndex) === 'text') return raw;
-  return formatFreteAccounting(raw);
+async function deleteFreteRoute(routeIndex) {
+  if (!isAdmin()) return;
+  const routes = freteRoutes();
+  const route = routes[routeIndex];
+  if (!route) return;
+  if (!confirm(`Excluir a rota ${route.rota}?`)) return;
+  routes.splice(routeIndex, 1);
+  await saveFreteConsultas();
+  renderFreteConsultas();
+}
+
+async function deleteFreteEixo(routeIndex, rowIndex) {
+  if (!isAdmin()) return;
+  const route = freteRoutes()[routeIndex];
+  const row = route?.rows?.[rowIndex];
+  if (!route || !row) return;
+  if (!confirm(`Excluir o eixo ${row.eixos} da rota ${route.rota}?`)) return;
+  route.rows.splice(rowIndex, 1);
+  await saveFreteConsultas();
+  renderFreteConsultas();
+}
+
+async function commitFreteBoardEdit(cell) {
+  if (!isAdmin()) return;
+  const field = cell.dataset.freteField;
+  const routeIndex = Number(cell.dataset.routeIndex);
+  const rowIndex = Number(cell.dataset.rowIndex);
+  const route = freteRoutes()[routeIndex];
+  if (!route || !field) return;
+  const previous = cell.dataset.value || '';
+  const raw = cell.textContent.trim();
+
+  if (field === 'rota') {
+    const rota = normalizeFreteRouteName(raw);
+    if (!rota || rota === previous) {
+      cell.textContent = previous || route.rota;
+      return;
+    }
+    const parts = splitFreteRoute(rota);
+    route.rota = rota;
+    route.origem = parts.origem;
+    route.destino = parts.destino;
+  } else {
+    const row = route.rows?.[rowIndex];
+    if (!row) return;
+    if (field === 'eixos') {
+      const eixos = Number(String(raw).replace(/\D/g, ''));
+      if (!eixos) {
+        cell.textContent = previous || row.eixos;
+        return;
+      }
+      row.eixos = eixos;
+    } else if (field === 'pj' || field === 'pf') {
+      const value = parseFreteCurrency(raw);
+      row[field] = Number.isFinite(value) ? value : null;
+    }
+    route.rows = (route.rows || []).sort((a, b) => Number(a.eixos) - Number(b.eixos));
+  }
+
+  await saveFreteConsultas();
+  renderFreteConsultas();
+}
+
+function formatFreteUpdatedAt(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return '-';
+  return `${date.toLocaleDateString('pt-BR')} \u00e0s ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatFreteCellValue(value) {
+  return formatFreteAccounting(value);
 }
 
 function formatFreteAccounting(value) {
-  const raw = String(value || '').trim();
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' && !Number.isFinite(value)) return '';
+  const raw = String(value ?? '').trim();
   if (!raw || raw === '--') return raw;
   const amount = parseFreteCurrency(raw);
-  if (!Number.isFinite(amount)) return raw;
+  if (!Number.isFinite(amount)) return raw && raw !== 'NaN' ? raw : '-';
   return amount.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -2258,7 +2618,8 @@ function formatFreteAccounting(value) {
 }
 
 function parseFreteCurrency(value) {
-  const raw = String(value || '').trim();
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  const raw = String(value ?? '').trim();
   if (!raw || raw === '--') return NaN;
   const cleaned = raw.replace(/[^\d,.-]/g, '');
   if (!cleaned) return NaN;
@@ -2280,23 +2641,20 @@ function freteOriginTone(origin) {
 }
 
 function freteOriginOptions() {
-  return uniqueFreteValues(0);
+  return [...new Set(freteRoutes().map(route => route.origem).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
 function freteDestinationOptions(origin = '') {
   const normalizedOrigin = normalizeOption(origin);
-  const rows = freteAllRows().filter(row => !normalizedOrigin || normalizeOption(row[0]) === normalizedOrigin);
-  return [...new Set(rows.map(row => String(row[1] || '').trim()).filter(Boolean))]
+  const routes = freteRoutes().filter(route => !normalizedOrigin || route.origem === normalizedOrigin);
+  return [...new Set(routes.map(route => route.destino).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
-function uniqueFreteValues(index) {
-  return [...new Set(freteAllRows().map(row => String(row[index] || '').trim()).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-}
-
-function freteAllRows() {
-  return Object.values(state.freteConsultas || {}).flatMap(table => table.rows || []);
+function freteEixosOptions() {
+  return [...new Set(freteRoutes().flatMap(route => (route.rows || []).map(row => row.eixos)).filter(Boolean))]
+    .sort((a, b) => a - b);
 }
 
 function updateFreteQueryDestinations() {
@@ -2321,138 +2679,24 @@ function consultarFreteValor() {
     return;
   }
 
-  const colIndex = FRETE_COLUMNS.indexOf(eixo);
-  const matches = Object.values(state.freteConsultas || {}).map(table => {
-    const row = (table.rows || []).find(item =>
-      normalizeOption(item[0]) === normalizeOption(origem) &&
-      normalizeOption(item[1]) === normalizeOption(destino)
-    );
-    return {
-      title: table.title,
-      tone: table.tone,
-      value: row ? String(row[colIndex] || '').trim() : ''
-    };
-  }).filter(item => item.value && item.value !== '--');
+  const eixoNumber = Number(String(eixo).replace(/\D/g, ''));
+  const route = freteRoutes().find(item => item.origem === normalizeOption(origem) && item.destino === normalizeOption(destino));
+  const row = route?.rows?.find(item => Number(item.eixos) === eixoNumber);
 
-  if (!matches.length) {
+  if (!row) {
     result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combina&ccedil;&atilde;o.</span>';
     return;
   }
 
-  result.innerHTML = matches.map(item => `<div class="frete-result-pill frete-result-${escapeAttr(item.tone)}">
-    <span>${escapeHtml(item.title)}</span>
-    <strong>${escapeHtml(formatFreteCellValue(item.value, colIndex))}</strong>
-  </div>`).join('');
-}
-
-async function addFreteConsultRow(tableKey) {
-  if (!isAdmin()) return;
-  const table = state.freteConsultas[tableKey];
-  if (!table) return;
-  table.rows.push(['', '', '', '', '', '']);
-  renderFreteConsultas();
-  await saveFreteConsultas();
-}
-
-async function deleteFreteConsultRow(tableKey, rowIndex) {
-  if (!isAdmin()) return;
-  const table = state.freteConsultas[tableKey];
-  if (!table?.rows?.[rowIndex]) return;
-  if (!confirm('Excluir esta linha da tabela de frete?')) return;
-  table.rows.splice(rowIndex, 1);
-  renderFreteConsultas();
-  await saveFreteConsultas();
-}
-
-let freteDragState = null;
-
-function startFreteRowDrag(event, tableKey, rowIndex) {
-  if (!isAdmin()) return;
-  freteDragState = { tableKey, rowIndex };
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', `${tableKey}:${rowIndex}`);
-  event.target.closest('tr')?.classList.add('frete-row-dragging');
-}
-
-function handleFreteRowDragOver(event) {
-  if (!freteDragState) return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-  event.currentTarget.classList.add('frete-row-drop-target');
-}
-
-function handleFreteRowDragLeave(event) {
-  event.currentTarget.classList.remove('frete-row-drop-target');
-}
-
-async function dropFreteRow(event, tableKey, targetIndex) {
-  if (!freteDragState || freteDragState.tableKey !== tableKey) return;
-  event.preventDefault();
-  document.querySelectorAll('.frete-row-drop-target').forEach(row => row.classList.remove('frete-row-drop-target'));
-
-  const table = state.freteConsultas[tableKey];
-  const sourceIndex = freteDragState.rowIndex;
-  freteDragState = null;
-  if (!table?.rows?.[sourceIndex] || sourceIndex === targetIndex) {
-    renderFreteConsultas();
-    return;
-  }
-
-  const [row] = table.rows.splice(sourceIndex, 1);
-  table.rows.splice(targetIndex, 0, row);
-  renderFreteConsultas();
-  await saveFreteConsultas();
-}
-
-function endFreteRowDrag(event) {
-  freteDragState = null;
-  event.target.closest('tr')?.classList.remove('frete-row-dragging');
-  document.querySelectorAll('.frete-row-drop-target').forEach(row => row.classList.remove('frete-row-drop-target'));
-}
-
-document.addEventListener('focusin', e => {
-  const cell = e.target.closest?.('.frete-consult-table td[contenteditable="true"]');
-  if (!cell) return;
-  cell.dataset.value = cell.textContent.trim();
-});
-
-document.addEventListener('keydown', e => {
-  const cell = e.target.closest?.('.frete-consult-table td[contenteditable="true"]');
-  if (!cell) return;
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    cell.blur();
-  }
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    cell.textContent = cell.dataset.value || '';
-    cell.blur();
-  }
-});
-
-document.addEventListener('focusout', e => {
-  const cell = e.target.closest?.('.frete-consult-table td[contenteditable="true"]');
-  if (!cell) return;
-  runBlurCommit(e, cell, () => commitFreteConsultEdit(cell));
-});
-
-async function commitFreteConsultEdit(cell) {
-  if (!isAdmin()) return;
-  const previous = cell.dataset.value || '';
-  const col = Number(cell.dataset.col);
-  const next = formatFreteCellValue(cell.textContent, col);
-  cell.textContent = next;
-  if (next === previous) return;
-
-  const table = cell.dataset.table;
-  const row = Number(cell.dataset.row);
-  if (!state.freteConsultas[table]?.rows?.[row]) return;
-
-  state.freteConsultas[table].rows[row][col] = next;
-  await saveFreteConsultas();
-  cell.dataset.value = next;
-  cell.closest('tr').className = freteOriginTone(state.freteConsultas[table].rows[row][0]);
-  updateFreteQueryDestinations();
+  result.innerHTML = `
+    <div class="frete-result-pill frete-result-pj">
+      <span>PJ</span>
+      <strong>${escapeHtml(formatFreteAccounting(row.pj))}</strong>
+    </div>
+    <div class="frete-result-pill frete-result-pf">
+      <span>PF</span>
+      <strong>${escapeHtml(formatFreteAccounting(row.pf))}</strong>
+    </div>`;
 }
 
 function scheduleMetaGoalAlert({ origem, destino, meta, realizado }) {
@@ -2684,7 +2928,7 @@ function changeDate(delta) {
   loadAll();
 }
 
-// â”€â”€â”€ RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── RENDER ───────────────────────────────────────────────────────────────────
 function renderAll() {
   applyAdditionalColumnState();
   syncDynamicSelects();
@@ -2850,50 +3094,55 @@ function renderDrawerAgendamento() {
 }
 
 function renderDrawerFinanceiro() {
+  const valores = freteValuesForViagem(selectedViagem());
   return `<div class="drawer-card-grid single">${drawerCard('FINANCEIRO', [
-    drawerReadOnlyValue('Valor do frete', freteValueForViagem(selectedViagem()), 'money'),
-    drawerField('valor_adiantamento','Valor adiantamento'),
-    drawerAdvanceButton()
+    drawerReadOnlyValue('Valor PJ', valores.pj, 'money'),
+    drawerReadOnlyValue('Valor PF', valores.pf, 'money')
   ])}</div>`;
 }
 
-function freteValueForViagem(viagem = {}) {
-  const eixoColumn = eixoToFreteColumn(viagem.eixos);
-  if (!viagem?.origem || !viagem?.destino || !eixoColumn) return '-';
-  const colIndex = FRETE_COLUMNS.indexOf(eixoColumn);
-  if (colIndex < 0) return '-';
-
-  const entries = Object.entries(state.freteConsultas || {});
-  const preferred = normalizeTipo(viagem.tipo) === 'AGREGADO'
-    ? ['agregados', 'terceiros']
-    : ['terceiros', 'agregados'];
-  const ordered = [
-    ...preferred.map(key => entries.find(([entryKey]) => entryKey === key)).filter(Boolean),
-    ...entries.filter(([key]) => !preferred.includes(key))
-  ];
-
-  for (const [, table] of ordered) {
-    const row = (table.rows || []).find(item =>
-      fretePlaceMatches(item[0], viagem.origem) &&
-      fretePlaceMatches(item[1], viagem.destino)
-    );
-    const value = row ? String(row[colIndex] || '').trim() : '';
-    if (value && value !== '--') return formatFreteCellValue(value, colIndex);
-  }
-  return '-';
+function freteValuesForViagem(viagem = {}) {
+  const eixo = eixoToFreteNumber(viagem.eixos);
+  if (!viagem?.origem || !viagem?.destino || !eixo) return { pj: '-', pf: '-' };
+  const route = freteRoutes().find(item =>
+    fretePlaceMatches(item.origem, viagem.origem) &&
+    fretePlaceMatches(item.destino, viagem.destino)
+  );
+  const row = route?.rows?.find(item => Number(item.eixos) === eixo);
+  return {
+    pj: row && Number.isFinite(row.pj) ? formatFreteAccounting(row.pj) : '-',
+    pf: row && Number.isFinite(row.pf) ? formatFreteAccounting(row.pf) : '-'
+  };
 }
 
-function eixoToFreteColumn(value) {
+function freteValueForViagem(viagem = {}) {
+  const values = freteValuesForViagem(viagem);
+  return values.pj !== '-' ? values.pj : values.pf;
+}
+
+function eixoToFreteNumber(value) {
   const digits = String(value || '').replace(/\D/g, '');
-  if (!digits) return '';
-  return FRETE_COLUMNS.find(col => col.startsWith(digits)) || '';
+  return Number(digits) || 0;
 }
 
 function fretePlaceMatches(tableValue, viagemValue) {
-  const tableNorm = normalizeOption(tableValue);
-  const viagemNorm = normalizeOption(viagemValue);
+  const tableNorm = normalizeFretePlaceAlias(tableValue);
+  const viagemNorm = normalizeFretePlaceAlias(viagemValue);
   if (!tableNorm || !viagemNorm) return false;
   return tableNorm === viagemNorm || tableNorm.includes(viagemNorm) || viagemNorm.includes(tableNorm);
+}
+
+function normalizeFretePlaceAlias(value) {
+  const normalized = normalizeOption(value).replace(/\s+/g, ' ').trim();
+  const aliases = {
+    SJRP: 'SAO JOSE DO RIO PRETO',
+    'SAO JOSE RIO PRETO': 'SAO JOSE DO RIO PRETO',
+    'RIBEIRAO P': 'RIBEIRAO PRETO',
+    'RIBEIRAO PRETO': 'RIBEIRAO PRETO',
+    PINDA: 'PINDAMONHANGABA',
+    'PEDRO L': 'PEDRO LEOPOLDO'
+  };
+  return aliases[normalized] || normalized;
 }
 
 function renderDrawerHistorico(viagem) {
@@ -3008,7 +3257,7 @@ function whatsappHref(phone) {
 
 function rowWhatsappAction(viagem) {
   if (!hasConversationPhone(viagem)) return '';
-  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${escapeAttr(viagem._id)}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.png" alt=""></button>`;
+  return `<button type="button" class="btn-row table-action-icon table-whatsapp-action request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${escapeAttr(viagem._id)}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.svg" alt=""></button>`;
 }
 
 function hasConversationPhone(viagem = {}) {
@@ -3025,7 +3274,7 @@ function rowActionMenu(viagem) {
   const hasPhone = hasConversationPhone(viagem);
   const items = [
     isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
-    hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.png" alt=""></button>` : '',
+    hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/arrow-whatsapp-request.svg" alt=""></button>` : '',
     rowConversationAction(viagem),
     viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
     viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
@@ -3770,8 +4019,7 @@ async function startWorkSession(tripId, workTypeId) {
     body: JSON.stringify({ workTypeId })
   });
   if (!created) return;
-  const sessions = await apiFetch('/api/work-sessions');
-  if (sessions) state.workSessions = normalizeWorkSessions(sessions);
+  upsertWorkSession(created);
   renderAllUnlessInlineEditing();
   const type = workTypeById(workTypeId);
   const viagem = state.viagens.find(item => item._id === tripId);
@@ -3785,8 +4033,7 @@ async function updateWorkSession(sessionId, action) {
     body: JSON.stringify({ action })
   });
   if (!updated) return;
-  const sessions = await apiFetch('/api/work-sessions');
-  if (sessions) state.workSessions = normalizeWorkSessions(sessions);
+  upsertWorkSession(updated);
   renderAllUnlessInlineEditing();
   const labels = { pause: 'Trabalho pausado.', resume: 'Trabalho retomado.', complete: 'Trabalho finalizado.' };
   showSummaryToast(labels[action] || 'Trabalho atualizado.');
@@ -3799,8 +4046,7 @@ async function changeWorkType(sessionId, workTypeId) {
     body: JSON.stringify({ action: 'change-type', workTypeId })
   });
   if (!updated) return;
-  const sessions = await apiFetch('/api/work-sessions');
-  if (sessions) state.workSessions = normalizeWorkSessions(sessions);
+  upsertWorkSession(updated);
   renderAllUnlessInlineEditing();
   showSummaryToast('Atividade alterada.');
 }
@@ -4008,7 +4254,7 @@ function renderTableHeader(secao) {
     const sortIndex = criteria.findIndex(item => item.field === field.key);
     const active = sortIndex >= 0 ? 'is-sorted' : '';
     const sortItem = criteria[sortIndex];
-    const arrow = sortItem ? (sortItem.direction === 'asc' ? ' ↑' : ' ↓') : '';
+    const arrow = sortItem ? (sortItem.direction === 'asc' ? ' ?' : ' ?') : '';
     const order = sortIndex > 0 ? ` ${sortIndex + 1}` : '';
     const label = `${field.label}${arrow}${order}`;
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
@@ -4221,8 +4467,11 @@ function setReportOperationOptions() {
   if (!select) return;
   const current = select.value;
   const options = originList();
-  select.innerHTML = `<option value="">Todas as opera&ccedil;&otilde;es</option>${options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('')}`;
-  if (options.includes(current) || current === '') select.value = current;
+  select.innerHTML = options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('');
+  const preferred = options.includes(current)
+    ? current
+    : options.find(opt => normalizeOption(opt) === normalizeOption(state.originFilter)) || options[0] || '';
+  select.value = preferred;
 }
 
 function openSettingsModal() {
@@ -4680,7 +4929,7 @@ async function addConfigOption(field) {
   state.configOptions = normalizeConfigOptions(updated);
   input.value = '';
   renderSettingsModal();
-  await loadAll();
+  renderAll();
 }
 
 async function deleteConfigOption(field, value) {
@@ -4688,7 +4937,7 @@ async function deleteConfigOption(field, value) {
   if (!updated) return;
   state.configOptions = normalizeConfigOptions(updated);
   renderSettingsModal();
-  await loadAll();
+  renderAll();
 }
 
 async function deleteOperation(operationId) {
@@ -4716,7 +4965,7 @@ async function moveConfigOption(field, index, direction) {
   if (!updated) return;
   state.configOptions = normalizeConfigOptions(updated);
   renderSettingsModal();
-  await loadAll();
+  renderAll();
 }
 
 function filteredRows(secao) {
@@ -4905,7 +5154,9 @@ async function copySummaryAsImage() {
   if (!panel || !document.querySelector('#summary-cards .summary-card')) return;
 
   if (!hasFreshSummaryCopyBlob()) {
-    if (!window.html2canvas) {
+    try {
+      await ensureHtml2Canvas();
+    } catch (error) {
       showSummaryToast('N\u00e3o foi poss\u00edvel gerar a imagem do resumo. Atualize a p\u00e1gina e tente novamente.', 'error');
       return;
     }
@@ -4957,7 +5208,7 @@ function prepareSummaryCopyImage() {
 
 async function getPreparedSummaryCopyBlob(panel) {
   if (!window.html2canvas) {
-    throw new Error('N\u00e3o foi poss\u00edvel gerar a imagem do resumo.');
+    await ensureHtml2Canvas();
   }
 
   if (hasFreshSummaryCopyBlob()) return state.summaryCopyBlob;
@@ -5049,7 +5300,9 @@ async function copyReportSummaryAsImage() {
   if (!panel || !document.querySelector('#report-summary-compact .report-summary-origin')) return;
 
   if (!hasFreshReportSummaryCopyBlob()) {
-    if (!window.html2canvas) {
+    try {
+      await ensureHtml2Canvas();
+    } catch (error) {
       showSummaryToast('N\u00e3o foi poss\u00edvel gerar a imagem do resumo. Atualize a p\u00e1gina e tente novamente.', 'error');
       return;
     }
@@ -5828,7 +6081,7 @@ function renderTransportChart(faturadoRows) {
   }).join('');
 }
 
-// â”€â”€â”€ INLINE EDIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── INLINE EDIT ──────────────────────────────────────────────────────────────
 let activeInlineCell = null;
 let activeInlineEdit = null;
 let windowLostFocus = false;
@@ -6352,7 +6605,7 @@ function hashText(value) {
   return String(value || '').split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0);
 }
 
-// â”€â”€â”€ MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── MODAL ────────────────────────────────────────────────────────────────────
 function openModal(viagem = null, defaults = {}) {
   syncDynamicSelects();
   state.editingId = viagem ? viagem._id : null;
@@ -6622,7 +6875,7 @@ function v(id) {
   return (document.getElementById(id)?.value || '').trim();
 }
 
-// â”€â”€â”€ EDIT / DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── EDIT / DELETE ────────────────────────────────────────────────────────────
 function editViagem(id) {
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
@@ -6746,7 +6999,7 @@ async function concluirTrocaMotorista() {
   await updateViagemField(id, 'trocaMotoristaConcluida', true);
 }
 
-// â”€â”€â”€ CONTEXT MENU â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
 function showCtxMenu(e, id, mode = 'row') {
   e.preventDefault();
   state.ctxTargetId = id;
@@ -6929,7 +7182,7 @@ async function marcarAgendamentoPalete() {
   await updateViagemField(id, 'agendamentoVerde', !isPalete);
 }
 
-// â”€â”€â”€ METAS SAVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── METAS SAVE ───────────────────────────────────────────────────────────────
 async function saveMetas() {
   if (!isAdmin()) return;
   const inputs = document.querySelectorAll('#metas-form input[data-dest]');
@@ -6950,7 +7203,7 @@ async function saveMetas() {
   setTimeout(() => { btn.textContent = 'Salvar Metas'; }, 1500);
 }
 
-// â”€â”€â”€ FORMATTERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── FORMATTERS ───────────────────────────────────────────────────────────────
 function sumPeso(rows) {
   return rows.reduce((sum, item) => sum + parseNumber(item.peso), 0);
 }
