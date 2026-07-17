@@ -7394,3 +7394,23 @@ function escapeAttr(value) {
 
 
 
+(() => {
+  const ensureCssLoaded = () => {
+    const logo = document.querySelector('.brand-logo');
+    const blocker = document.querySelector('.mobile-blocker');
+    const logoHeight = logo ? Number.parseFloat(getComputedStyle(logo).height) : 0;
+    const blockerDisplay = blocker ? getComputedStyle(blocker).display : 'none';
+    const cssLooksMissing = blockerDisplay !== 'none' || logoHeight > 120 || !logoHeight;
+    if (!cssLooksMissing || document.getElementById('style-css-recovery')) return;
+    const link = document.createElement('link');
+    link.id = 'style-css-recovery';
+    link.rel = 'stylesheet';
+    link.href = `/css/style.css?v=20260717-css-recovery-${Date.now()}`;
+    document.head.appendChild(link);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(ensureCssLoaded, 80), { once: true });
+  } else {
+    setTimeout(ensureCssLoaded, 80);
+  }
+})();

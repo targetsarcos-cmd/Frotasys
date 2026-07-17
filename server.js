@@ -153,6 +153,8 @@ const STATIC_CACHE_OPTIONS = {
     const ext = path.extname(filePath).toLowerCase();
     if (ext === '.html') {
       res.setHeader('Cache-Control', 'no-cache');
+    } else if (ext === '.css' || ext === '.js') {
+      res.setHeader('Cache-Control', 'no-cache');
     } else if (STATIC_CACHE_EXTENSIONS.has(ext)) {
       res.setHeader('Cache-Control', 'public, max-age=604800, must-revalidate');
     }
