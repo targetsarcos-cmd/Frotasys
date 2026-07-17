@@ -1,3 +1,44 @@
+(() => {
+  const cssHref = '/css/style.css?v=20260717-css-recovery-inline';
+  const cssCandidates = [
+    'css/style.css?v=20260717-css-recovery-inline',
+    cssHref
+  ];
+  const injectCssText = async () => {
+    if (document.getElementById('style-css-recovery-inline')) return;
+    try {
+      const response = await fetch(`${cssHref}&inline=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) return;
+      const style = document.createElement('style');
+      style.id = 'style-css-recovery-inline';
+      style.textContent = await response.text();
+      document.head.appendChild(style);
+    } catch (_) {
+      // If the browser refuses the recovery request, the regular stylesheet links still remain.
+    }
+  };
+  const ensureCssLoaded = () => {
+    const logo = document.querySelector('.brand-logo');
+    const blocker = document.querySelector('.mobile-blocker');
+    const logoHeight = logo ? Number.parseFloat(getComputedStyle(logo).height) : 0;
+    const blockerDisplay = blocker ? getComputedStyle(blocker).display : 'none';
+    const cssLooksMissing = blockerDisplay !== 'none' || logoHeight > 120 || !logoHeight;
+    if (!cssLooksMissing || document.getElementById('style-css-recovery')) return;
+    cssCandidates.forEach((href, index) => {
+      const link = document.createElement('link');
+      link.id = index === 0 ? 'style-css-recovery' : 'style-css-recovery-absolute';
+      link.rel = 'stylesheet';
+      link.href = href + '-' + Date.now();
+      document.head.appendChild(link);
+    });
+    injectCssText();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(ensureCssLoaded, 80), { once: true });
+  } else {
+    setTimeout(ensureCssLoaded, 80);
+  }
+})();
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const state = {
   viagens: [],
@@ -7391,26 +7432,3 @@ function escapeHtml(value) {
 function escapeAttr(value) {
   return escapeHtml(value);
 }
-
-
-
-(() => {
-  const ensureCssLoaded = () => {
-    const logo = document.querySelector('.brand-logo');
-    const blocker = document.querySelector('.mobile-blocker');
-    const logoHeight = logo ? Number.parseFloat(getComputedStyle(logo).height) : 0;
-    const blockerDisplay = blocker ? getComputedStyle(blocker).display : 'none';
-    const cssLooksMissing = blockerDisplay !== 'none' || logoHeight > 120 || !logoHeight;
-    if (!cssLooksMissing || document.getElementById('style-css-recovery')) return;
-    const link = document.createElement('link');
-    link.id = 'style-css-recovery';
-    link.rel = 'stylesheet';
-    link.href = `/css/style.css?v=20260717-css-recovery-${Date.now()}`;
-    document.head.appendChild(link);
-  };
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(ensureCssLoaded, 80), { once: true });
-  } else {
-    setTimeout(ensureCssLoaded, 80);
-  }
-})();

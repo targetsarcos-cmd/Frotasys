@@ -146,7 +146,7 @@ const VIAGEM_FIELD_LABELS = {
 
 const COMPRESSIBLE_TYPES = /^(text\/|application\/json|application\/javascript|application\/xml|image\/svg\+xml)/i;
 const STATIC_CACHE_EXTENSIONS = new Set(['.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.webmanifest', '.woff', '.woff2']);
-const STATIC_GZIP_EXTENSIONS = new Set(['.js', '.css', '.svg', '.json', '.html']);
+const STATIC_GZIP_EXTENSIONS = new Set(['.svg', '.json', '.html']);
 const staticGzipCache = new Map();
 const STATIC_CACHE_OPTIONS = {
   setHeaders(res, filePath) {
