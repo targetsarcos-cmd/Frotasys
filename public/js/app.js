@@ -4297,10 +4297,9 @@ function renderTableHeader(secao) {
     const sortIndex = criteria.findIndex(item => item.field === field.key);
     const active = sortIndex >= 0 ? 'is-sorted' : '';
     const sortItem = criteria[sortIndex];
-    const arrow = sortItem ? (sortItem.direction === 'asc' ? ' ?' : ' ?') : '';
+    const arrow = sortItem ? (sortItem.direction === 'asc' ? ' &uarr;' : ' &darr;') : '';
     const order = sortIndex > 0 ? ` ${sortIndex + 1}` : '';
-    const label = `${field.label}${arrow}${order}`;
-    return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(label)}</th>`;
+    return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(field.label)}${arrow}${escapeHtml(order)}</th>`;
   }).join('')}<th class="col-actions">A&Ccedil;&Otilde;ES</th>`;
 
   headRow.querySelectorAll('th[data-field]:not([data-field="trabalho"])').forEach(th => {
