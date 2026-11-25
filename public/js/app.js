@@ -1,7 +1,7 @@
 (() => {
-  const cssHref = '/css/style.css?v=20261125-filtro-visual';
+  const cssHref = '/css/style.css?v=20261125-funil';
   const cssCandidates = [
-    'css/style.css?v=20261125-filtro-visual',
+    'css/style.css?v=20261125-funil',
     cssHref
   ];
   const injectCssText = async () => {
@@ -45,6 +45,7 @@ const state = {
   metas: [],
   currentDate: todayStr(),
   originFilter: '',
+  tripFilters: {},
   editingId: null,
   editingOperationId: null,
   ctxTargetId: null,
@@ -760,6 +761,7 @@ function initUI() {
   document.getElementById('agendamento-mark').addEventListener('click', toggleAgendamentoVerde);
   document.getElementById('agendamento-palete').addEventListener('click', marcarAgendamentoPalete);
   document.getElementById('btn-column-picker')?.addEventListener('click', toggleColumnPicker);
+  initTripFilters();
   document.getElementById('agendamento-edit').addEventListener('click', () => {
     const id = state.agendamentoTargetId;
     hideAgendamentoMenu();
@@ -3790,7 +3792,10 @@ function renderTable(secao) {
   if (count) count.textContent = `${rows.length} ${rows.length === 1 ? 'registro' : 'registros'}`;
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="${fields.length + 1}" class="empty-state">Nenhum registro para ${formatDateBR(state.currentDate)}</td></tr>`;
+    const message = Object.keys(state.tripFilters).length
+      ? 'Nenhuma viagem corresponde aos filtros aplicados.'
+      : `Nenhum registro para ${formatDateBR(state.currentDate)}`;
+    tbody.innerHTML = `<tr><td colspan="${fields.length + 1}" class="empty-state">${message}</td></tr>`;
     updateTableScrollControls(secao);
     return;
   }
@@ -5048,10 +5053,75 @@ async function moveConfigOption(field, index, direction) {
   renderAll();
 }
 
+function initTripFilters() {
+  const button = document.getElementById('btn-trip-filters');
+  const form = document.getElementById('trip-filters');
+  const close = () => {
+    form.classList.add('hidden');
+    button.setAttribute('aria-expanded', 'false');
+  };
+  button.addEventListener('click', () => {
+    if (!form.classList.contains('hidden')) return close();
+    closeColumnPicker();
+    const statuses = new Set(state.viagens.filter(v => v.data === state.currentDate &&
+      (!state.originFilter || v.origem === state.originFilter || (v.secao === 'agenciando' && !v.origem)))
+      .map(viagemStatusDisplay).filter(Boolean));
+    if (state.tripFilters.status) statuses.add(state.tripFilters.status);
+    const status = form.elements.namedItem('status');
+    status.replaceChildren(new Option('Todos', ''));
+    for (const value of [...statuses].sort((a, b) => a.localeCompare(b, 'pt-BR'))) status.add(new Option(value, value));
+    form.reset();
+    for (const [key, value] of Object.entries(state.tripFilters)) form.elements.namedItem(key).value = value;
+    form.classList.remove('hidden');
+    button.setAttribute('aria-expanded', 'true');
+    form.elements.namedItem('placa').focus();
+  });
+  const apply = filters => {
+    state.tripFilters = filters;
+    const count = Object.keys(filters).length;
+    if (count) button.dataset.count = String(count);
+    else delete button.dataset.count;
+    button.setAttribute('aria-label', count ? `Filtrar viagens (${count} filtros ativos)` : 'Filtrar viagens');
+    close();
+    renderTable('arcos');
+    renderTable('agenciando');
+    button.focus();
+  };
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const filters = {};
+    for (const [key, value] of new FormData(form)) {
+      if (value.trim()) filters[key] = value.trim();
+    }
+    apply(filters);
+  });
+  document.getElementById('clear-trip-filters').addEventListener('click', () => apply({}));
+  document.addEventListener('pointerdown', event => {
+    if (!button.parentElement.contains(event.target)) close();
+  });
+  button.parentElement.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !form.classList.contains('hidden')) {
+      event.stopPropagation();
+      close();
+      button.focus();
+    }
+  });
+}
+
+function matchesTripFilters(viagem, filters) {
+  return Object.entries(filters).every(([field, value]) => {
+    if (field === 'evento') return Boolean(String(viagem.frete ?? '').trim()) === (value === 'com');
+    if (field === 'status') return viagemStatusDisplay(viagem) === value;
+    if (field === 'placa') return normalizeOption(viagem.placa).replace(/[^A-Z0-9]/g, '').includes(normalizeOption(value).replace(/[^A-Z0-9]/g, ''));
+    return normalizeOption(viagem[field]).includes(normalizeOption(value));
+  });
+}
+
 function filteredRows(secao) {
   return sortRows(state.viagens
     .filter(v => v.secao === secao)
     .filter(v => v.data === state.currentDate)
+    .filter(v => matchesTripFilters(v, state.tripFilters))
     .filter(v => !state.originFilter || v.origem === state.originFilter || (secao === 'agenciando' && !v.origem)));
 }
 
