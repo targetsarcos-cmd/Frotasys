@@ -187,14 +187,27 @@ test('funil combina os campos com data e operacao nas duas tabelas', () => {
   state.viagens = [base, { ...base, frete: '' }, { ...base, secao: 'agenciando' },
     { ...base, origem: 'BARROSO' }, { ...base, data: '2000-01-01' }];
   state.originFilter = 'ARCOS';
-  state.tripFilters = { placa: 'bc12', nome: 'jose', destino: 'sao', status: 'PROGRAMAR', evento: 'com' };
+  const options = ui.renderTripFilterFields();
+  assert.match(options, /name="origem" value="ARCOS"/);
+  assert.doesNotMatch(options, /name="origem" value="BARROSO"/);
+  assert.equal((options.match(/name="placa" value="ABC-1234"/g) || []).length, 1);
+  state.tripFilters = { placa: [base.placa], nome: [base.nome], destino: [base.destino], status: ['PROGRAMAR'], evento: ['Com evento'] };
   assert.equal(ui.filteredRows('arcos').length, 1);
   assert.equal(ui.filteredRows('agenciando').length, 1);
-  state.tripFilters.evento = 'sem';
+  state.tripFilters.evento = ['Sem evento'];
   assert.equal(ui.filteredRows('arcos')[0].frete, '');
   assert.equal(ui.filteredRows('agenciando').length, 0);
   state.tripFilters = {};
   assert.equal(ui.filteredRows('arcos').length, 2);
+  state.originFilter = '';
+  state.viagens.push({ ...base, placa: 'ONT-9999', data: '2000-01-01' });
+  assert.doesNotMatch(ui.renderTripFilterFields(), /ONT-9999/);
+  state.tripFilters = { origem: ['ARCOS', 'BARROSO'], frete: ['0,00'] };
+  assert.equal(ui.filteredRows('arcos').length, 2);
+  state.tripFilters = { frete: [''] };
+  assert.equal(ui.filteredRows('arcos').length, 1);
+  state.tripFilters = { placa: [] };
+  assert.equal(ui.filteredRows('arcos').length, 0);
 });
 
 test('coluna Evento exibe duas casas para numeros e conserva o valor de edicao', () => {
