@@ -1,7 +1,7 @@
 (() => {
-  const cssHref = '/css/style.css?v=20261125-funil';
+  const cssHref = '/css/style.css?v=20261125-filtros-dia';
   const cssCandidates = [
-    'css/style.css?v=20261125-funil',
+    'css/style.css?v=20261125-filtros-dia',
     cssHref
   ];
   const injectCssText = async () => {
@@ -553,6 +553,7 @@ function initUI() {
   });
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;
+    clearTripFilterScope();
     loadAll();
   });
   document.getElementById('btn-prev-date').addEventListener('click', () => changeDate(-1));
@@ -659,6 +660,7 @@ function initUI() {
 
   document.getElementById('operation-filter').addEventListener('change', e => {
     state.originFilter = e.target.value;
+    clearTripFilterScope();
     renderAll();
   });
   document.getElementById('travel-drawer')?.addEventListener('click', handleDrawerClick);
@@ -2985,6 +2987,7 @@ function changeDate(delta) {
   const d = new Date(state.currentDate + 'T12:00:00');
   d.setDate(d.getDate() + delta);
   state.currentDate = d.toISOString().split('T')[0];
+  clearTripFilterScope();
   document.getElementById('date-picker').value = state.currentDate;
   loadAll();
 }
@@ -5053,6 +5056,62 @@ async function moveConfigOption(field, index, direction) {
   renderAll();
 }
 
+const TRIP_FILTER_FIELDS = {
+  origem: 'Origem', destino: 'Destino', placa: 'Placa', nome: 'Motorista',
+  status: 'Status', frete: 'Evento', evento: 'Presença de evento'
+};
+
+function tripFilterValue(viagem, field) {
+  if (field === 'status') return viagemStatusDisplay(viagem);
+  if (field === 'evento') return String(viagem.frete ?? '').trim() ? 'Com evento' : 'Sem evento';
+  if (field === 'frete') return String(formatTableCellValue(field, viagem.frete) ?? '').trim();
+  return String(viagem[field] ?? '').trim();
+}
+
+function tripInFilterScope(v) {
+  return v.data === state.currentDate && (!state.originFilter || v.origem === state.originFilter ||
+    (v.secao === 'agenciando' && !v.origem));
+}
+
+function renderTripFilterFields() {
+  const rows = state.viagens.filter(tripInFilterScope);
+  return Object.entries(TRIP_FILTER_FIELDS).map(([key, label]) => {
+    const values = [...new Set(rows.map(row => tripFilterValue(row, key)))].sort((a, b) =>
+      a.localeCompare(b, 'pt-BR', { numeric: true }));
+    const selected = state.tripFilters[key];
+    const options = values.map(value => {
+      const text = value && key === 'origem' ? operationName(value) : value || '(Em branco)';
+      return `<label class="trip-check"><input type="checkbox" name="${key}" value="${escapeAttr(value)}" ${!selected || selected.includes(value) ? 'checked' : ''}><span>${escapeHtml(text)}</span></label>`;
+    }).join('');
+    return `<details data-filter-key="${key}"><summary>${label}</summary>
+      <input type="search" aria-label="Pesquisar em ${label}" placeholder="Pesquisar" autocomplete="off">
+      <label class="trip-check"><input type="checkbox" data-all>Selecionar todos</label>
+      <div class="trip-filter-values">${options || 'Sem valores neste dia'}</div></details>`;
+  }).join('');
+}
+
+function syncFilterChecks(group) {
+  const boxes = [...group.querySelectorAll('input[name]')];
+  const visible = boxes.filter(box => !box.parentElement.hidden);
+  const all = group.querySelector('[data-all]');
+  const checked = visible.filter(box => box.checked).length;
+  all.disabled = !visible.length;
+  all.checked = visible.length > 0 && checked === visible.length;
+  all.indeterminate = checked > 0 && checked < visible.length;
+  const count = boxes.filter(box => box.checked).length;
+  group.querySelector('summary').textContent = TRIP_FILTER_FIELDS[group.dataset.filterKey] +
+    (count < boxes.length ? ` (${count}/${boxes.length})` : '');
+}
+
+function clearTripFilterScope() {
+  state.tripFilters = {};
+  const button = document.getElementById('btn-trip-filters');
+  delete button.dataset.count;
+  button.setAttribute('aria-label', 'Filtrar viagens');
+  button.setAttribute('aria-expanded', 'false');
+  document.getElementById('trip-filters').classList.add('hidden');
+}
+
 function initTripFilters() {
   const button = document.getElementById('btn-trip-filters');
   const form = document.getElementById('trip-filters');
@@ -5063,18 +5122,22 @@ function initTripFilters() {
   button.addEventListener('click', () => {
     if (!form.classList.contains('hidden')) return close();
     closeColumnPicker();
-    const statuses = new Set(state.viagens.filter(v => v.data === state.currentDate &&
-      (!state.originFilter || v.origem === state.originFilter || (v.secao === 'agenciando' && !v.origem)))
-      .map(viagemStatusDisplay).filter(Boolean));
-    if (state.tripFilters.status) statuses.add(state.tripFilters.status);
-    const status = form.elements.namedItem('status');
-    status.replaceChildren(new Option('Todos', ''));
-    for (const value of [...statuses].sort((a, b) => a.localeCompare(b, 'pt-BR'))) status.add(new Option(value, value));
-    form.reset();
-    for (const [key, value] of Object.entries(state.tripFilters)) form.elements.namedItem(key).value = value;
+    document.getElementById('trip-filter-fields').innerHTML = renderTripFilterFields();
+    form.querySelectorAll('details').forEach(syncFilterChecks);
     form.classList.remove('hidden');
     button.setAttribute('aria-expanded', 'true');
-    form.elements.namedItem('placa').focus();
+    form.querySelector('summary').focus();
+  });
+  form.addEventListener('input', event => {
+    const group = event.target.closest('details');
+    if (!group) return;
+    const input = event.target;
+    for (const box of group.querySelectorAll('input[name]')) {
+      if (input.type === 'search') box.parentElement.hidden =
+        !normalizeOption(box.parentElement.textContent).includes(normalizeOption(input.value.trim()));
+      if (input.hasAttribute('data-all') && !box.parentElement.hidden) box.checked = input.checked;
+    }
+    syncFilterChecks(group);
   });
   const apply = filters => {
     state.tripFilters = filters;
@@ -5090,8 +5153,10 @@ function initTripFilters() {
   form.addEventListener('submit', event => {
     event.preventDefault();
     const filters = {};
-    for (const [key, value] of new FormData(form)) {
-      if (value.trim()) filters[key] = value.trim();
+    for (const group of form.querySelectorAll('details')) {
+      const boxes = [...group.querySelectorAll('input[name]')];
+      const values = boxes.filter(box => box.checked).map(box => box.value);
+      if (values.length < boxes.length) filters[group.dataset.filterKey] = values;
     }
     apply(filters);
   });
@@ -5109,20 +5174,14 @@ function initTripFilters() {
 }
 
 function matchesTripFilters(viagem, filters) {
-  return Object.entries(filters).every(([field, value]) => {
-    if (field === 'evento') return Boolean(String(viagem.frete ?? '').trim()) === (value === 'com');
-    if (field === 'status') return viagemStatusDisplay(viagem) === value;
-    if (field === 'placa') return normalizeOption(viagem.placa).replace(/[^A-Z0-9]/g, '').includes(normalizeOption(value).replace(/[^A-Z0-9]/g, ''));
-    return normalizeOption(viagem[field]).includes(normalizeOption(value));
-  });
+  return Object.entries(filters).every(([field, values]) => values.includes(tripFilterValue(viagem, field)));
 }
 
 function filteredRows(secao) {
   return sortRows(state.viagens
     .filter(v => v.secao === secao)
-    .filter(v => v.data === state.currentDate)
-    .filter(v => matchesTripFilters(v, state.tripFilters))
-    .filter(v => !state.originFilter || v.origem === state.originFilter || (secao === 'agenciando' && !v.origem)));
+    .filter(tripInFilterScope)
+    .filter(v => matchesTripFilters(v, state.tripFilters)));
 }
 
 function sortTableBy(fieldKey) {

@@ -9,8 +9,8 @@
 <link rel="apple-touch-icon" href="/icons/favicon-192.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0f766e">
-<link rel="stylesheet" href="css/style.css?v=20261125-funil">
-<link rel="stylesheet" href="/css/style.css?v=20261125-funil">
+<link rel="stylesheet" href="css/style.css?v=20261125-filtros-dia">
+<link rel="stylesheet" href="/css/style.css?v=20261125-filtros-dia">
 </head>
 <body>
 <div class="mobile-blocker" aria-live="polite">
@@ -78,11 +78,7 @@
         </button>
         <form class="column-picker-menu hidden trip-filter-menu" id="trip-filters" aria-label="Filtros de viagens">
           <strong class="column-picker-title">Filtrar viagens</strong>
-          <label>Placa<input name="placa" type="search" autocomplete="off"></label>
-          <label>Motorista<input name="nome" type="search" autocomplete="off"></label>
-          <label>Destino<input name="destino" type="search" autocomplete="off"></label>
-          <label>Status<select name="status"><option value="">Todos</option></select></label>
-          <label>Evento<select name="evento"><option value="">Todos</option><option value="com">Com evento</option><option value="sem">Sem evento</option></select></label>
+          <div id="trip-filter-fields"></div>
           <div class="trip-filter-actions"><button type="button" class="btn-cancel" id="clear-trip-filters">Limpar</button><button type="submit" class="btn-primary">Aplicar</button></div>
         </form>
       </div>
@@ -819,7 +815,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/js/auth.js?v=20260521-auth"></script>
-<script src="js/app.js?v=20261125-funil"></script>
+<script src="js/app.js?v=20261125-filtros-dia"></script>
 </body>
 </html>
 
