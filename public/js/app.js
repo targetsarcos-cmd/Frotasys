@@ -1,7 +1,7 @@
 (() => {
-  const cssHref = '/css/style.css?v=20261125-seletor';
+  const cssHref = '/css/style.css?v=20261125-filtro-visual';
   const cssCandidates = [
-    'css/style.css?v=20261125-seletor',
+    'css/style.css?v=20261125-filtro-visual',
     cssHref
   ];
   const injectCssText = async () => {
