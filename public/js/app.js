@@ -1,7 +1,7 @@
 (() => {
-  const cssHref = '/css/style.css?v=20260717-css-recovery-inline';
+  const cssHref = '/css/style.css?v=20261125-evento';
   const cssCandidates = [
-    'css/style.css?v=20260717-css-recovery-inline',
+    'css/style.css?v=20261125-evento',
     cssHref
   ];
   const injectCssText = async () => {
@@ -249,6 +249,7 @@ function ensureChartJs() {
 }
 
 const SEARCH_RESULT_FIELDS = [
+  { key: 'frete', label: 'EVENTO' },
   { key: 'placa', label: 'PLACA' },
   { key: 'nome', label: 'NOME' },
   { key: 'tipo', label: 'TIPO' },
@@ -402,6 +403,9 @@ function handleWsMessage(msg) {
       renderAllUnlessInlineEditing();
     }
   } else if (type === 'viagem_atualizada') {
+    if (state.selectedViagemDetails?._id === payload._id) {
+      state.selectedViagemDetails.frete = payload.frete;
+    }
     const idx = state.viagens.findIndex(v => v._id === payload._id);
     if (idx !== -1) {
       state.viagens[idx] = payload;
@@ -521,6 +525,7 @@ async function apiFetch(url, opts = {}) {
       alert(data.error || 'N\u00e3o foi poss\u00edvel salvar.');
       return null;
     }
+    if (res.headers.get('X-Viagem-Evento') === '1') showEventWarning(data.frete);
     return data;
   } catch (e) {
     console.error('API error:', e);
@@ -529,7 +534,22 @@ async function apiFetch(url, opts = {}) {
 }
 
 // ─── UI INIT ──────────────────────────────────────────────────────────────────
+const pendingEventWarnings = [];
+
+function showEventWarning(text) {
+  const dialog = document.getElementById('event-warning');
+  if (dialog.open) {
+    pendingEventWarnings.push(text);
+    return;
+  }
+  document.getElementById('event-warning-text').textContent = text;
+  dialog.showModal();
+}
+
 function initUI() {
+  document.getElementById('event-warning').addEventListener('close', () => {
+    if (pendingEventWarnings.length) showEventWarning(pendingEventWarnings.shift());
+  });
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;
     loadAll();
@@ -1185,6 +1205,7 @@ function collectAdvancedSearchFilters() {
     cte: v('search-cte'),
     nome: v('search-nome'),
     placa: v('search-placa'),
+    evento: v('search-evento'),
     dataInicio: v('search-data-inicio'),
     dataFim: v('search-data-fim')
   };
@@ -1195,7 +1216,7 @@ function hasSearchFilters(filters = {}) {
 }
 
 function clearAdvancedSearch({ focus = true } = {}) {
-  ['search-dt', 'search-nota', 'search-contrato', 'search-cte', 'search-nome', 'search-placa', 'search-data-inicio', 'search-data-fim']
+  ['search-dt', 'search-nota', 'search-contrato', 'search-cte', 'search-nome', 'search-placa', 'search-evento', 'search-data-inicio', 'search-data-fim']
     .forEach(id => {
       const input = document.getElementById(id);
       if (input) input.value = '';
@@ -2844,6 +2865,7 @@ async function fetchCarregamentosSearch(filters = {}) {
   if (contrato) params.set('contrato', contrato);
   if (nome) params.set('nome', nome);
   if (placa) params.set('placa', placa);
+  if (filters.evento) params.set('evento', filters.evento);
   if (dataInicio) params.set('dataInicio', dataInicio);
   if (dataFim) params.set('dataFim', dataFim);
   const searchUrl = `/api/viagens/search?${params.toString()}`;
@@ -3194,7 +3216,7 @@ function renderDrawerHistorico(viagem) {
 }
 
 function renderDrawerObservacoes() {
-  return `<div class="drawer-card-grid single">${drawerCard('OBSERVA\u00c7\u00d5ES', [drawerTextarea('obs','Observa\u00e7\u00f5es')])}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('OBSERVA\u00c7\u00d5ES', [drawerField('frete','Evento'), drawerTextarea('obs','Observa\u00e7\u00f5es')])}</div>`;
 }
 
 function drawerCard(title, content, action = '') {
@@ -3492,6 +3514,7 @@ function handleDrawerInput(event) {
   if (!state.drawerDraft) state.drawerDraft = { ...selectedViagem() };
   if (field === 'telefone' || field === 'telefone2') event.target.value = maskPhoneListInput(event.target.value);
   state.drawerDraft[field] = event.target.value;
+  if (field === 'frete') state.drawerDraft.eventoEditado = true;
 }
 
 async function handleDrawerClick(event) {
@@ -3587,6 +3610,10 @@ function handleMasterCellDrawerShortcut(event) {
 
   event.preventDefault();
   event.stopPropagation();
+  if (field === 'frete' && canEditViagemField(state.viagens.find(item => item._id === id), field)) {
+    startInlineEdit(cell);
+    return;
+  }
   selectViagem(id, drawerTabForField(field), field);
 }
 
@@ -3594,7 +3621,7 @@ function drawerTabForField(field) {
   if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field)) return 'documentos';
   if (['agendamento', 'descarga'].includes(field)) return 'agendamento';
   if (['valor_adiantamento'].includes(field)) return 'financeiro';
-  if (field === 'obs') return 'observacoes';
+  if (field === 'obs' || field === 'frete') return 'observacoes';
   return 'gerais';
 }
 
@@ -3688,6 +3715,7 @@ async function saveDrawerViagem() {
   if (!viagem || !state.drawerDraft || state.drawerSaving) return;
   const patch = {};
   const fields = ['placa','nome','tipo','eixos','carroceria','pamcard','telefone','telefone2','origem','destino','produto','peso','agendamento','descarga','dt','cte','manifesto','contrato','nota','hora_nf','num_pedagio','valor_adiantamento','vlr_pedagio','obs','data'];
+  if (state.drawerDraft.eventoEditado) fields.push('frete');
   fields.forEach(field => {
     const next = normalizeFieldValue(field, state.drawerDraft[field] || '');
     const current = normalizeFieldValue(field, viagem[field] || '');
@@ -3720,6 +3748,7 @@ const BASE_FIELDS = [
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'status', label: 'STATUS' },
+  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'trabalho', label: 'TRABALHO', noSort: true }
 ];
 
@@ -3816,6 +3845,7 @@ function allSortableTableFields() {
 
 function renderTableCell(v, field, context = {}) {
   const raw = v[field.key] || '';
+  const eventClass = field.key === 'frete' && String(raw).trim() ? ' has-event' : '';
   const quickClass = field.quick ? 'quick-edit' : '';
   if (field.key === 'placa') {
     return `<td data-field="placa" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.placa || '')}" class="quick-edit placa-cell">
@@ -3856,7 +3886,7 @@ function renderTableCell(v, field, context = {}) {
     return `<td class="work-cell" onclick="event.stopPropagation()">${renderWorkCell(v)}</td>`;
   }
   const value = formatCellValue(field.key, raw);
-  return `<td data-field="${escapeAttr(field.key)}" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(raw)}" class="${quickClass}">
+  return `<td data-field="${escapeAttr(field.key)}" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(raw)}" class="${quickClass}${eventClass}">
     <strong>${escapeHtml(value || '-')}</strong>
   </td>`;
 }
@@ -6663,6 +6693,9 @@ function openModal(viagem = null, defaults = {}) {
       ? (f === 'tipo' ? normalizeTipo(viagem[f]) : f === 'descarga' ? descargaToInputValue(viagem[f]) : (viagem[f] || ''))
       : (defaults[f] !== undefined ? defaults[f] : (f === 'secao' ? 'agenciando' : ''));
   });
+  const eventoInput = document.getElementById('f-frete');
+  eventoInput.value = viagem?.frete || '';
+  eventoInput.defaultValue = eventoInput.value;
   const usuarioInput = document.getElementById('f-usuario');
   if (usuarioInput && !viagem) usuarioInput.value = '';
   const quantidadeInput = document.getElementById('f-quantidade');
@@ -6869,6 +6902,8 @@ async function saveViagem() {
     obs: v('f-obs'),
     data: state.currentDate
   };
+  const eventoInput = document.getElementById('f-frete');
+  if (eventoInput.value !== eventoInput.defaultValue) data.frete = eventoInput.value.trim();
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
 
   if (!canSaveViagemDate(data.data)) return;

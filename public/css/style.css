@@ -9244,3 +9244,26 @@ selection and completed states. */
 .data-table tbody tr.is-marcado-amarelo:focus-within td.master-actions {
   background: #fff200 !important;
 }
+
+/* Evento na programacao e no aviso de CT-e */
+.data-table td.has-event strong {
+  border-inline-start: 3px solid #b7791f;
+  padding-inline-start: .45rem;
+}
+
+#event-warning {
+  margin: auto;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: 80vh;
+  padding: 1.25rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  box-shadow: var(--shadow);
+}
+
+#event-warning::backdrop { background: rgba(15, 23, 42, .4); }
+#event-warning h2 { font-size: 1.15rem; }
+#event-warning p { margin: 1rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+#event-warning form { text-align: right; }
