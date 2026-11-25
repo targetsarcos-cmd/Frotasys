@@ -822,10 +822,27 @@ body.reports-page-active .main {
 
 .origin-filters {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-start;
   order: -1;
+}
+
+.origin-filters label {
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+#operation-filter {
+  height: 34px;
+  width: min(210px, 60vw);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
 }
 
 .toolbar .date-tools {
