@@ -2329,7 +2329,8 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
       nextData.usuario = patch.usuario;
     }
 
-    const duplicate = await findDuplicateViagemFields(nextData, req.params.id);
+    const eventoOnly = Object.keys(req.body).length === 1 && typeof req.body.frete === 'string';
+    const duplicate = eventoOnly ? null : await findDuplicateViagemFields(nextData, req.params.id);
     if (duplicate) {
       return res.status(409).json({
         error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
