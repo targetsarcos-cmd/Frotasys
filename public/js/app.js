@@ -1,7 +1,7 @@
 (() => {
-  const cssHref = '/css/style.css?v=20261125-evento-coluna';
+  const cssHref = '/css/style.css?v=20261125-operacoes';
   const cssCandidates = [
-    'css/style.css?v=20261125-evento-coluna',
+    'css/style.css?v=20261125-operacoes',
     cssHref
   ];
   const injectCssText = async () => {
@@ -1947,7 +1947,7 @@ function renderReportSummaryCard(card, periodLabel = '') {
         <div class="summary-operation report-summary-operation report-summary-operation-header">
           <div>
             <span class="summary-card-kicker">Opera&ccedil;&atilde;o</span>
-            <strong>${escapeHtml(card.origem)}</strong>
+            <strong>${escapeHtml(operationName(card.origem))}</strong>
           </div>
           <div class="summary-icon">${summaryIcon(card.origem)}</div>
         </div>
@@ -3015,7 +3015,7 @@ function renderOriginFilters() {
   }
 
   filters.innerHTML = origins
-    .map(origem => `<button class="filter-chip ${originSlug(origem)} ${state.originFilter === origem ? 'active' : ''}" data-origin="${escapeAttr(origem)}">${escapeHtml(titleCase(origem))}</button>`)
+    .map(origem => `<button class="filter-chip ${originSlug(origem)} ${state.originFilter === origem ? 'active' : ''}" data-origin="${escapeAttr(origem)}">${escapeHtml(operationName(origem))}</button>`)
     .join('');
 }
 
@@ -4479,6 +4479,11 @@ function operationsList() {
   return normalizeOperacoes(state.operacoes);
 }
 
+function operationName(origem) {
+  const op = state.operacoes.find(item => item.origem === origem);
+  return op?.nome || titleCase(origem);
+}
+
 function originList() {
   const operationOrigins = operationsList().map(op => op.origem).filter(Boolean);
   return operationOrigins.length ? operationOrigins : configOptionList('origem');
@@ -4545,7 +4550,7 @@ function setReportOperationOptions() {
   if (!select) return;
   const current = select.value;
   const options = originList();
-  select.innerHTML = options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(titleCase(opt))}</option>`).join('');
+  select.innerHTML = options.map(opt => `<option value="${escapeAttr(opt)}">${escapeHtml(operationName(opt))}</option>`).join('');
   const preferred = options.includes(current)
     ? current
     : options.find(opt => normalizeOption(opt) === normalizeOption(state.originFilter)) || options[0] || '';
@@ -4908,10 +4913,10 @@ function renderSettingsOperations() {
     <div class="settings-operation-list">
       ${operations.map(op => {
         const id = escapeAttr(op._id || op.metaTipo || op.origem);
-        const label = escapeHtml(titleCase(op.origem));
+        const label = escapeHtml(operationName(op.origem));
         return `<div class="settings-operation-chip">
-          <button type="button" class="settings-operation-edit" onclick="openOperationModal('${id}')" title="Editar opera&ccedil;&atilde;o">${label}</button>
-          <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir opera&ccedil;&atilde;o" aria-label="Excluir opera&ccedil;&atilde;o ${escapeAttr(titleCase(op.origem))}">&times;</button>
+          <button type="button" class="settings-operation-edit" onclick="openOperationModal('${id}')" title="Editar nome da opera&ccedil;&atilde;o">${label} <span aria-hidden="true">&#9998;</span></button>
+          <button type="button" class="settings-operation-delete" onclick="deleteOperation('${id}')" title="Excluir opera&ccedil;&atilde;o" aria-label="Excluir opera&ccedil;&atilde;o ${escapeAttr(operationName(op.origem))}">&times;</button>
         </div>`;
       }).join('')}
       </div>
@@ -4923,10 +4928,10 @@ function renderSettingsOperationMessages(container, operations) {
   const activeOperations = operations.filter(op => operationMessageKey(op));
   const fields = activeOperations.map(op => {
     const key = operationMessageKey(op);
-    const label = String(op.origem || op.metaTipo || key || '').trim();
+    const label = operationName(op.origem);
     return `<label class="operation-message-field">
       <span>${escapeHtml(label)}</span>
-      <textarea rows="3" data-operation-message-key="${escapeAttr(key)}" oninput="handleOperationMessageInput(this)" onchange="saveOperationMessage(this)" placeholder="Mensagem de ${escapeAttr(titleCase(label))}">${escapeHtml(state.operationMessages[key] || '')}</textarea>
+      <textarea rows="3" data-operation-message-key="${escapeAttr(key)}" oninput="handleOperationMessageInput(this)" onchange="saveOperationMessage(this)" placeholder="Mensagem de ${escapeAttr(label)}">${escapeHtml(state.operationMessages[key] || '')}</textarea>
     </label>`;
   }).join('');
 
@@ -5021,7 +5026,7 @@ async function deleteConfigOption(field, value) {
 async function deleteOperation(operationId) {
   const op = findOperation(operationId);
   if (!op?._id) return;
-  if (!confirm(`Excluir a opera\u00e7\u00e3o "${titleCase(op.origem)}"?`)) return;
+  if (!confirm(`Excluir a opera\u00e7\u00e3o "${operationName(op.origem)}"?`)) return;
 
   const removed = await apiFetch(`/api/operacoes/${op._id}`, { method: 'DELETE' });
   if (!removed) return;
@@ -5892,7 +5897,7 @@ function renderOriginSummaryCard(operacao) {
         <div class="summary-icon">${summaryIcon(origem)}</div>
         <div>
           <span class="summary-card-kicker">Opera&ccedil;&atilde;o</span>
-          <strong>${escapeHtml(origem)}</strong>
+          <strong>${escapeHtml(operationName(origem))}</strong>
         </div>
       </div>
       <div class="summary-kpis">
@@ -6795,10 +6800,10 @@ function openOperationModal(operationId = null) {
   if (!isAdmin()) return;
   const op = operationId ? findOperation(operationId) : null;
   state.editingOperationId = op?._id || null;
-  document.getElementById('op-modal-title').textContent = op ? 'Configurar Card de Resumo' : 'Adicionar Opera\u00e7\u00e3o';
-  document.getElementById('op-origem').value = op ? op.origem : '';
+  document.getElementById('op-modal-title').textContent = op ? 'Editar Opera\u00e7\u00e3o' : 'Adicionar Opera\u00e7\u00e3o';
+  document.getElementById('op-origem').value = op ? operationName(op.origem) : '';
   const saveBtn = document.getElementById('op-btn-save');
-  saveBtn.dataset.label = op ? 'Salvar Card' : 'Salvar Opera\u00e7\u00e3o';
+  saveBtn.dataset.label = op ? 'Salvar altera\u00e7\u00f5es' : 'Salvar Opera\u00e7\u00e3o';
   saveBtn.textContent = saveBtn.dataset.label;
   renderOperationCardChoices(op);
 
@@ -6835,16 +6840,19 @@ function closeOperationModal() {
 }
 
 async function saveOperation() {
-  const origem = v('op-origem').toUpperCase();
+  const nome = v('op-origem');
+  const origem = nome.toUpperCase();
+  const existing = state.editingOperationId ? findOperation(state.editingOperationId) : null;
   const checkedProdutos = checkedOperationValues('produto');
   const checkedDestinos = checkedOperationValues('destino');
   const resumoProdutos = normalizeCardSelection(checkedProdutos, productList());
   const resumoDestinos = normalizeCardSelection(checkedDestinos, destinationList());
   if (!origem) {
-    alert('Informe a origem da opera\u00e7\u00e3o');
+    alert('Informe o nome da opera\u00e7\u00e3o');
     return;
   }
-  if (!checkedProdutos.length || !checkedDestinos.length) {
+  if ((!checkedProdutos.length && (!existing || productList().length)) ||
+      (!checkedDestinos.length && (!existing || destinationList().length))) {
     alert('Selecione pelo menos um produto e um destino para o card');
     return;
   }
@@ -6853,15 +6861,16 @@ async function saveOperation() {
   btn.textContent = 'Salvando...';
   btn.disabled = true;
 
-  const existing = state.editingOperationId ? findOperation(state.editingOperationId) : null;
-  const payload = {
-    origem,
-    produtos: resumoProdutos,
-    resumoProdutos,
-    resumoDestinos,
-    metaTipo: existing?.metaTipo || metaTipo(origem),
-    ordem: existing?.ordem || operationsList().length + 1
+  const payload = existing ? { nome } : {
+    nome, origem, metaTipo: metaTipo(origem), ordem: operationsList().length + 1
   };
+  if (!existing || JSON.stringify(resumoProdutos) !== JSON.stringify(summaryProductsForOperation(existing))) {
+    payload.produtos = resumoProdutos;
+    payload.resumoProdutos = resumoProdutos;
+  }
+  if (!existing || JSON.stringify(resumoDestinos) !== JSON.stringify(summaryDestinationsForOperation(existing))) {
+    payload.resumoDestinos = resumoDestinos;
+  }
 
   const saved = existing?._id
     ? await apiFetch(`/api/operacoes/${existing._id}`, { method: 'PUT', body: JSON.stringify(payload) })
@@ -6872,13 +6881,7 @@ async function saveOperation() {
     if (idx !== -1) state.operacoes[idx] = saved;
     else state.operacoes.push(saved);
 
-    await syncOperationOriginConfig(saved.origem, existing?.origem);
-
-    if (existing && existing.origem !== saved.origem) {
-      await Promise.all(state.viagens
-        .filter(v => v.origem === existing.origem)
-        .map(v => updateViagemField(v._id, 'origem', saved.origem)));
-    }
+    if (!existing) await syncOperationOriginConfig(saved.origem);
 
     closeOperationModal();
     renderSettingsModal();
@@ -6889,18 +6892,13 @@ async function saveOperation() {
   btn.disabled = false;
 }
 
-async function syncOperationOriginConfig(origem, previousOrigem = '') {
+async function syncOperationOriginConfig(origem) {
   if (!origem) return;
   const updated = await apiFetch('/api/config-options/origem', {
     method: 'POST',
     body: JSON.stringify({ value: origem })
   });
   if (updated) state.configOptions = normalizeConfigOptions(updated);
-
-  if (previousOrigem && normalizeOption(previousOrigem) !== normalizeOption(origem)) {
-    const cleaned = await apiFetch(`/api/config-options/origem/${encodeURIComponent(previousOrigem)}`, { method: 'DELETE' });
-    if (cleaned) state.configOptions = normalizeConfigOptions(cleaned);
-  }
 }
 
 async function saveViagem() {

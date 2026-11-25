@@ -2424,6 +2424,7 @@ app.post('/api/operacoes', requireAdmin, async (req, res) => {
     const grouped = await configOptionsGrouped();
     const produtos = Array.isArray(req.body.produtos) ? req.body.produtos : grouped.produto;
     const doc = {
+      nome: String(req.body.nome || '').trim() || undefined,
       origem: String(req.body.origem || 'NOVA OPERACAO').trim().toUpperCase(),
       metaTipo: req.body.metaTipo || slug(req.body.origem || 'NOVA OPERACAO'),
       produtos,
@@ -2442,6 +2443,10 @@ app.post('/api/operacoes', requireAdmin, async (req, res) => {
 app.put('/api/operacoes/:id', requireAdmin, async (req, res) => {
   try {
     const patch = {};
+    if (req.body.nome !== undefined) {
+      if (typeof req.body.nome !== 'string' || !req.body.nome.trim()) return res.status(400).json({ error: 'Informe o nome da opera\u00e7\u00e3o.' });
+      patch.nome = req.body.nome.trim();
+    }
     if (req.body.origem !== undefined) patch.origem = String(req.body.origem || '').trim().toUpperCase();
     if (req.body.metaTipo !== undefined) patch.metaTipo = req.body.metaTipo || slug(req.body.origem);
     if (req.body.produtos !== undefined) patch.produtos = Array.isArray(req.body.produtos) ? req.body.produtos : [];

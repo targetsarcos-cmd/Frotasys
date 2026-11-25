@@ -3448,6 +3448,10 @@ body.theme-white .summary-progress-row strong {
   backdrop-filter: blur(5px);
 }
 
+#op-modal-overlay {
+  z-index: 501;
+}
+
 .modal-overlay.hidden {
   display: none;
 }
