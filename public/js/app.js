@@ -3751,11 +3751,11 @@ const BASE_FIELDS = [
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'status', label: 'STATUS' },
-  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'trabalho', label: 'TRABALHO', noSort: true }
 ];
 
 const EXTRA_FIELDS = [
+  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'eixos', label: 'EIXOS', quick: true, number: true },
   { key: 'carroceria', label: 'CARROCERIA', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
