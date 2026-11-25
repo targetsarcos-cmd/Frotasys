@@ -9246,6 +9246,28 @@ selection and completed states. */
 }
 
 /* Evento na programacao e no aviso de CT-e */
+body:not(.has-extra-table-columns) .table-scroll-area {
+  overflow-x: auto !important;
+}
+
+body:not(.has-extra-table-columns) .table-scroll-area .data-table {
+  min-width: 1180px !important;
+}
+
+.data-table th[data-field="frete"],
+.data-table td[data-field="frete"] {
+  width: 120px !important;
+  min-width: 120px !important;
+}
+
+.data-table td[data-field="frete"] strong {
+  display: block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .data-table td.has-event strong {
   border-inline-start: 3px solid #b7791f;
   padding-inline-start: .45rem;
