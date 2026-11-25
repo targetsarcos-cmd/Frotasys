@@ -669,7 +669,7 @@ function initUI() {
   document.getElementById('travel-drawer')?.addEventListener('input', handleDrawerInput);
   document.getElementById('travel-drawer')?.addEventListener('change', handleDrawerInput);
   document.getElementById('travel-drawer')?.addEventListener('change', e => {
-    if (e.target?.dataset?.drawerCommit === 'change') commitActiveDrawerField();
+    if (e.target?.dataset?.drawerCommit === 'change' || e.target?.dataset?.drawerField === 'frete') commitActiveDrawerField();
   });
   document.getElementById('travel-drawer')?.addEventListener('focusout', e => {
     if (e.target?.dataset?.drawerCommit === 'blur') {
@@ -3680,9 +3680,15 @@ async function commitActiveDrawerField() {
   }
 
   state.drawerSaving = true;
-  const updated = await apiFetch(`/api/viagens/${viagem._id}`, { method: 'PUT', body: JSON.stringify({ [field]: next }) });
+  const draft = state.drawerDraft;
+  const updated = await persistTripField(viagem._id, field, next);
   state.drawerSaving = false;
   if (!updated) return;
+  if (field === 'frete' && (selectedViagem()?._id !== viagem._id || state.drawerDraft !== draft)) {
+    const row = state.viagens.find(item => item._id === viagem._id);
+    if (row) row.frete = updated.frete;
+    return;
+  }
   state.selectedViagemDetails = updated;
   const idx = state.viagens.findIndex(item => item._id === viagem._id);
   if (idx !== -1) state.viagens[idx] = updated;
@@ -6400,6 +6406,11 @@ function startInlineEdit(td) {
     inp.oninput = () => { inp.value = formatDocumentNumber(inp.value, field); };
   }
   inp.addEventListener('input', () => updateActiveInlineEditSnapshot(inp));
+  if (field === 'frete') {
+    inp.addEventListener('change', () => {
+      if (activeInlineEdit?.input === inp) commitInlineEdit(td, id, field, inp.value);
+    });
+  }
   inp.addEventListener('keyup', () => updateActiveInlineEditSnapshot(inp));
   inp.addEventListener('click', () => updateActiveInlineEditSnapshot(inp));
   inp.onkeydown = e => {
@@ -6530,11 +6541,7 @@ async function updateViagemField(id, field, value, options = {}) {
   if (field === 'data' && !canSaveViagemDate(value)) return null;
   const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
   const nextValue = normalizeFieldValue(field, value);
-  const body = { [field]: nextValue };
-  const updated = await apiFetch(`/api/viagens/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(body)
-  });
+  const updated = await persistTripField(id, field, nextValue);
   if (updated) {
     const idx = state.viagens.findIndex(v => v._id === id);
     if (idx !== -1) state.viagens[idx] = updated;
@@ -6549,9 +6556,27 @@ async function updateViagemField(id, field, value, options = {}) {
       });
     }
     if (!options.skipRender) {
-      state.pendingInlineRender = false;
-      renderAll();
+      if (field === 'frete') renderAllUnlessInlineEditing();
+      else {
+        state.pendingInlineRender = false;
+        renderAll();
+      }
     }
+  }
+  return updated;
+}
+
+async function persistTripField(id, field, value) {
+  const updated = await apiFetch(`/api/viagens/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ [field]: value })
+  });
+  if (field === 'frete') {
+    if (!updated || updated._id !== id || (updated.frete ?? '') !== value) {
+      showSummaryToast('N\u00e3o foi poss\u00edvel confirmar a grava\u00e7\u00e3o do evento.', 'error');
+      return null;
+    }
+    showSummaryToast(value ? 'Evento salvo.' : 'Evento removido.');
   }
   return updated;
 }

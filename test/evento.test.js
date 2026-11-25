@@ -92,6 +92,20 @@ const item = collection + '/:id';
 const trip = { produto: 'CPV', data: '2026-01-05', secao: 'arcos', origem: 'ARCOS', pamcard: 'OK' };
 const eventText = '<em>Aguardar & conferir</em>';
 
+test('editar Evento em viagem com DT historica repetida preserva os documentos', async () => {
+  const { records, request } = setup();
+  for (const id of ['a', 'b']) {
+    records.set(id, { id, updated_at: '1', dados: { ...trip, dt: '123', programado: true } });
+  }
+  const saved = await request('put', item, { frete: 'Conferir descarga' }, 'operador', 'a');
+  assert.equal(saved.code, 200, saved.data?.error);
+  assert.equal(records.get('a').dados.frete, 'Conferir descarga');
+  assert.equal(records.get('a').dados.dt, '123');
+  assert.equal(records.get('b').dados.frete, undefined);
+  const conflict = await request('put', item, { frete: 'Outro', dt: '123' }, 'operador', 'a');
+  assert.equal(conflict.code, 409);
+});
+
 test('JSONB, pesquisa, historico, planilha e atualizacoes concorrentes', async () => {
   const { server, records, request } = setup();
   const created = await request('post', collection, { ...trip, frete: eventText });
@@ -162,9 +176,41 @@ function browser(fetch) {
     FrotasysAuth: { getAccessToken: async () => null }
   });
   vm.runInContext(source('public/js/app.js'), ui);
-  Object.assign(ui, { renderAll: noop, loadAll: noop, syncDynamicSelects: noop, updateUndoButton: noop });
+  Object.assign(ui, { renderAll: noop, loadAll: noop, syncDynamicSelects: noop, updateUndoButton: noop, showSummaryToast: noop });
   return { ui, state: vm.runInContext('state', ui), el: id => document.getElementById(id) };
 }
+
+test('sair da celula Evento confirma o texto uma vez mesmo com blur apos change', async () => {
+  const { records, request } = setup();
+  const id = (await request('post', collection, trip)).data._id;
+  let writes = 0;
+  const { ui, state } = browser(async (url, opts) => {
+    assert.equal(url, collection + '/' + id);
+    writes++;
+    const response = await request('put', item, JSON.parse(opts.body), 'operador', id);
+    return { ok: true, headers: { get: () => null }, json: async () => response.data };
+  });
+  const notices = [];
+  ui.showSummaryToast = message => notices.push(message);
+  state.userProfile = { role: 'operador' };
+  state.viagens = [(await request('get', item, {}, 'operador', id)).data];
+  const handlers = {};
+  const input = {
+    focus: noop, select: noop, isConnected: true, value: '',
+    addEventListener(name, fn) { handlers[name] = fn; }
+  };
+  const td = { dataset: { id, field: 'frete', raw: '' }, style: {},
+    getBoundingClientRect: () => ({ width: 120 }), querySelector: () => input };
+  ui.startInlineEdit(td);
+  input.value = 'Aguardar descarga';
+  handlers.input();
+  handlers.change();
+  input.onblur({});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes, 1);
+  assert.equal(records.get(id).dados.frete, input.value);
+  assert.deepEqual(notices, ['Evento salvo.']);
+});
 
 test('tabela, painel, formulario, recarga e WebSocket com evento historico', async () => {
   const { records, messages, request } = setup();
