@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: frotasys-interface-beta
+    runtime: node
+    branch: feature/interface-v2
+    buildCommand: npm ci
+    startCommand: node beta/start.js
+    autoDeployTrigger: off
+    healthCheckPath: /login
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: BETA_READ_JWT
+        sync: false
+      - key: BETA_USER_ID
+        sync: false

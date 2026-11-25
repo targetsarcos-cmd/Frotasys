@@ -1,0 +1,16 @@
+body.workspace-beta { --rail: 176px; background: #f1f5f9; color: #142b42; }
+.workspace-beta .header { margin-left: var(--rail); width: auto; background: #142b42; box-shadow: none; }
+.workspace-beta .header-left { display: none; }
+.workspace-beta .main { margin-left: var(--rail); width: auto; max-width: none; padding: 20px; }
+.workspace-nav { position: fixed; z-index: 20; inset: 0 auto 0 0; box-sizing: border-box; width: var(--rail); padding: 20px 10px; background: #142b42; color: white; display: flex; flex-direction: column; gap: 6px; }
+.workspace-nav img { width: 130px; height: 40px; object-fit: contain; margin: 0 auto 22px; }
+.workspace-nav a { padding: 11px 14px; color: #e4eff8; border-radius: 6px; font-size: 14px; text-decoration: none; }
+.workspace-nav a:hover, .workspace-nav a:focus-visible { background: #214b70; }
+.workspace-nav small { margin: auto 12px 0; color: #a8c9dd; }
+.workspace-beta .section-block, .workspace-beta .summary-panel { background: white; border: 1px solid #d8e3ed; border-radius: 10px; padding: 16px; }
+.workspace-beta .summary-panel { width: 100%; min-width: 0; padding: 22px; }
+.workspace-beta .summary-layout { grid-template-columns: minmax(0, 1fr); }
+.workspace-beta .summary-title { font-size: 20px; }
+.workspace-beta [id^="workspace-"], .workspace-beta #summary-arcos { scroll-margin-top: 90px; }
+@media (max-width: 1350px) { body.workspace-beta { --rail: 136px; } .workspace-nav img { width: 110px; } .workspace-beta .main { padding: 12px; } }
+@media (max-width: 1150px) { body.workspace-beta { --rail: 0px; } .workspace-nav { display: none; } }

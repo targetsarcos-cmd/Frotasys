@@ -6,12 +6,14 @@ const path = require('path');
 const fs = require('fs/promises');
 const zlib = require('zlib');
 const ExcelJS = require('exceljs');
-const supabase = require('./supabaseClient');
+const betaReadOnly = process.env.FROTASYS_INTERFACE_BETA === 'readonly';
+const betaAccess = betaReadOnly && require('./beta/access');
+const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server(betaReadOnly ? { noServer: true } : { server });
 
 const TABLES = {
   viagens: 'viagens',
@@ -238,6 +240,17 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
   };
 }
 
+if (betaReadOnly) {
+  server.on('upgrade', (_req, socket) => socket.destroy());
+  app.use((req, res, next) => {
+    if (!betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
+    next();
+  });
+  app.get(['/', '/index.html'], async (_req, res) => {
+    const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source));
+  });
+}
 app.use(cors());
 app.use(responseCompression);
 app.use(express.json({ limit: '1mb' }));
@@ -489,12 +502,14 @@ function slug(value) {
 }
 
 async function ensureDefaultOperacoes() {
+  if (betaReadOnly) return;
   const total = await countDocs(TABLES.operacoes);
   if (total > 0) return;
   await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
 async function ensureDefaultConfigOptions() {
+  if (betaReadOnly) return;
   const existing = await selectDocs(TABLES.configOptions);
 
   const docs = [];
@@ -939,6 +954,7 @@ async function workTypeDocs({ includeDeleted = false } = {}) {
 }
 
 async function ensureDefaultWorkTypes() {
+  if (betaReadOnly) return;
   const existing = await workTypeDocs({ includeDeleted: true });
   if (existing.length) return existing.filter(doc => !doc.deletedAt);
   const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
@@ -1518,6 +1534,7 @@ function requireAuth(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
 
+    if (betaReadOnly && data.user.id !== process.env.BETA_USER_ID) return res.status(403).json({ error: 'Acesso restrito a beta.' });
     const profile = await profileForUser(data.user.id);
     if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
 

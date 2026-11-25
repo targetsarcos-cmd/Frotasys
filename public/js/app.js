@@ -367,7 +367,13 @@ async function startApp() {
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
-  initWS();
+  if (document.body?.classList?.contains?.('workspace-beta')) {
+    const badge = document.getElementById('ws-status');
+    badge.textContent = 'Beta | Somente leitura';
+    badge.title = 'Atualize a pagina para consultar dados recentes';
+  } else {
+    initWS();
+  }
   initUI();
   applyPermissions();
   loadAll();
@@ -838,6 +844,7 @@ function isAdmin() {
 }
 
 function canEditViagens() {
+  if (document.body?.classList?.contains?.('workspace-beta')) return false;
   return ['admin', 'operador'].includes(state.userProfile?.role);
 }
 
@@ -846,6 +853,7 @@ function isViagemConcluida(viagem) {
 }
 
 function canEditViagem(viagem) {
+  if (document.body?.classList?.contains?.('workspace-beta')) return false;
   return isAdmin() || (canEditViagens() && !isViagemConcluida(viagem));
 }
 
@@ -857,6 +865,7 @@ function canEditViagemField(viagem, field) {
 }
 
 function canDeleteViagem(viagem) {
+  if (document.body?.classList?.contains?.('workspace-beta')) return false;
   return isAdmin() || !isViagemConcluida(viagem);
 }
 
