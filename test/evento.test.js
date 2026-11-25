@@ -188,6 +188,8 @@ test('funil combina os campos com data e operacao nas duas tabelas', () => {
     { ...base, origem: 'BARROSO' }, { ...base, data: '2000-01-01' }];
   state.originFilter = 'ARCOS';
   const options = ui.renderTripFilterFields();
+  assert.doesNotMatch(options, /type="search"/);
+  assert.match(options, /data-all>Selecionar todos/);
   assert.match(options, /name="origem" value="ARCOS"/);
   assert.doesNotMatch(options, /name="origem" value="BARROSO"/);
   assert.equal((options.match(/name="placa" value="ABC-1234"/g) || []).length, 1);
