@@ -3850,7 +3850,7 @@ function allSortableTableFields() {
 }
 
 function renderTableCell(v, field, context = {}) {
-  const raw = v[field.key] || '';
+  const raw = v[field.key] ?? '';
   const eventClass = field.key === 'frete' && String(raw).trim() ? ' has-event' : '';
   const quickClass = field.quick ? 'quick-edit' : '';
   if (field.key === 'placa') {
@@ -3891,7 +3891,7 @@ function renderTableCell(v, field, context = {}) {
   if (field.key === 'trabalho') {
     return `<td class="work-cell" onclick="event.stopPropagation()">${renderWorkCell(v)}</td>`;
   }
-  const value = formatCellValue(field.key, raw);
+  const value = formatTableCellValue(field.key, raw);
   return `<td data-field="${escapeAttr(field.key)}" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(raw)}" class="${quickClass}${eventClass}">
     <strong>${escapeHtml(value || '-')}</strong>
   </td>`;
@@ -6430,7 +6430,7 @@ function startInlineEdit(td) {
     if (e.key === 'Escape') {
       e.preventDefault();
       unlockInlineEditCellWidth(td);
-      td.textContent = formatCellValue(field, cur);
+      td.textContent = formatTableCellValue(field, cur);
       activeInlineCell = null;
       activeInlineEdit = null;
       flushPendingInlineRender();
@@ -6454,7 +6454,7 @@ async function moveInlineEditWithTab(td, id, field, value, direction) {
   activeInlineEdit = null;
   td.dataset.raw = normalized;
   unlockInlineEditCellWidth(td);
-  td.textContent = formatCellValue(field, normalized);
+  td.textContent = formatTableCellValue(field, normalized);
 
   if (nextTarget) {
     const nextCell = document.querySelector(
@@ -6466,7 +6466,7 @@ async function moveInlineEditWithTab(td, id, field, value, direction) {
   const updated = await updateViagemField(id, field, normalized, { skipRender: true });
   if (!updated) {
     td.dataset.raw = previous;
-    td.textContent = formatCellValue(field, previous);
+    td.textContent = formatTableCellValue(field, previous);
   }
 }
 
@@ -6485,12 +6485,12 @@ async function saveAndCloseActiveInlineEdit() {
   activeInlineEdit = null;
   td.dataset.raw = normalized;
   unlockInlineEditCellWidth(td);
-  td.textContent = formatCellValue(field, normalized);
+  td.textContent = formatTableCellValue(field, normalized);
 
   const updated = await updateViagemField(id, field, normalized, { skipRender: true });
   if (!updated) {
     td.dataset.raw = previous;
-    td.textContent = formatCellValue(field, previous);
+    td.textContent = formatTableCellValue(field, previous);
   }
   flushPendingInlineRender();
 }
@@ -6532,7 +6532,7 @@ async function commitInlineEdit(td, id, field, value) {
   unlockInlineEditCellWidth(td);
   if (!updated) {
     td.dataset.raw = previous;
-    td.textContent = formatCellValue(field, previous);
+    td.textContent = formatTableCellValue(field, previous);
   }
   flushPendingInlineRender();
 }
@@ -6590,7 +6590,7 @@ function cancelInlineEdit() {
   if (!activeInlineCell) return;
   const v = state.viagens.find(item => item._id === activeInlineCell.dataset.id);
   unlockInlineEditCellWidth(activeInlineCell);
-  if (v) activeInlineCell.textContent = formatCellValue(activeInlineCell.dataset.field, v[activeInlineCell.dataset.field] || '');
+  if (v) activeInlineCell.textContent = formatTableCellValue(activeInlineCell.dataset.field, v[activeInlineCell.dataset.field] ?? '');
   activeInlineCell = null;
   activeInlineEdit = null;
   flushPendingInlineRender();
@@ -6610,6 +6610,21 @@ function normalizeFieldValue(field, value) {
   if (isDocumentNumberField(field)) return formatDocumentNumber(value, field);
   if (field === 'data') return String(value || '').trim();
   return String(value || '').trim();
+}
+
+const eventoNumberFormat = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2
+});
+
+function formatTableCellValue(field, value) {
+  if (field !== 'frete') return formatCellValue(field, value);
+  if (typeof value === 'number' && Number.isFinite(value)) return eventoNumberFormat.format(value);
+  const raw = String(value ?? '').trim();
+  // Em pt-BR, pontos em grupos de três dígitos separam milhares.
+  const grouped = /^[+-]?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(raw);
+  if (!grouped && !/^[+-]?\d+(?:[.,]\d+)?$/.test(raw)) return value;
+  const decimal = (grouped ? raw.replace(/\./g, '') : raw).replace(',', '.');
+  return eventoNumberFormat.format(decimal);
 }
 
 function formatCellValue(field, value) {
