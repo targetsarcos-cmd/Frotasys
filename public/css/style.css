@@ -489,9 +489,7 @@ button, input, select {
 .trip-filter-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
 .trip-filter-menu details { border-bottom: 1px solid var(--border); padding: 7px 0; }
 .trip-filter-menu summary { cursor: pointer; color: var(--text); font-weight: 650; }
-.trip-filter-menu input[type="search"] { margin-top: 6px; }
 .trip-filter-menu .trip-check { display: flex; align-items: center; gap: 7px; overflow-wrap: anywhere; }
-.trip-filter-menu .trip-check[hidden] { display: none; }
 .trip-filter-menu input[type="checkbox"] { width: 15px; height: 15px; flex: none; accent-color: #0f766e; }
 .trip-filter-values { max-height: 150px; overflow: auto; }
 .trip-filter-actions .btn-primary { background: #0f766e; color: white; border: 0; border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }

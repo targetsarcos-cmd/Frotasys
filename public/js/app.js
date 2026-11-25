@@ -5084,7 +5084,6 @@ function renderTripFilterFields() {
       return `<label class="trip-check"><input type="checkbox" name="${key}" value="${escapeAttr(value)}" ${!selected || selected.includes(value) ? 'checked' : ''}><span>${escapeHtml(text)}</span></label>`;
     }).join('');
     return `<details data-filter-key="${key}"><summary>${label}</summary>
-      <input type="search" aria-label="Pesquisar em ${label}" placeholder="Pesquisar" autocomplete="off">
       <label class="trip-check"><input type="checkbox" data-all>Selecionar todos</label>
       <div class="trip-filter-values">${options || 'Sem valores neste dia'}</div></details>`;
   }).join('');
@@ -5092,13 +5091,11 @@ function renderTripFilterFields() {
 
 function syncFilterChecks(group) {
   const boxes = [...group.querySelectorAll('input[name]')];
-  const visible = boxes.filter(box => !box.parentElement.hidden);
   const all = group.querySelector('[data-all]');
-  const checked = visible.filter(box => box.checked).length;
-  all.disabled = !visible.length;
-  all.checked = visible.length > 0 && checked === visible.length;
-  all.indeterminate = checked > 0 && checked < visible.length;
   const count = boxes.filter(box => box.checked).length;
+  all.disabled = !boxes.length;
+  all.checked = boxes.length > 0 && count === boxes.length;
+  all.indeterminate = count > 0 && count < boxes.length;
   group.querySelector('summary').textContent = TRIP_FILTER_FIELDS[group.dataset.filterKey] +
     (count < boxes.length ? ` (${count}/${boxes.length})` : '');
 }
@@ -5132,10 +5129,8 @@ function initTripFilters() {
     const group = event.target.closest('details');
     if (!group) return;
     const input = event.target;
-    for (const box of group.querySelectorAll('input[name]')) {
-      if (input.type === 'search') box.parentElement.hidden =
-        !normalizeOption(box.parentElement.textContent).includes(normalizeOption(input.value.trim()));
-      if (input.hasAttribute('data-all') && !box.parentElement.hidden) box.checked = input.checked;
+    if (input.hasAttribute('data-all')) {
+      for (const box of group.querySelectorAll('input[name]')) box.checked = input.checked;
     }
     syncFilterChecks(group);
   });
