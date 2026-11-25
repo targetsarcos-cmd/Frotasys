@@ -107,9 +107,11 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'nota', header: 'NOTA', width: 12 },
   { key: 'num_pedagio', header: 'NUMERO PEDÁGIO', width: 16 },
   { key: 'vlr_pedagio', header: 'VALOR PEDÁGIO', width: 16 },
+  { key: 'frete', header: 'EVENTO', width: 32 },
   { key: 'horas', header: 'HORAS', width: 10 }
 ];
 const VIAGEM_FIELD_LABELS = {
+  frete: 'EVENTO',
   placa: 'PLACA',
   nome: 'NOME',
   tipo: 'TIPO',
@@ -421,21 +423,20 @@ async function insertDocs(table, docs) {
   return (data || []).map(supabaseToFrontend);
 }
 
-async function updateDoc(table, id, patch) {
-  const current = await findOneById(table, id);
+async function updateDoc(table, id, patch, snapshot) {
+  const current = snapshot || await findOneById(table, id);
   if (!current) return null;
   const next = {
     ...current,
     ...patch,
     updatedAt: new Date().toISOString()
   };
-  const { data, error } = await supabase
-    .from(table)
-    .update(frontendToSupabase(next))
-    .eq('id', id)
-    .select(SUPABASE_DOC_SELECT)
-    .single();
+  let query = supabase.from(table).update(frontendToSupabase(next)).eq('id', id);
+  if (snapshot) query = query.eq('updated_at', snapshot.updatedAt);
+  const result = query.select(SUPABASE_DOC_SELECT);
+  const { data, error } = snapshot ? await result.maybeSingle() : await result.single();
   if (error) throw error;
+  if (!data) return null;
   invalidateCache();
   return supabaseToFrontend(data);
 }
@@ -2015,11 +2016,12 @@ app.get('/api/viagens/search', async (req, res) => {
     const contratoTerm = comparableSearchValue('contrato', req.query.contrato);
     const cteTerm = comparableSearchValue('cte', req.query.cte);
     const nomeTerm = comparableSearchValue('nome', req.query.nome);
+    const evento = String(req.query.evento || '').trim();
     const placaTerm = comparableSearchValue('placa', req.query.placa);
     const origem = String(req.query.origem || '').trim().toUpperCase();
     const dataInicio = String(req.query.dataInicio || '').trim();
     const dataFim = String(req.query.dataFim || '').trim();
-    if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !dataInicio && !dataFim) return res.json([]);
+    if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento && !dataInicio && !dataFim) return res.json([]);
     if ((dataInicio && !isIsoDate(dataInicio)) || (dataFim && !isIsoDate(dataFim))) {
       return res.status(400).json({ error: 'Informe datas válidas para a busca.' });
     }
@@ -2035,6 +2037,7 @@ app.get('/api/viagens/search', async (req, res) => {
     if (origem) query.origem = origem;
     if (dataInicio) options.gte = { data: dataInicio };
     if (dataFim) options.lte = { data: dataFim };
+    if (evento) options.ilike = { frete: evento };
     if (nomeTerm) options.ilike = { ...(options.ilike || {}), nome: req.query.nome };
     if (placaTerm) options.ilike = { ...(options.ilike || {}), placa: req.query.placa };
 
@@ -2046,7 +2049,7 @@ app.get('/api/viagens/search', async (req, res) => {
     }
 
     let docs;
-    if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm) {
+    if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento) {
       const notaValue = formatDocumentNumber(term, 'nota');
       const cteValue = formatDocumentNumber(term, 'cte');
       const [notaDocs, cteDocs] = await Promise.all([
@@ -2074,6 +2077,7 @@ app.get('/api/viagens/search', async (req, res) => {
         const cte = comparableSearchValue('cte', doc.cte);
         const nome = comparableSearchValue('nome', doc.nome);
         const placa = comparableSearchValue('placa', doc.placa);
+        if (evento && !String(doc.frete || '').toLowerCase().includes(evento.toLowerCase())) return false;
         if (dtTerm && dt !== dtTerm) return false;
         if (notaTerm && nota !== notaTerm) return false;
         if (contratoTerm && contrato !== contratoTerm) return false;
@@ -2187,9 +2191,17 @@ app.get('/api/viagens/:id', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+function sendSavedViagem(res, previous, patch, saved) {
+  if (patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
+    res.set('X-Viagem-Evento', '1');
+  }
+  return res.json(saved);
+}
+
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
+    if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     normalizeViagemDocumentNumbers(payload);
     applyFrotaContratoRule(payload);
     const previousByPlaca = await latestViagemByPlaca(payload.placa);
@@ -2235,7 +2247,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     payload.historico = buildViagemHistoryEntries({}, payload, req.userProfile, 'CRIACAO');
     const inserted = await insertDoc(TABLES.viagens, payload);
     broadcast({ type: 'viagem_criada', payload: inserted });
-    res.json(inserted);
+    sendSavedViagem(res, null, payload, inserted);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2247,6 +2259,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
+    if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     delete patch.__manualStatus;
     delete patch.status;
     normalizeViagemDocumentNumbers(patch);
@@ -2285,13 +2298,14 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
         const lockedNextData = applyFrotaContratoRule({ ...current, ...patch });
         patch.status = calculateTripStatus(lockedNextData);
-        const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+        const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
+        if (!updated) return res.status(409).json({ error: 'A viagem mudou durante a edicao. Atualize e tente novamente.' });
         const workChanged = updated.status === 'CONCLUIDO'
           ? await completeOpenWorkSessionsForTrip(req.params.id, req.userProfile)
           : false;
         broadcast({ type: 'viagem_atualizada', payload: updated });
         if (workChanged) broadcast({ type: 'work_sessions_atualizadas', payload: await publicWorkSessions() });
-        return res.json(updated);
+        return sendSavedViagem(res, current, patch, updated);
       }
     }
 
@@ -2325,13 +2339,14 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
     const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
     if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
-    const updated = await updateDoc(TABLES.viagens, req.params.id, patch);
+    const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
+    if (!updated) return res.status(409).json({ error: 'A viagem mudou durante a edicao. Atualize e tente novamente.' });
     const workChanged = updated.status === 'CONCLUIDO'
       ? await completeOpenWorkSessionsForTrip(req.params.id, req.userProfile)
       : false;
     broadcast({ type: 'viagem_atualizada', payload: updated });
     if (workChanged) broadcast({ type: 'work_sessions_atualizadas', payload: await publicWorkSessions() });
-    res.json(updated);
+    sendSavedViagem(res, current, patch, updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
