@@ -41,9 +41,27 @@ test('renomear no editor preserva a origem da viagem e a chave de mensagens', as
   await ui.saveOperation();
   assert.deepEqual(writes, [{ url: '/api/operacoes/op1', method: 'PUT', patch: { nome: 'Unidade <Centro>' } }]);
   ui.renderOriginFilters();
-  assert.match(getElementById('origin-filters').innerHTML, /data-origin="ARCOS">Unidade &lt;Centro&gt;/);
+  const select = getElementById('operation-filter');
+  assert.match(select.innerHTML, /value="ARCOS">Unidade &lt;Centro&gt;/);
+  assert.equal(select.value, 'ARCOS');
   assert.equal(ui.filteredRows('arcos').length, 1);
   assert.equal(ui.operationMessageKey(state.operacoes[0]), 'ARCOS');
   ui.openOperationModal('op1');
   assert.equal(getElementById('op-origem').value, 'Unidade <Centro>');
+  state.operacoes.push({ _id: 'op2', origem: 'BARROSO' });
+  state.viagens.push(
+    { origem: 'BARROSO', secao: 'arcos', data: state.currentDate },
+    { origem: 'BARROSO', secao: 'agenciando', data: state.currentDate },
+    { origem: 'ARCOS', secao: 'arcos', data: '2000-01-01' }
+  );
+  state.originFilter = '';
+  ui.renderOriginFilters();
+  assert.match(select.innerHTML, /<option value="">Todos<\/option>/);
+  assert.equal(select.value, '');
+  assert.equal(ui.filteredRows('arcos').length, 2);
+  assert.equal(ui.filteredRows('agenciando').length, 1);
+  state.originFilter = 'BARROSO';
+  ui.renderOriginFilters();
+  assert.equal(select.value, 'BARROSO');
+  assert.equal(ui.filteredRows('arcos').length, 1);
 });

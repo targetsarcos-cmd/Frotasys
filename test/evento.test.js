@@ -249,8 +249,12 @@ test('tabela, painel, formulario, recarga e WebSocket com evento historico', asy
   state.currentDate = trip.data;
   state.userProfile = { role: 'operador' };
   state.additionalColumns = ['cte'];
+  assert.ok(!ui.visibleTableFields().some(f => f.key === 'frete'));
+  state.additionalColumns = ['cte', 'frete'];
   const original = await reload();
   const fields = ui.visibleTableFields();
+  assert.equal(fields[fields.findIndex(f => f.key === 'agendamento') + 1].key, 'frete');
+  assert.ok(fields.findIndex(f => f.key === 'frete') < fields.findIndex(f => f.key === 'status'));
   const eventField = fields.find(f => f.key === 'frete');
   assert.equal(eventField.quick, true);
   assert.ok(fields.some(f => f.key === 'cte'));

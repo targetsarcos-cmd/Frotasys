@@ -1,7 +1,7 @@
 (() => {
-  const cssHref = '/css/style.css?v=20261125-operacoes';
+  const cssHref = '/css/style.css?v=20261125-seletor';
   const cssCandidates = [
-    'css/style.css?v=20261125-operacoes',
+    'css/style.css?v=20261125-seletor',
     cssHref
   ];
   const injectCssText = async () => {
@@ -656,12 +656,8 @@ function initUI() {
     if (e.target === document.getElementById('op-modal-overlay')) closeOperationModal();
   });
 
-  document.getElementById('origin-filters').addEventListener('click', e => {
-    const btn = e.target.closest('.filter-chip');
-    if (!btn) return;
-    state.originFilter = btn.dataset.origin;
-    document.querySelectorAll('.filter-chip').forEach(item => item.classList.remove('active'));
-    btn.classList.add('active');
+  document.getElementById('operation-filter').addEventListener('change', e => {
+    state.originFilter = e.target.value;
     renderAll();
   });
   document.getElementById('travel-drawer')?.addEventListener('click', handleDrawerClick);
@@ -3006,17 +3002,18 @@ function renderAll() {
 }
 
 function renderOriginFilters() {
-  const filters = document.getElementById('origin-filters');
-  if (!filters) return;
+  const select = document.getElementById('operation-filter');
+  if (!select) return;
 
   const origins = originList();
   if (!origins.includes(state.originFilter)) {
-    state.originFilter = origins[0] || '';
+    state.originFilter = '';
   }
 
-  filters.innerHTML = origins
-    .map(origem => `<button class="filter-chip ${originSlug(origem)} ${state.originFilter === origem ? 'active' : ''}" data-origin="${escapeAttr(origem)}">${escapeHtml(operationName(origem))}</button>`)
+  select.innerHTML = '<option value="">Todos</option>' + origins
+    .map(origem => `<option value="${escapeAttr(origem)}">${escapeHtml(operationName(origem))}</option>`)
     .join('');
+  select.value = state.originFilter;
 }
 
 async function selectViagem(id, preferredTab = 'documentos', activeField = '') {
@@ -3754,11 +3751,11 @@ const BASE_FIELDS = [
   { key: 'peso', label: 'PESO', quick: true, number: true },
   { key: 'agendamento', label: 'AGENDAMENTO', quick: true, time: true },
   { key: 'status', label: 'STATUS' },
-  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'trabalho', label: 'TRABALHO', noSort: true }
 ];
 
 const EXTRA_FIELDS = [
+  { key: 'frete', label: 'EVENTO', quick: true },
   { key: 'eixos', label: 'EIXOS', quick: true, number: true },
   { key: 'carroceria', label: 'CARROCERIA', select: true },
   { key: 'pamcard', label: 'PAMCARD', select: true },
