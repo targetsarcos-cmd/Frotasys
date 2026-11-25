@@ -180,6 +180,20 @@ function browser(fetch) {
   return { ui, state: vm.runInContext('state', ui), el: id => document.getElementById(id) };
 }
 
+test('coluna Evento exibe duas casas para numeros e conserva o valor de edicao', () => {
+  const { ui } = browser();
+  const field = { key: 'frete', quick: true };
+  for (const [raw, display] of [
+    ['320', '320,00'], ['320,00', '320,00'], ['320,5', '320,50'], ['320.5', '320,50'],
+    ['1.250,75', '1.250,75'], ['1.250', '1.250,00'], ['-3,456', '-3,46'],
+    [0, '0,00'], ['', '-'], ['Evento 320', 'Evento 320'], ['01/12', '01/12']
+  ]) {
+    const cell = ui.renderTableCell({ _id: 'teste', frete: raw }, field);
+    assert.ok(cell.includes('<strong>' + display + '</strong>'), cell);
+    assert.ok(cell.includes('data-raw="' + raw + '"'), cell);
+  }
+});
+
 test('sair da celula Evento confirma o texto uma vez mesmo com blur apos change', async () => {
   const { records, request } = setup();
   const id = (await request('post', collection, trip)).data._id;
