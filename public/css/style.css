@@ -469,6 +469,25 @@ button, input, select {
   color: var(--accent);
 }
 
+.trip-filter-wrap { position: relative; display: inline-flex; }
+.column-picker-btn.trip-filter-btn { display: inline-flex; align-items: center; }
+.trip-filter-btn[data-count] { background: #e2f3f2; border-color: #0f766e; color: #075d58; }
+.trip-filter-btn[data-count]::after {
+  content: attr(data-count);
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  border-radius: 9px;
+  padding: 1px 4px;
+  background: #0f766e;
+  color: white;
+  font: 700 10px/13px var(--font-sans);
+}
+.column-picker-menu.trip-filter-menu { width: min(260px, 85vw); padding: 14px; }
+.trip-filter-menu label { display: grid; gap: 3px; margin-top: 8px; font-size: 12px; font-weight: 600; }
+.trip-filter-menu input, .trip-filter-menu select { width: 100%; padding: 5px 8px; height: 32px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.trip-filter-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
+
 .column-picker-menu {
   position: absolute;
   right: 0;

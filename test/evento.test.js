@@ -180,6 +180,23 @@ function browser(fetch) {
   return { ui, state: vm.runInContext('state', ui), el: id => document.getElementById(id) };
 }
 
+test('funil combina os campos com data e operacao nas duas tabelas', () => {
+  const { ui, state } = browser();
+  state.currentDate = trip.data;
+  const base = { ...trip, placa: 'ABC-1234', nome: 'José', destino: 'São Paulo', status: 'PROGRAMAR', frete: '0' };
+  state.viagens = [base, { ...base, frete: '' }, { ...base, secao: 'agenciando' },
+    { ...base, origem: 'BARROSO' }, { ...base, data: '2000-01-01' }];
+  state.originFilter = 'ARCOS';
+  state.tripFilters = { placa: 'bc12', nome: 'jose', destino: 'sao', status: 'PROGRAMAR', evento: 'com' };
+  assert.equal(ui.filteredRows('arcos').length, 1);
+  assert.equal(ui.filteredRows('agenciando').length, 1);
+  state.tripFilters.evento = 'sem';
+  assert.equal(ui.filteredRows('arcos')[0].frete, '');
+  assert.equal(ui.filteredRows('agenciando').length, 0);
+  state.tripFilters = {};
+  assert.equal(ui.filteredRows('arcos').length, 2);
+});
+
 test('coluna Evento exibe duas casas para numeros e conserva o valor de edicao', () => {
   const { ui } = browser();
   const field = { key: 'frete', quick: true };
