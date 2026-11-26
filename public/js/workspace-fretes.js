@@ -101,6 +101,21 @@ document.addEventListener('keydown',event => {
 });
 window.addEventListener('hashchange',() => document.getElementById('frete-actions')?.remove());
 
+function renderBetaFreteQueryResult(route, eixo) {
+  if (!route) return '<span class="is-error">Nenhuma rota cadastrada para essa combinação.</span>';
+  const groups = [['agregado','Agregado'],['rows','Terceiros']];
+  const fields = [['pf','Pessoa Física'],['pj','Pessoa Jurídica']];
+  return groups.map(([key,label]) => {
+    const row = route[key]?.find(item => Number(item.eixos) === eixo);
+    const values = fields.map(([field,person]) => {
+      const value = row?.[field];
+      const available = Number.isFinite(parseFreteCurrency(value));
+      return '<div class="beta-rate-value"><span>'+person+'</span><strong'+(available?'':' class="beta-rate-unavailable"')+'>'+(available?escapeHtml(formatFreteAccounting(value)):'Não cadastrado')+'</strong></div>';
+    }).join('');
+    return '<section class="beta-rate-result beta-rate-result-'+key+'" aria-label="'+label+'"><h4>'+label+'</h4><div class="beta-rate-values">'+values+'</div></section>';
+  }).join('');
+}
+
 function renderBetaFreteBoard(routes) {
   const categoryGap = '<td class="rate-category-gap" aria-hidden="true"></td>';
   const sections = routes.map(route => {
