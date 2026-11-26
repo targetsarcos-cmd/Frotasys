@@ -124,7 +124,7 @@ test('modo de escrita exige opt-in e credencial privada do projeto correto', () 
   assert.match(workspace(page,{editable:true}), /data-beta-mode="editable"/);
 });
 
-test('comentarios registram autoria no servidor e conservam respostas e resolucao imutavel', () => {
+test('comentarios independentes registram autoria e resolver exclui apenas o comentario selecionado', () => {
   const { applyCommentAction } = require('../beta/trip-comments');
   let counter = 0;
   const opts = {uuid:()=>String(++counter),now:()=> '2026-11-26T12:00:00.000Z'};
@@ -137,31 +137,46 @@ test('comentarios registram autoria no servidor e conservam respostas e resoluca
   assert.throws(()=>applyCommentAction(items,{action:'edit',threadId,messageId,text:'alterado'},b,opts),{status:403});
   const edited = applyCommentAction(items,{action:'edit',threadId,messageId,text:'Agendar descarga'},a,opts);
   assert.equal(items[0].messages[0].text,'Agendar');
-  items = applyCommentAction(edited,{action:'reply',threadId,text:'Agendado'},b,opts);
-  assert.equal(items[0].messages.length,2);
-  items = applyCommentAction(items,{action:'resolve',threadId},b,opts);
-  assert.equal(items[0].resolvedBy.id,'b');
-  for (const action of ['edit','reply','resolve']) assert.throws(()=>applyCommentAction(items,{action,threadId,messageId,text:'x'},a,opts),{status:409});
+  assert.equal(edited[0].messages[0].text,'Agendar descarga');
+  assert.throws(()=>applyCommentAction(edited,{action:'reply',threadId,text:'Agendado'},b,opts),{status:400});
+  items = applyCommentAction(edited,{action:'create',text:'Outra pendencia'},b,opts);
+  assert.equal(items.length,2);
+  const resolved = applyCommentAction(items,{action:'resolve',threadId},b,opts);
+  assert.equal(resolved.length,1);
+  assert.equal(resolved[0].messages[0].text,'Outra pendencia');
+  assert.equal(items.length,2);
+  assert.throws(()=>applyCommentAction(resolved,{action:'edit',threadId,messageId,text:'x'},a,opts),{status:404});
   assert.throws(()=>applyCommentAction(items,{action:'create',text:' '},a,opts),{status:400});
   assert.throws(()=>applyCommentAction(items,{action:'create',text:'x'},{...a,role:'visualizador'},opts),{status:403});
-  assert.equal(applyCommentAction(items,{action:'create',text:'Nova pendencia'},a,opts).length,2);
+  assert.equal(applyCommentAction(resolved,{action:'resolve',threadId:resolved[0].id},b,opts).length,0);
 });
 
-test('comentarios abertos podem ser excluidos conforme autoria; resolvidos continuam bloqueados', () => {
+test('exclusao manual conserva permissoes e conversas legadas ja resolvidas', () => {
   const { applyCommentAction } = require('../beta/trip-comments');
   let n=0;
   const options={uuid:()=>String(++n),now:()=> '2026-11-26T12:00:00Z'};
   const a={id:'a',name:'A',role:'operador'}, b={id:'b',name:'B',role:'operador'}, admin={id:'admin',name:'Admin',role:'admin'};
-  let items=applyCommentAction([],{action:'create',text:'Agendar'},a,options);
+  const items=applyCommentAction([],{action:'create',text:'Agendar'},a,options);
   const threadId=items[0].id, messageId=items[0].messages[0].id;
-  items=applyCommentAction(items,{action:'reply',threadId,text:'Agendado'},b,options);
+  items[0].messages.push({id:'legacy-reply',authorId:'b',authorName:'B',text:'Agendado',createdAt:options.now()});
   assert.throws(()=>applyCommentAction(items,{action:'delete',threadId,messageId},b,options),{status:403});
   assert.throws(()=>applyCommentAction(items,{action:'delete-thread',threadId},a,options),{status:403});
   assert.equal(applyCommentAction(items,{action:'delete',threadId,messageId},a,options)[0].messages.length,1);
   assert.equal(applyCommentAction(items,{action:'delete-thread',threadId},admin,options).length,0);
-  const resolved=applyCommentAction(items,{action:'resolve',threadId},admin,options);
-  for(const action of ['delete','delete-thread']) assert.throws(()=>applyCommentAction(resolved,{action,threadId,messageId},admin,options),{status:409});
+  assert.equal(applyCommentAction(items,{action:'resolve',threadId},b,options).length,0);
+  const legacy=[{...items[0],resolvedAt:options.now()}];
+  assert.throws(()=>applyCommentAction(legacy,{action:'delete-thread',threadId},admin,options),{status:409});
+  const active=applyCommentAction(legacy,{action:'create',text:'Nova pendencia'},a,options);
+  assert.equal(active.length,2);
+  assert.equal(active[0].resolvedAt,options.now());
   assert.equal(items[0].messages.length,2);
+});
+
+test('janela nao oferece respostas nem mostra comentarios resolvidos antigos', () => {
+  const script=fs.readFileSync(path.join(__dirname,'../public/js/workspace-comments.js'),'utf8');
+  assert.doesNotMatch(script,/form\('reply'|Responder\.\.\.|beta-comment-resolved/);
+  assert.match(script,/comentariosBeta\.filter\(thread => !thread\.resolvedAt\)/);
+  assert.match(script,/action:'resolve',threadId:thread\.id/);
 });
 
 test('cores da linha possuem lista fechada e compatibilidade com marca amarela antiga', () => {

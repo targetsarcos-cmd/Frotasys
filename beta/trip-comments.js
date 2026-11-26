@@ -20,23 +20,16 @@ function applyCommentAction(existing, input, actor, options = {}) {
   };
   const message = () => ({ id: uuid(), authorId:id, authorName:String(name || 'Usuario'), text:body(), createdAt:now() });
   if (action === 'create') {
-    if (threads.length >= 50) throw new CommentError('Limite de 50 conversas por viagem atingido.');
+    if (threads.filter(item => !item.resolvedAt).length >= 50) throw new CommentError('Limite de 50 comentarios ativos por viagem atingido.');
     threads.push({ id:uuid(), messages:[message()], resolvedAt:null });
     return threads;
   }
-  if (!['reply','edit','resolve','delete','delete-thread'].includes(action)) throw new CommentError('Acao de comentario invalida.');
+  if (!['edit','resolve','delete','delete-thread'].includes(action)) throw new CommentError('Acao de comentario invalida.');
   const thread = threads.find(item => item.id === input.threadId);
   if (!thread) throw new CommentError('Comentario nao encontrado.', 404);
   if (thread.resolvedAt) throw new CommentError('Comentario resolvido. O historico esta bloqueado.', 409);
   if (action === 'resolve') {
-    thread.resolvedAt = now();
-    thread.resolvedBy = { id, name:String(name || 'Usuario') };
-    return threads;
-  }
-  if (action === 'reply') {
-    if (thread.messages.length >= 50) throw new CommentError('Limite de 50 mensagens nesta conversa atingido.');
-    thread.messages.push(message());
-    return threads;
+    return threads.filter(item => item.id !== thread.id);
   }
   if (action === 'delete-thread') {
     if (role !== 'admin' && !thread.messages.every(item => item.authorId === id)) throw new CommentError('Somente o administrador pode excluir a conversa com outros autores.', 403);

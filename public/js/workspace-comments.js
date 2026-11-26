@@ -12,7 +12,7 @@
   document.body.append(panel);
   let activeId = '', pinned = false, timer = 0, pending = false;
   const byTrip = id => state.viagens.find(trip => String(trip._id) === String(id));
-  const threads = trip => Array.isArray(trip?.comentariosBeta) ? trip.comentariosBeta : [];
+  const threads = trip => Array.isArray(trip?.comentariosBeta) ? trip.comentariosBeta.filter(thread => !thread.resolvedAt) : [];
   const observation = trip => String(trip?.obs || '').trim();
   const hasHistory = trip => !!observation(trip) || threads(trip).length > 0;
   const canWrite = () => canEditViagens() && !isBetaReadOnly();
@@ -79,7 +79,7 @@
     const wrapper = el('form', 'beta-comment-form');
     const input = el('textarea');
     input.rows = 2; input.maxLength = 2000; input.required = true;
-    input.placeholder = action === 'reply' ? 'Responder...' : 'Escreva um comentario...';
+    input.placeholder = 'Escreva um comentário...';
     input.setAttribute('aria-label', input.placeholder);
     input.value = value;
     input.addEventListener('focus', pin);
@@ -136,9 +136,7 @@
     const list = threads(trip);
     if (!list.length && !obs) content.append(el('p', 'beta-comment-empty', 'Nenhum comentario registrado.'));
     for (const thread of list) {
-      const resolved = !!thread.resolvedAt;
-      const card = el('article', 'beta-comment-thread' + (resolved ? ' is-resolved' : ''));
-      if (resolved) card.append(el('div','beta-comment-resolved', 'Resolvido por ' + (thread.resolvedBy?.name || 'usuario') + ' · ' + dateLabel(thread.resolvedAt)));
+      const card = el('article', 'beta-comment-thread');
       for (const msg of Array.isArray(thread.messages) ? thread.messages : []) {
         const message = el('div', 'beta-comment-message');
         const avatar = el('span', 'beta-comment-avatar', initialsFromName(msg.authorName || 'U'));
@@ -147,7 +145,7 @@
         meta.append(el('strong', '', msg.authorName || 'Usuario'), el('small', '', dateLabel(msg.createdAt) + (msg.editedAt ? ' · editado' : '')));
         main.append(meta, el('p','',msg.text || ''));
         const actions = el('div','beta-comment-actions');
-        if (!resolved && canWrite() && msg.authorId === currentUserWorkId()) {
+        if (canWrite() && msg.authorId === currentUserWorkId()) {
           actions.append(button('Editar', () => {
             pin();
             const editor = form('edit',{threadId:thread.id,messageId:msg.id},msg.text,'Salvar');
@@ -156,7 +154,7 @@
             position();
           }, 'beta-comment-link'));
         }
-        if (!resolved && canWrite() && (isAdmin() || msg.authorId === currentUserWorkId())) {
+        if (canWrite() && (isAdmin() || msg.authorId === currentUserWorkId())) {
           actions.append(button('Excluir', async () => {
             pin();
             if (!pending && window.confirm('Excluir esta mensagem?')) {
@@ -167,10 +165,9 @@
         if (actions.childElementCount) main.append(actions);
         message.append(avatar, main); card.append(message);
       }
-      if (!resolved && canWrite()) {
-        card.append(form('reply',{threadId:thread.id},'','Responder'));
+      if (canWrite()) {
         const threadActions = el('div','beta-comment-actions beta-comment-thread-actions');
-        if (isAdmin() || thread.messages.every(msg => msg.authorId === currentUserWorkId())) {
+        if (thread.messages.length > 1 && (isAdmin() || thread.messages.every(msg => msg.authorId === currentUserWorkId()))) {
           threadActions.append(button('Excluir conversa', async () => {
             pin();
             if (!pending && window.confirm('Excluir todas as mensagens desta conversa?')) {
@@ -181,7 +178,7 @@
         threadActions.append(button('Marcar como resolvido', async () => {
           pin();
           if (pending) return;
-          if (!window.confirm('Resolver este comentario? As mensagens nao poderao mais ser editadas.')) return;
+          if (!window.confirm('Marcar como resolvido e excluir definitivamente este comentário?')) return;
           await save({action:'resolve',threadId:thread.id});
         }, 'beta-comment-resolve'));
         card.append(threadActions);
@@ -338,7 +335,7 @@
       original.replaceWith(plate); // Removes the old observation balloon.
     }
     if (!plate) return;
-    const open = threads(trip).some(thread => !thread.resolvedAt);
+    const open = threads(trip).length > 0;
     plate.classList.toggle('beta-plate-attention', !!observation(trip) || open);
     plate.setAttribute('aria-label', 'Placa ' + (trip.placa || '-') + (hasHistory(trip) ? ', possui observacoes ou comentarios' : '') + ', abrir opcoes');
   }
