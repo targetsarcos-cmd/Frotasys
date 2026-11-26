@@ -2,7 +2,7 @@
 (() => {
   const shell = document.getElementById('beta-shell');
   const byId = id => document.getElementById(id);
-  const sections = [['agenciando','theadBooked','countBooked'], ['arcos','thead','countBilled'], ['concluidos',null,'countCompleted']];
+  const sections = [['agenciando','theadBooked'], ['arcos','thead'], ['concluidos',null]];
   const actionIcons = {
     eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
     more:'<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
@@ -151,7 +151,7 @@
     const term = normalize(byId('tableSearch').value.trim());
     const labels = new Set();
     let visible = 0, collapsedCompleted = 0;
-    for (const [sec,,countId] of sections) {
+    for (const [sec] of sections) {
       const table = byId('table-'+sec), body = byId('tbody-'+sec);
       let n = 0;
       for (const row of body.querySelectorAll('tr[data-id]')) {
@@ -170,7 +170,6 @@
       if (separator) separator.hidden = tab !== 'all' || !!term;
       const empty = table.parentElement.querySelector('.beta-empty');
       empty.hidden = n > 0 || !body.querySelector('tr[data-id]');
-      byId(countId).textContent = String(n);
       if (sec === 'concluidos' && !completedExpanded) collapsedCompleted = n;
       else visible += n;
       const cols = visibleTableFields();

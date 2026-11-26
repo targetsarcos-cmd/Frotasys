@@ -44,7 +44,7 @@ test('a composição da beta conserva os controles da interface original', () =>
   assert.ok(result.includes('class="workspace-beta"'));
   const ids = [...result.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, new Set(ids).size, 'cada controle deve ter um único id');
-  for (const id of ['collapseNav', 'tableSearch', 'tabs', 'summaryMetrics', 'progressTrack', 'summaryBody', 'toggleCompleted', 'completedContent', 'table-concluidos', 'tbody-concluidos', 'countCompleted']) {
+  for (const id of ['collapseNav', 'tableSearch', 'tabs', 'summaryMetrics', 'progressTrack', 'summaryBody', 'toggleCompleted', 'completedContent', 'table-concluidos', 'tbody-concluidos']) {
     assert.ok(ids.includes(id), id);
   }
   assert.doesNotMatch(result, /demoTargets|Modo demo|Dados demonstrativos/);
@@ -98,8 +98,8 @@ test('a tabela de concluídos inicia recolhida e preserva a estrutura original',
   const result = workspace(page);
   assert.match(result, /id="toggleCompleted" aria-expanded="false" aria-controls="completedContent"/);
   assert.match(result, /id="completedContent" hidden/);
-  assert.ok(result.indexOf('countBooked') < result.indexOf('countBilled'));
-  assert.ok(result.indexOf('countBilled') < result.indexOf('countCompleted'));
+  assert.ok(result.indexOf('booked-section') < result.indexOf('billed-section'));
+  assert.ok(result.indexOf('billed-section') < result.indexOf('completed-section'));
   assert.ok(result.indexOf('/js/workspace-trip-sections.js') < result.indexOf('/js/workspace-beta.js'));
   assert.doesNotMatch(page, /table-concluidos/);
 });
@@ -286,9 +286,11 @@ test('drawer beta renderiza nota e hora juntas para as 15 posicoes',()=>{
   assert.match(api.renderBetaInvoiceRow(14),/nota15:Nota Fiscal 15:undefined;hora_nf15:Hora NF:time/);
 });
 
-test('contadores das secoes beta exibem somente o numero de viagens',()=>{
+test('secoes beta nao exibem contadores nos titulos e preservam totais do rodape',()=>{
   const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
   const shell=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
-  assert.match(js,/byId\(countId\)\.textContent = String\(n\)/);
-  assert.match(shell,/id="countCompleted">0<\/span>/);
+  assert.doesNotMatch(shell,/id="count(?:Booked|Billed|Completed)"/);
+  assert.doesNotMatch(js,/countBooked|countBilled|countCompleted|countId/);
+  assert.match(js,/byId\('footCount'\)\.textContent/);
+  assert.match(shell,/id="toggleCompleted"/);
 });
