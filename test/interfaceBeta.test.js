@@ -146,3 +146,28 @@ test('comentarios registram autoria no servidor e conservam respostas e resoluca
   assert.throws(()=>applyCommentAction(items,{action:'create',text:'x'},{...a,role:'visualizador'},opts),{status:403});
   assert.equal(applyCommentAction(items,{action:'create',text:'Nova pendencia'},a,opts).length,2);
 });
+
+test('comentarios abertos podem ser excluidos conforme autoria; resolvidos continuam bloqueados', () => {
+  const { applyCommentAction } = require('../beta/trip-comments');
+  let n=0;
+  const options={uuid:()=>String(++n),now:()=> '2026-11-26T12:00:00Z'};
+  const a={id:'a',name:'A',role:'operador'}, b={id:'b',name:'B',role:'operador'}, admin={id:'admin',name:'Admin',role:'admin'};
+  let items=applyCommentAction([],{action:'create',text:'Agendar'},a,options);
+  const threadId=items[0].id, messageId=items[0].messages[0].id;
+  items=applyCommentAction(items,{action:'reply',threadId,text:'Agendado'},b,options);
+  assert.throws(()=>applyCommentAction(items,{action:'delete',threadId,messageId},b,options),{status:403});
+  assert.throws(()=>applyCommentAction(items,{action:'delete-thread',threadId},a,options),{status:403});
+  assert.equal(applyCommentAction(items,{action:'delete',threadId,messageId},a,options)[0].messages.length,1);
+  assert.equal(applyCommentAction(items,{action:'delete-thread',threadId},admin,options).length,0);
+  const resolved=applyCommentAction(items,{action:'resolve',threadId},admin,options);
+  for(const action of ['delete','delete-thread']) assert.throws(()=>applyCommentAction(resolved,{action,threadId,messageId},admin,options),{status:409});
+  assert.equal(items[0].messages.length,2);
+});
+
+test('cores da linha possuem lista fechada e compatibilidade com marca amarela antiga', () => {
+  const {rowColorPatch,COLORS}=require('../beta/trip-row-color');
+  assert.deepEqual(COLORS,['orange','yellow','blue','pink']);
+  for(const color of COLORS) assert.deepEqual(rowColorPatch(color),{corLinhaBeta:color,marcadoAmarelo:color==='yellow'});
+  assert.deepEqual(rowColorPatch(''),{corLinhaBeta:'',marcadoAmarelo:false});
+  for(const color of ['red','#fff',null,undefined,{},'__proto__']) assert.throws(()=>rowColorPatch(color));
+});
