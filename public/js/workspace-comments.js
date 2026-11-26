@@ -239,6 +239,7 @@
     observation:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     view:'<path d="M13 3H5a2 2 0 0 0-2 2v7l3-3h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/><path d="M16 10h3a2 2 0 0 1 2 2v7l-3-3h-6a2 2 0 0 1-2-2v-2"/>',
     add:'<path d="M20 11a8 8 0 0 1-8 8H5l2-4a8 8 0 1 1 13-4Z"/><path d="M12 8v6M9 11h6"/>',
+    registration:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
     clear:'<path d="m5 16 8-11a2 2 0 0 1 3-.4l4 4a2 2 0 0 1 0 3L12 20H8l-3-3a1 1 0 0 1 0-1Z"/><path d="m9 11 7 7M12 20h9"/>'
   };
   function menuLabel(node, icon, label) {
@@ -259,6 +260,7 @@
   const obsItem = menuLabel(el('div','ctx-item'),'observation','Observações');
   const viewItem = menuLabel(el('div','ctx-item'),'view','Ver comentários');
   const addItem = menuLabel(el('div','ctx-item'),'add','Adicionar comentário');
+  const registrationItem = menuLabel(el('div','ctx-item'),'registration','Cadastro efetuado');
   const colorItem = el('div','beta-row-color-menu');
   colorItem.append(el('div','beta-row-color-title','Cor da linha'));
   const swatches = el('div','beta-row-swatches');
@@ -275,7 +277,7 @@
   const readOnlyNote = el('div','beta-menu-readonly');
   readOnlyNote.setAttribute('role','status');
   colorItem.append(swatches,clearItem,readOnlyNote);
-  for (const node of [detailsItem,obsItem,viewItem,addItem,colorItem]) {
+  for (const node of [detailsItem,obsItem,viewItem,addItem,registrationItem,colorItem]) {
     node.style.display = 'none';
     menu.append(node);
   }
@@ -295,6 +297,12 @@
   obsItem.onclick = () => menuAction(id => selectViagem(id,'observacoes'));
   viewItem.onclick = () => menuAction(id => show(id,true));
   addItem.onclick = () => writeMenuAction(id => show(id,true,true));
+  registrationItem.onclick = () => writeMenuAction(async id=>{
+    const trip=byTrip(id);
+    if(!trip||!isCadastroPendente(trip)||!canEditViagemField(trip,'pamcard'))return;
+    if(!window.confirm('Confirmar que o cadastro desta placa foi efetuado?'))return;
+    await updateViagemField(id,'pamcard','PAMCARD OK');
+  });
   const pendingColors = new Set();
   async function setRowColor(id,color) {
     if (!canWrite() || pendingColors.has(id)) return;
@@ -310,6 +318,8 @@
     menu.classList.toggle('beta-plate-context',visible);
     for (const item of [detailsItem,obsItem,viewItem,addItem,colorItem]) item.style.display = visible ? '' : 'none';
     const writable = visible && canWrite();
+    registrationItem.style.display = visible && isCadastroPendente(trip) ? '' : 'none';
+    registrationItem.setAttribute('aria-disabled',String(!writable || !canEditViagemField(trip,'pamcard')));
     for (const item of [addItem,clearItem,...swatches.children]) {
       item.setAttribute('aria-disabled',String(!writable));
       item.title = writable ? (item.dataset.color ? colors.find(c=>c[0]===item.dataset.color)[1] : '') : 'Edição indisponível';

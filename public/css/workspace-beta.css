@@ -164,3 +164,14 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 .workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry[aria-disabled=true] {color:#68727b}
 .workspace-beta #ctx-menu.beta-plate-context .beta-menu-readonly {font:11px/1.4 'Segoe UI',Arial,sans-serif;padding:7px 0 1px;color:#596a78;border-top:1px solid #dadada}
 .workspace-beta #ctx-menu.beta-plate-context .beta-menu-readonly[hidden] {display:none}
+
+/* Restore the legacy green scheduling marker independently of row colors. */
+#beta-shell .tablewrap tbody tr td[data-field="agendamento"].has-agendamento,
+#beta-shell .tablewrap tbody tr:hover td[data-field="agendamento"].has-agendamento {
+  background-color:#dcfce7!important;color:#14532d;
+}
+#beta-shell .tablewrap tbody td[data-field="agendamento"].has-agendamento .sched {color:#166534;font-weight:700}
+.workspace-beta #travel-drawer .beta-invoice-add {display:flex;align-items:center;justify-content:flex-start;padding:5px 5px 9px;border-bottom:1px solid #e5ecf2}
+.workspace-beta #travel-drawer .beta-invoice-add button {width:25px;height:25px;display:grid;place-items:center;border:1px solid #a9c3da;border-radius:4px;background:#fff;color:#075b9e;font:600 19px/1 'Segoe UI',Arial,sans-serif;cursor:pointer}
+.workspace-beta #travel-drawer .beta-invoice-add button:hover:not(:disabled) {background:#e5f0fa;border-color:#2580c4}
+.workspace-beta #travel-drawer .beta-invoice-add button:disabled {opacity:.45;cursor:not-allowed}
