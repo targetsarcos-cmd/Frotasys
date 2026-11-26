@@ -1,16 +1,37 @@
-body.workspace-beta { --rail: 176px; background: #f1f5f9; color: #142b42; }
-.workspace-beta .header { margin-left: var(--rail); width: auto; background: #142b42; box-shadow: none; }
-.workspace-beta .header-left { display: none; }
-.workspace-beta .main { margin-left: var(--rail); width: auto; max-width: none; padding: 20px; }
-.workspace-nav { position: fixed; z-index: 20; inset: 0 auto 0 0; box-sizing: border-box; width: var(--rail); padding: 20px 10px; background: #142b42; color: white; display: flex; flex-direction: column; gap: 6px; }
-.workspace-nav img { width: 130px; height: 40px; object-fit: contain; margin: 0 auto 22px; }
-.workspace-nav a { padding: 11px 14px; color: #e4eff8; border-radius: 6px; font-size: 14px; text-decoration: none; }
-.workspace-nav a:hover, .workspace-nav a:focus-visible { background: #214b70; }
-.workspace-nav small { margin: auto 12px 0; color: #a8c9dd; }
-.workspace-beta .section-block, .workspace-beta .summary-panel { background: white; border: 1px solid #d8e3ed; border-radius: 10px; padding: 16px; }
-.workspace-beta .summary-panel { width: 100%; min-width: 0; padding: 22px; }
-.workspace-beta .summary-layout { grid-template-columns: minmax(0, 1fr); }
-.workspace-beta .summary-title { font-size: 20px; }
-.workspace-beta [id^="workspace-"], .workspace-beta #summary-arcos { scroll-margin-top: 90px; }
-@media (max-width: 1350px) { body.workspace-beta { --rail: 136px; } .workspace-nav img { width: 110px; } .workspace-beta .main { padding: 12px; } }
-@media (max-width: 1150px) { body.workspace-beta { --rail: 0px; } .workspace-nav { display: none; } }
+body.workspace-beta { margin:0; background:#edf2f6; }
+.workspace-beta > :is(.main,.header,.session-status) {display:none!important}
+.workspace-beta.is-unsupported-viewport #beta-shell, .workspace-beta.reports-page-active #beta-shell .workspace {display:none}
+#beta-shell { min-height:100vh; text-align:left; }
+#beta-shell [hidden] {display:none!important}
+#beta-shell .btn { box-shadow:none; text-transform:none; }
+#beta-shell .new:disabled { opacity:.52; cursor:default }
+#beta-shell .tablewrap table { width:100%; border-collapse:collapse; margin:0; }
+#beta-shell .tablewrap th {position:sticky;top:0;text-align:left;cursor:pointer}
+#beta-shell .tablewrap td {background:transparent;text-align:left;text-transform:none}
+#beta-shell .tablewrap :is(td,th):is([data-field=tipo],[data-field=status],[data-field=trabalho],.work-cell,.master-actions,.col-actions) {text-align:center}
+#beta-shell .tablewrap :is(td,th):is([data-field=frete],[data-field=peso]) {text-align:right}
+#beta-shell .tablewrap .plate {color:#075b9e;font-weight:700;letter-spacing:.4px}
+#beta-shell .route-cell strong,#beta-shell td[data-field=peso] strong {font-weight:500}
+#beta-shell .tablewrap .row-action-wrap {justify-content:center}
+#beta-shell .tablewrap .btn-row,#beta-shell .tablewrap .row-action-trigger {background:transparent;color:#1665a3;box-shadow:none;border:none}
+#beta-shell .work-start-btn {height:25px;font:650 10px 'Segoe UI',sans-serif;color:#075b9e;background:white;border:1px solid #abc3d9;border-radius:4px;padding:3px 7px}
+#beta-shell .master-row.is-selected td {background:#dceeff}
+#beta-shell .master-row.is-marcado-amarelo td {background:#fff2ae}
+#beta-shell .column-picker-menu {z-index:40;top:calc(100% + 5px);right:0}
+#beta-shell .operations-panel:has(.column-picker-menu:not(.hidden)),#beta-shell .command-surface {overflow:visible}
+#beta-shell #operation-filter, #beta-shell #date-picker {position:static;background:white;color:#183346;box-shadow:none;font:600 13px 'Segoe UI',sans-serif;border:0;border-radius:0;min-height:0;width:auto;padding:4px}
+#beta-shell #operation-filter {min-width:100px}
+#beta-shell #beta-breakdown {padding:12px 24px;color:#456078}
+#beta-shell #beta-breakdown summary {cursor:pointer}
+#beta-shell #reminder-note {position:fixed;left:var(--rail);top:90px;right:auto;z-index:70}
+#beta-shell #filterCount:empty {display:none}
+.workspace-beta .travel-drawer.is-open {background:#edf2f6;border-left:1px solid #c4d4e1;box-shadow:-6px 0 22px #12324c24}
+.workspace-beta #travel-drawer .drawer-head {background:#f6f9fc;color:#193d5a}
+.workspace-beta #travel-drawer .drawer-head :is(h2,p,button) {color:#193d5a}
+.workspace-beta.reports-page-active #beta-shell {min-height:0}
+.workspace-beta.reports-page-active #reports-overlay {margin-left:var(--beta-rail,184px)}
+.workspace-beta:has(#beta-shell.nav-compact) {--beta-rail:64px}
+@media(max-width:1250px){.workspace-beta {--beta-rail:64px}}
+.workspace-beta #travel-drawer .drawer-tabs {background:#fff;border-bottom:1px solid #d6e0e9}
+.workspace-beta #travel-drawer .drawer-tabs .active {color:#075b9e;border-bottom:2px solid #096ac1}
+@media(min-width:1251px){.workspace-beta.travel-drawer-open #beta-shell .workspace {margin-right:min(535px,38vw)}}

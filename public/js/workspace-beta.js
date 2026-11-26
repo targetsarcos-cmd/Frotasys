@@ -1,0 +1,204 @@
+/* The beta uses the existing Frotasys controls and trip rows inside the reference layout. */
+(() => {
+  const shell = document.getElementById('beta-shell');
+  const byId = id => document.getElementById(id);
+  const sections = [['arcos','thead','countBilled'], ['agenciando','theadBooked','countBooked']];
+  const widths = {placa:8,nome:13,tipo:10,origem:8,destino:9,peso:7,agendamento:9,frete:6,status:17,trabalho:10};
+  const typeStyles = {CARRETEIRO:'car','CARRETEIRO J':'carj',AGREGADO:'ag',FROTA:'frota',DEDICADO:'ded'};
+  let tab = 'all';
+
+  function adopt(targetId, sourceId, useMarkup = false) {
+    const target = byId(targetId), source = byId(sourceId);
+    if (useMarkup) {
+      source.innerHTML = target.innerHTML;
+      source.className = target.className;
+    }
+    target.replaceWith(source);
+    return source;
+  }
+
+  const nav = { 'Lembretes':'btn-lembretes', 'Relatórios':'btn-relatorios', 'Consulta Frete':'btn-frete-consult',
+    'Lista de Espera':'btn-lista-espera', 'Usuários':'btn-users-admin', 'Configurações':'btn-settings' };
+  shell.querySelectorAll('[data-nav]').forEach(button => {
+    button.onclick = event => {
+      event.stopPropagation();
+      byId(nav[button.dataset.nav]).click();
+    };
+  });
+  byId('navHome').onclick = () => { if (document.body.classList.contains('reports-page-active')) closeReportsModal(); window.scrollTo(0,0); };
+  byId('collapseNav').onclick = event => {
+    const compact = shell.classList.toggle('nav-compact');
+    const label = compact ? 'Expandir menu' : 'Recolher menu';
+    event.currentTarget.setAttribute('aria-expanded', String(!compact));
+    event.currentTarget.setAttribute('aria-label', label);
+    event.currentTarget.querySelector('span').textContent = label;
+  };
+  byId('logout').onclick = () => byId('btn-logout').click();
+  const reminder = document.createElement('div');
+  reminder.className = 'header-reminder';
+  reminder.append(byId('reminder-note'));
+  shell.append(reminder, byId('travel-drawer'));
+  const globalSearch = adopt('globalSearch','header-search-input');
+  globalSearch.setAttribute('form', 'header-search-form');
+  const advanced = byId('btn-advanced-search');
+  advanced.setAttribute('aria-label','Busca avançada');
+  globalSearch.after(advanced);
+  const op = adopt('operation','operation-filter');
+  shell.querySelector('label[for=operation]').htmlFor = op.id;
+  const date = adopt('date','date-picker');
+  adopt('prev','btn-prev-date',true);
+  adopt('next','btn-next-date',true);
+  byId('today').onclick = () => { date.value = todayStr(); date.dispatchEvent(new Event('change')); };
+  const filter = adopt('filterBtn','btn-trip-filters',true);
+  filter.parentElement.classList.add('trip-filter-wrap');
+  filter.after(byId('trip-filters'));
+  const columns = adopt('colsBtn','btn-column-picker',true);
+  columns.parentElement.classList.add('column-picker-wrap');
+  columns.after(byId('column-picker-menu'));
+  byId('export').onclick = () => { if (isAdmin()) exportCurrentDateExcel(); };
+  byId('beta-breakdown').append(byId('summary-arcos'));
+
+  function group(status) {
+    const s = normalizeOption(status);
+    if (s.includes('DESCARGA')) return 'dis';
+    if (s.includes('ADIANTAMENTO')) return 'adv';
+    if (s.includes('PROGRAMAR')) return 'planned';
+    if (s.includes('AGUARDANDO CARREGAMENTO')) return 'wait';
+    return '';
+  }
+  const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  function decorate(row) {
+    const plate = row.querySelector('.master-plate');
+    if (plate) plate.className = 'plate';
+    const driver = row.querySelector('.driver-cell strong');
+    if (driver) driver.className = 'driver';
+    const type = row.querySelector('.type-chip');
+    if (type) {
+      type.removeAttribute('style');
+      type.className = 'pill type-' + (typeStyles[type.textContent.trim()] || 'other');
+    }
+    const status = row.querySelector('.status-chip');
+    if (status) {
+      const value = normalizeOption(status.textContent);
+      const style = value === 'AGENDAR DESCARGA' ? 'sched' : group(value);
+      if (style) {
+        status.removeAttribute('style');
+        status.className = 'pill st-' + style;
+      }
+    }
+    const sched = row.querySelector('.schedule-chip');
+    if (sched) sched.className = 'sched';
+  }
+  function paintRows() {
+    const scope = state.viagens.filter(tripInFilterScope);
+    const index = new Map(scope.map(trip => [String(trip._id),trip]));
+    const groups = {all:scope.length,wait:0,adv:0,dis:0,planned:0};
+    for (const trip of scope) {
+      const key = group(viagemStatusDisplay(trip));
+      if (key) groups[key]++;
+    }
+    const term = normalize(byId('tableSearch').value.trim());
+    let visible = 0;
+    for (const [sec,,countId] of sections) {
+      const table = byId('table-'+sec), body = byId('tbody-'+sec);
+      let n = 0;
+      for (const row of body.querySelectorAll('tr[data-id]')) {
+        const trip = index.get(row.dataset.id);
+        decorate(row);
+        const show = trip && (tab === 'all' || group(viagemStatusDisplay(trip)) === tab) &&
+          (!term || normalize(row.textContent + ' ' + (trip.frete || '') + ' ' + (trip.cte || '') + ' ' + (trip.nota || '')).includes(term));
+        row.hidden = !show;
+        if (show) n++;
+      }
+      const separator = body.querySelector('.table-completion-separator');
+      if (separator) separator.hidden = tab !== 'all' || !!term;
+      const empty = table.parentElement.querySelector('.beta-empty');
+      empty.hidden = n > 0 || !body.querySelector('tr[data-id]');
+      byId(countId).textContent = n + (n === 1 ? ' registro' : ' registros');
+      visible += n;
+      const cols = visibleTableFields();
+      table.querySelector('colgroup').innerHTML = [...cols,{key:'actions'}].map(f =>
+        '<col style="width:'+ ((widths[f.key] || 7) / (cols.reduce((sum,c)=>sum+(widths[c.key]||7),0)+7)*100) +'%">').join('');
+      table.style.minWidth = Math.max(1000,cols.length*105)+'px';
+    }
+    byId('footCount').textContent = 'Exibindo '+visible+' de '+scope.length+' viagens';
+    for (const button of byId('tabs').querySelectorAll('[data-tab]')) {
+      const active = tab === button.dataset.tab;
+      button.classList.toggle('active',active);
+      button.setAttribute('aria-pressed',String(active));
+      button.querySelector('small').textContent = groups[button.dataset.tab];
+    }
+    byId('filterCount').textContent = Object.keys(state.tripFilters).length || '';
+    const active = byId('activeFilters');
+    active.replaceChildren();
+    for (const [field, values] of Object.entries(state.tripFilters)) {
+      const chip = document.createElement('button');
+      chip.className = 'chip';
+      chip.textContent = (TRIP_FILTER_FIELDS[field] || field) + ' · ' + values.length + ' ×';
+      chip.onclick = () => {
+        delete state.tripFilters[field];
+        const count = Object.keys(state.tripFilters).length;
+        if (count) filter.dataset.count = String(count);
+        else delete filter.dataset.count;
+        filter.setAttribute('aria-label',count ? 'Filtrar viagens ('+count+' filtros ativos)' : 'Filtrar viagens');
+        renderTable('arcos');
+        renderTable('agenciando');
+      };
+      active.append(chip);
+    }
+    const name = loggedUserDisplayName();
+    shell.querySelector('.username').textContent = name;
+    shell.querySelector('.avatar').textContent = initialsFromName(name);
+    byId('export').hidden = !isAdmin();
+    shell.querySelector('[data-nav="Usuários"]').hidden = !isAdmin();
+  }
+
+  function paintSummary() {
+    const cards = buildReportSummaryCards(state.viagens.filter(v => v.data === state.currentDate),
+      state.metas,[state.currentDate],reportOperations(state.originFilter));
+    const series = [['meta','Meta operacional'],['fat','Faturado'],['agenc','Agenciado'],['total','Total programado'],['falta','Falta para meta']];
+    const totals = {meta:0,fat:0,agenc:0,total:0,falta:0};
+    const dests = new Map();
+    for (const card of cards) for (const col of card.columns) {
+      if (!dests.has(col.destino)) dests.set(col.destino,{meta:0,fat:0,agenc:0,total:0,falta:0});
+      for (const [key] of series) {
+        totals[key] += col[key];
+        dests.get(col.destino)[key] += col[key];
+      }
+    }
+    const pct = value => totals.meta ? (100*value/totals.meta).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%' : '—';
+    byId('reportContext').textContent = (state.originFilter ? operationName(state.originFilter) : 'Todos')+' · '+formatDateBR(state.currentDate);
+    byId('summaryMetrics').innerHTML = series.map(([key,label]) => {
+      const desc = key==='meta' ? 'Volume de referência' : key==='falta' ? 'Saldo da meta' : totals.meta ? pct(totals[key])+' da meta' : 'Sem meta no período';
+      const style = key==='total' ? 'total' : key==='falta' && totals.falta>0 ? 'short' : '';
+      return '<div class="metric '+style+'"><span class="metric-label">'+label+'</span><strong class="metric-value">'+formatKg(totals[key])+'</strong><span class="metric-desc">'+desc+'</span></div>';
+    }).join('');
+    const actual = totals.meta>0 ? Math.min(100,100*totals.fat/totals.meta) : 0;
+    const booked = totals.meta>0 ? Math.min(100-actual,100*totals.agenc/totals.meta) : 0;
+    byId('coverage').textContent = pct(totals.total);
+    byId('progressActual').style.width = actual+'%';
+    byId('progressBooked').style.width = booked+'%';
+    byId('summaryHead').innerHTML = '<tr><th>Volume (kg)</th>'+[...dests.keys()].map(d=>'<th>'+escapeHtml(d)+'</th>').join('')+'<th>Total</th></tr>';
+    byId('summaryBody').innerHTML = series.map(([key,label])=>'<tr class="'+(key==='total'?'total-row':'')+'"><td>'+label+'</td>'+[...dests.values(),totals].map(d=>'<td>'+formatKg(d[key])+'</td>').join('')+'</tr>').join('');
+  }
+  for (const [sec,head] of sections) {
+    const placeholder = byId(head).closest('table');
+    const table = byId('table-'+sec);
+    table.classList.remove('data-table');
+    table.prepend(document.createElement('colgroup'));
+    placeholder.replaceWith(table);
+    const empty = document.createElement('p');
+    empty.className = 'beta-empty empty'; empty.hidden=true;
+    empty.textContent = 'Nenhuma viagem para os critérios selecionados.';
+    table.after(empty);
+    new MutationObserver(paintRows).observe(byId('tbody-'+sec),{childList:true});
+  }
+  byId('tableSearch').oninput = paintRows;
+  byId('tabs').onclick = event => {
+    const btn = event.target.closest('[data-tab]');
+    if (btn) { tab = btn.dataset.tab; paintRows(); }
+  };
+  new MutationObserver(paintSummary).observe(byId('summary-cards'),{childList:true});
+  paintRows();
+  paintSummary();
+})();

@@ -42,6 +42,13 @@ test('a composição da beta conserva os controles da interface original', () =>
     assert.ok(result.includes('id="' + target + '"'), target);
   }
   assert.ok(result.includes('class="workspace-beta"'));
+  const ids = [...result.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(ids.length, new Set(ids).size, 'cada controle deve ter um único id');
+  for (const id of ['collapseNav', 'tableSearch', 'tabs', 'summaryMetrics', 'progressTrack', 'summaryBody']) {
+    assert.ok(ids.includes(id), id);
+  }
+  assert.doesNotMatch(result, /demoTargets|Modo demo|Dados demonstrativos/);
+  assert.doesNotMatch(page, /workspace-reference\.css|workspace-beta\.js|beta-shell/);
 });
 
 test('a configuração exige identidade, chave pública e função específica de leitura', () => {
