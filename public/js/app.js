@@ -503,7 +503,13 @@ async function loadAll() {
   if ('configOptions' in data) state.configOptions = normalizeConfigOptions(data.configOptions);
   if ('configColors' in data) state.configColors = mergeConfigColors(data.configColors);
   if ('operacoes' in data) state.operacoes = normalizeOperacoes(data.operacoes);
-  if ('listaEspera' in data) state.listaEspera = normalizeListaEspera(data.listaEspera);
+  if ('listaEspera' in data) {
+    state.listaEspera = normalizeListaEspera(data.listaEspera);
+    if (document.getElementById('beta-espera')?.hidden === false) {
+      prepareWaitlistForm();
+      renderListaEspera();
+    }
+  }
   if ('lembrete' in data) state.lembrete = normalizeLembrete(data.lembrete);
   if ('operationMessages' in data) state.operationMessages = normalizeOperationMessages(data.operationMessages);
   if ('workTypes' in data) state.workTypes = normalizeWorkTypes(data.workTypes);
@@ -2129,13 +2135,21 @@ function dateRangeList(start, end) {
 }
 
 async function openListaEsperaModal() {
-  syncDynamicSelects();
-  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
-  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
-  document.getElementById('waitlist-data').value = todayStr();
+  if (isBetaTripWorkspace()) {
+    location.hash = 'lista-espera';
+    return;
+  }
+  prepareWaitlistForm();
   document.getElementById('waitlist-overlay').classList.remove('hidden');
   await loadListaEspera();
   document.getElementById('waitlist-placa').focus();
+}
+
+function prepareWaitlistForm() {
+  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
+  const date = document.getElementById('waitlist-data');
+  if (!isBetaTripWorkspace() || !date.value) date.value = todayStr();
 }
 
 function closeListaEsperaModal() {
@@ -2177,12 +2191,25 @@ function listaEsperaPositionValue(item = {}) {
 function renderListaEspera() {
   const tbody = document.getElementById('waitlist-body-rows');
   if (!tbody) return;
+  const beta = isBetaTripWorkspace();
+  const editable = !beta || canEditViagens();
+  if (beta) {
+    document.getElementById('espera-cadastro').hidden = !editable;
+    document.getElementById('espera-count').textContent = String(state.listaEspera.length);
+    document.getElementById('beta-espera').classList.toggle('queue-readonly',!editable);
+  }
 
   if (!state.listaEspera.length) {
     tbody.innerHTML = '<tr><td colspan="9" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
     return;
   }
 
+  if (!editable) {
+    tbody.innerHTML = state.listaEspera.map((item,index) => '<tr><td>'+(index+1)+'º</td>'+
+      [item.placa,item.nome,item.tipo,item.origem,item.data ? formatDateBR(item.data) : '',item.hora,item.obs]
+        .map(value => '<td>'+escapeHtml(value || '—')+'</td>').join('')+'</tr>').join('');
+    return;
+  }
   tbody.innerHTML = state.listaEspera.map((item, index) => `
     <tr data-id="${escapeAttr(item._id)}">
       <td>${index + 1}&ordm;</td>

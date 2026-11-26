@@ -4,6 +4,16 @@
   const page = document.getElementById('beta-fretes');
   const home = document.getElementById('navHome');
   const nav = shell.querySelector('[data-nav="Consulta Frete"]');
+  const queue = document.getElementById('beta-espera');
+  const queueNav = shell.querySelector('[data-nav="Lista de Espera"]');
+  const form = document.getElementById('waitlist-form');
+  document.getElementById('espera-cadastro').append(form);
+  for (const group of form.querySelectorAll('.form-group')) {
+    group.querySelector('label').htmlFor = group.querySelector('input,select').id;
+  }
+  const queueTable = document.querySelector('#waitlist-overlay .waitlist-table-wrap');
+  queueTable.querySelector('th:last-child').textContent = 'Ações';
+  document.getElementById('espera-fila').append(queueTable);
   const title = shell.querySelector('.shell-location strong');
   const homeTitle = title.textContent;
   const grid = document.getElementById('frete-consult-grid');
@@ -11,13 +21,21 @@
 
   function navigate() {
     const active = location.hash === '#fretes';
+    const queueActive = location.hash === '#lista-espera';
+    queue.hidden = !queueActive;
     page.hidden = !active;
-    shell.querySelector('main.workspace').hidden = active;
-    title.textContent = active ? 'Tabela de Fretes' : homeTitle;
-    for (const [button,selected] of [[home,!active],[nav,active]]) {
+    shell.querySelector('main.workspace').hidden = active || queueActive;
+    title.textContent = active ? 'Tabela de Fretes' : queueActive ? 'Lista de Espera' : homeTitle;
+    for (const [button,selected] of [[home,!active && !queueActive],[nav,active],[queueNav,queueActive]]) {
       button.classList.toggle('nav-current',selected);
       if (selected) button.setAttribute('aria-current','page');
       else button.removeAttribute('aria-current');
+    }
+    if (queueActive) {
+      closeTravelDrawer();
+      prepareWaitlistForm();
+      renderListaEspera();
+      if (state.userProfile) loadListaEspera();
     }
     if (active) {
       closeTravelDrawer();
@@ -25,7 +43,7 @@
       if (state.userProfile) refreshFreteConsultas();
     }
   }
-  home.addEventListener('click',() => { if (!page.hidden) location.hash = ''; });
+  home.addEventListener('click',() => { if (!page.hidden || !queue.hidden) location.hash = ''; });
   window.addEventListener('hashchange',navigate);
   navigate();
 })();

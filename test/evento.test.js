@@ -92,6 +92,29 @@ const item = collection + '/:id';
 const trip = { produto: 'CPV', data: '2026-01-05', secao: 'arcos', origem: 'ARCOS', pamcard: 'OK' };
 const eventText = '<em>Aguardar & conferir</em>';
 
+test('gerar viagem da fila distingue cadastro conhecido, troca de motorista e primeiro registro', async () => {
+  const { request, server, records } = setup();
+  records.set('known', { id:'known', dados:{placa:'ABC-1234',nome:'JOSÉ SILVA',pamcard:'PAMCARD OK', telefone:'37999999999',dt:'antiga'} });
+  const item = {field:vm.runInContext('WAITLIST_FIELD', server), placa:'ABC1234', nome:'Jose Silva'};
+  server.findOneById = async () => item;
+  server.waitlistDocs = async () => [];
+  const db = vm.runInContext('supabase',server);
+  const from = db.from.bind(db);
+  db.from = table => table === 'config_options' ? {
+    delete(){return this}, eq(){return this}, select(){return {data:[{}]}}
+  } : from(table);
+  const generate = () => request('post','/api/lista-espera/:id/gerar-viagem',{data:trip.data},'operador','queued');
+  const known = await generate();
+  assert.equal(known.code,200,known.data?.error);
+  assert.equal(known.data.viagem.status,'CRIAR DT / PROGRAMAR');
+  assert.equal(known.data.viagem.telefone,'37999999999');
+  assert.equal(known.data.viagem.dt,undefined);
+  item.nome='OUTRO';
+  assert.equal((await generate()).data.viagem.status,'CONFERIR MOTORISTA');
+  item.placa='XYZ9999';
+  assert.equal((await generate()).data.viagem.status,'SEM CADASTRO');
+});
+
 test('as tarifas de Agregado e Terceiros são independentes por rota e eixo', () => {
   const { server } = setup();
   const { ui, state } = browser();

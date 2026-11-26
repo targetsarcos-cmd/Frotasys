@@ -436,3 +436,30 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table .rate-remove {margin-left:6px;color:#a74444}
 #beta-fretes .rate-empty {color:#728696}
 @media(max-width:850px){#beta-fretes .frete-query-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+#beta-espera {color:#18394f;font-family:'Segoe UI',Arial,sans-serif}
+#beta-espera .pagehead {margin-bottom:14px}
+#beta-espera h1 {font-size:25px;line-height:1.2;margin:0;color:#17354c}
+#beta-espera .queue-panel {margin-bottom:14px;overflow:hidden;background:#fff;border:1px solid #cbdce9;border-radius:7px}
+#beta-espera h2 {margin:0;font-size:15px;font-weight:650}
+#beta-espera .queue-panel>header,#beta-espera #espera-add-title {display:flex;align-items:center;gap:9px;padding:12px 15px;border-bottom:1px solid #dae5ee}
+#espera-count {padding:2px 7px;background:#e6eff6;color:#365671;font-size:12px;border-radius:4px}
+#beta-espera .waitlist-form {margin:0;padding:14px;border:0;border-radius:0;box-shadow:none;grid-template-columns:minmax(85px,.8fr) minmax(145px,1.5fr) repeat(2,minmax(102px,1fr)) minmax(126px,1fr) minmax(95px,.7fr) minmax(134px,1.4fr) auto}
+#beta-espera .form-group label {color:#456079;font-size:11px;font-weight:650}
+#beta-espera :is(input,select) {height:34px;min-width:0;width:100%;padding:4px 8px;background:white;border:1px solid #abc1d3;border-radius:4px;color:#17384e;font:400 13px 'Segoe UI',sans-serif}
+#beta-espera :is(input,select,button,[contenteditable]):focus-visible {outline:2px solid #3684be;outline-offset:1px}
+#beta-espera button {box-shadow:none;border:1px solid #aac1d3;border-radius:4px;padding:5px 10px;font:600 12px 'Segoe UI',sans-serif}
+#beta-espera #waitlist-add {height:34px;background:#155e95;color:white;border-color:#155e95}
+#beta-espera .waitlist-table-wrap {border:none;border-radius:0;box-shadow:none;overflow:auto}
+#beta-espera .waitlist-table {width:100%;min-width:920px;font:13px 'Segoe UI',sans-serif;font-variant-numeric:tabular-nums}
+#beta-espera .waitlist-table th {padding:9px;background:#dce7f0;color:#274762;font-weight:650}
+#beta-espera .waitlist-table td {padding:6px 9px;color:#19394e;border-color:#dce6ed}
+#beta-espera .waitlist-table tbody tr:nth-child(even) {background:#f6f9fc}
+#beta-espera .waitlist-table td:first-child {color:#20577e;width:54px}
+#beta-espera .waitlist-table td:nth-child(8) {white-space:normal;overflow-wrap:anywhere}
+#beta-espera .waitlist-actions {justify-content:flex-start}
+#beta-espera .waitlist-generate {background:#eaf3fa;color:#125985}
+#beta-espera .waitlist-actions .danger {background:white;color:#984343;border-color:#dec4c4}
+#beta-espera.queue-readonly th:last-child {display:none}
+@media(max-width:1300px){#beta-espera .waitlist-form{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:720px){#beta-espera .waitlist-form{grid-template-columns:repeat(2,minmax(0,1fr))}}

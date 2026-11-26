@@ -665,6 +665,36 @@ function normalizeWaitlistItem(data = {}) {
   };
 }
 
+async function waitlistRegistration(item) {
+  const plate = normalizeUniqueValue(item.placa).replace(/[^A-Z0-9]/g,'');
+  const nameKey = value => normalizeUniqueValue(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  const name = nameKey(item.nome);
+  const plates = [...new Set([plate, normalizeUniqueValue(item.placa), plate.slice(0,3)+'-'+plate.slice(3)])];
+  const history = plate ? await selectDocsByJson(TABLES.viagens, {}, { in:{placa:plates} }) : [];
+  const registered = trip => {
+    const status = normalizeUniqueValue(trip.status);
+    if (status === 'CONCLUIDO') return true;
+    const calculated = calculateTripStatus(trip);
+    if (calculated === 'CONFERIR MOTORISTA') return false;
+    if (!calculated.includes('CADASTRO')) return true;
+    // Older completed loads can have fiscal documents but no Pamcard field.
+    return !status.includes('CADASTRO') && Boolean(String(trip.nota || trip.cte || '').trim());
+  };
+  const latest = history.filter(registered).sort((a,b) =>
+    String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+  )[0];
+  if (latest && (!name || (nameKey(latest.nome) === name))) {
+    return { nome:item.nome || latest.nome, pamcard:String(latest.pamcard || '').trim() || 'PAMCARD OK',
+      telefone:latest.telefone || '', telefone2:latest.telefone2 || '', carroceria:latest.carroceria || '' };
+  }
+  if (latest) return { status:'CONFERIR MOTORISTA', trocaMotoristaConcluida:false };
+  if (name) {
+    const matches = await selectDocsByJson(TABLES.viagens, {nome:normalizeUniqueValue(item.nome)});
+    if (matches.some(registered)) return { status:'CONFERIR MOTORISTA', trocaMotoristaConcluida:false };
+  }
+  return { status:'SEM CADASTRO' };
+}
+
 function waitlistDocToFrontend(doc = {}) {
   return {
     _id: doc._id,
@@ -1940,6 +1970,14 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
     const dateError = viagemDateValidationError(viagemData);
     if (dateError) return res.status(400).json({ error: dateError });
 
+    const registration = await waitlistRegistration(item);
+    const trip = {
+      placa:item.placa || '', nome:item.nome || '', tipo:normalizeTipo(item.tipo),
+      origem:item.origem || '', obs:item.obs || '', secao:'agenciando', data:viagemData,
+      ...registration
+    };
+    trip.status = calculateTripStatus(trip);
+
     const { data: removedRows, error: removeError } = await supabase
       .from(TABLES.configOptions)
       .delete()
@@ -1949,15 +1987,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
     if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
     invalidateCache();
 
-    const viagem = await insertDoc(TABLES.viagens, {
-      placa: item.placa || '',
-      nome: item.nome || '',
-      tipo: normalizeTipo(item.tipo),
-      origem: item.origem || '',
-      obs: item.obs || '',
-      secao: 'agenciando',
-      data: viagemData
-    });
+    const viagem = await insertDoc(TABLES.viagens, trip);
 
     const lista = await waitlistDocs();
     broadcast({ type: 'viagem_criada', payload: viagem });
