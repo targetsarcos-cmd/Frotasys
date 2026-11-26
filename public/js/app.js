@@ -3179,19 +3179,30 @@ function renderDrawerGerais() {
 }
 
 function renderDrawerDocuments() {
-  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), ...(isBetaTripWorkspace() ? renderBetaExtraInvoices() : []), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), (isBetaTripWorkspace() ? renderBetaInvoiceRow(0) : drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time'))), ...(isBetaTripWorkspace() ? renderBetaExtraInvoices() : []), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
 }
 
 const BETA_INVOICE_FIELDS=['nota',...Array.from({length:14},(_,i)=>'nota'+(i+2))];
+const BETA_INVOICE_TIME_FIELDS=['hora_nf',...Array.from({length:14},(_,i)=>'hora_nf'+(i+2))];
+
+function renderBetaInvoiceRow(index){
+  return '<div class="drawer-field-row beta-invoice-row">'+
+    drawerField(BETA_INVOICE_FIELDS[index],index===0?'Nota Fiscal':'Nota Fiscal '+(index+1))+
+    drawerField(BETA_INVOICE_TIME_FIELDS[index],'Hora NF','time')+'</div>';
+}
+
+function isBetaInvoiceTimeField(field){
+  return isBetaTripWorkspace() && BETA_INVOICE_TIME_FIELDS.includes(field);
+}
 
 function renderBetaExtraInvoices(){
   const trip=selectedViagem();
   if(!trip)return [];
   const lastStored=BETA_INVOICE_FIELDS.reduce((last,key,i)=>String(trip[key]||'').trim()?i:last,0);
-  const lastVisible=Math.max(lastStored,BETA_INVOICE_FIELDS.indexOf(state.drawerActiveField),0);
+  const lastVisible=Math.max(lastStored,BETA_INVOICE_FIELDS.indexOf(state.drawerActiveField),BETA_INVOICE_TIME_FIELDS.indexOf(state.drawerActiveField),0);
   const fields=[];
   for(let index=1;index<=lastVisible;index++){
-    fields.push(drawerField(BETA_INVOICE_FIELDS[index],'Nota Fiscal '+(index+1)));
+    fields.push(renderBetaInvoiceRow(index));
   }
   if(lastStored<14 && canEditDrawerViagem(trip)){
     const disabled=!String(trip[BETA_INVOICE_FIELDS[lastStored]]||'').trim() || !!state.drawerActiveField || state.drawerSaving;
@@ -3292,7 +3303,7 @@ function drawerCardIcon(title) {
 function drawerField(field, label, type = 'text') {
   const isActive = state.drawerActiveField === field;
   const editable = canEditDrawerField(field);
-  const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : drawerValue(field);
+  const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : isBetaInvoiceTimeField(field) ? normalizeHours(drawerValue(field)) : drawerValue(field);
   const display = field === 'peso' ? formatPeso(value) : field === 'vlr_pedagio' ? formatMoney(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
   if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
   const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'datetime-local' : 'text';
@@ -3631,7 +3642,7 @@ function handleDrawerContextMenu(event) {
 }
 
 function isDrawerDocumentCopyField(field) {
-  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^nota(?:[2-9]|1[0-5])$/.test(field));
+  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^(?:nota|hora_nf)(?:[2-9]|1[0-5])$/.test(field));
 }
 
 function showDrawerCopyMenu(event, id, { field = '', value = '', copyType = '' } = {}) {
@@ -3680,7 +3691,7 @@ function handleMasterCellDrawerShortcut(event) {
 }
 
 function drawerTabForField(field) {
-  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^nota(?:[2-9]|1[0-5])$/.test(field))) return 'documentos';
+  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^(?:nota|hora_nf)(?:[2-9]|1[0-5])$/.test(field))) return 'documentos';
   if (['agendamento', 'descarga'].includes(field)) return 'agendamento';
   if (['valor_adiantamento'].includes(field)) return 'financeiro';
   if (field === 'obs' || field === 'frete') return 'observacoes';
@@ -3694,6 +3705,11 @@ function canEditDrawerFieldForViagem(viagem, field) {
 function activateDrawerField(field) {
   const viagem = selectedViagem();
   if (!viagem || !canEditDrawerField(field)) return;
+  // Keep a pending invoice number from being discarded when moving to its time.
+  if (isBetaInvoiceTimeField(field)) {
+    const index=BETA_INVOICE_TIME_FIELDS.indexOf(field);
+    if (index>0 && !String(viagem[BETA_INVOICE_FIELDS[index]]||'').trim()) return;
+  }
   state.drawerActiveField = field;
   state.drawerDraft = { ...viagem };
   renderTravelDrawer();
@@ -6818,7 +6834,7 @@ function normalizeFieldValue(field, value) {
   if (field === 'programado') return Boolean(value);
   if (field === 'adiantamentoOk') return Boolean(value);
   if (field === 'descarga') return normalizeDescargaDateTime(value);
-  if (TIME_FIELDS.includes(field)) return normalizeHours(value);
+  if (TIME_FIELDS.includes(field) || isBetaInvoiceTimeField(field)) return normalizeHours(value);
   if (field === 'telefone' || field === 'telefone2') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
@@ -6848,7 +6864,7 @@ function formatCellValue(field, value) {
   if (field === 'peso' && value !== '') return formatPeso(value);
   if (field === 'descarga' && value !== '') return formatDescargaDateTime(value);
   if (field === 'agendamento' && value !== '') return formatAgendamentoDisplay(value);
-  if (TIME_FIELDS.includes(field) && value !== '') return normalizeHours(value);
+  if ((TIME_FIELDS.includes(field) || isBetaInvoiceTimeField(field)) && value !== '') return normalizeHours(value);
   if ((field === 'telefone' || field === 'telefone2') && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
   return value || '';
@@ -6861,7 +6877,7 @@ function formatAgendamentoDisplay(value) {
 function inputPlaceholder(field) {
   if (field === 'telefone' || field === 'telefone2') return '(00) 00000-0000';
   if (field === 'descarga') return '00:00 00/00/0000';
-  if (TIME_FIELDS.includes(field)) return '00:00';
+  if (TIME_FIELDS.includes(field) || isBetaInvoiceTimeField(field)) return '00:00';
   if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';
   return '';
 }

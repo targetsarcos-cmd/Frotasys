@@ -262,3 +262,26 @@ test('acoes beta preservam controles e substituem apenas seu conteudo visual',()
   assert.match(js,/decorateActions\(row\)/);
   assert.match(css,/\.work-cell \{[^}]*text-overflow:clip/);
 });
+
+test('cada nota tem hora individual e a compactacao preserva os pares',()=>{
+  const {FIELDS,TIME_FIELDS,invoicePatch}=require('../beta/trip-invoices');
+  assert.equal(TIME_FIELDS.length,15);
+  assert.equal(TIME_FIELDS[14],'hora_nf15');
+  assert.deepEqual(invoicePatch({nota:'100',nota2:'200'},{hora_nf2:'8:05'}),{hora_nf2:'08:05'});
+  assert.deepEqual(invoicePatch({nota:'100',hora_nf:'12:00',nota2:'200',hora_nf2:'13:15'},{nota:''}),{nota:'200',hora_nf:'13:15',nota2:'',hora_nf2:''});
+  assert.deepEqual(invoicePatch({nota:'100',hora_nf:'12:00',nota2:'200',hora_nf2:'13:15'},{nota2:''}),{nota2:'',hora_nf2:''});
+  assert.deepEqual(invoicePatch({nota:'100',hora_nf:'12:00'},{nota:''}),{nota:'',hora_nf:''});
+  assert.deepEqual(invoicePatch({},{hora_nf:'12:00'}),{hora_nf:'12:00'});
+  assert.throws(()=>invoicePatch({nota:'100'},{hora_nf2:'12:00'}),/Preencha/);
+  for(const value of ['25:00','10:60','abc',{}])assert.throws(()=>invoicePatch({nota:'100'},{hora_nf:value}),/invalida/);
+  assert.throws(()=>invoicePatch({},{hora_nf16:'10:00'}),/15/);
+});
+test('drawer beta renderiza nota e hora juntas para as 15 posicoes',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const block=js.slice(js.indexOf('const BETA_INVOICE_FIELDS='),js.indexOf('function renderDrawerAgendamento()'));
+  const get=new Function('state','selectedViagem','drawerField','canEditDrawerViagem','isBetaTripWorkspace',block+';return {renderBetaInvoiceRow,renderBetaExtraInvoices};');
+  const api=get({drawerActiveField:'nota2'},()=>({nota:'100'}),(key,label,type)=>key+':'+label+':'+type+';',()=>true,()=>true);
+  assert.match(api.renderBetaInvoiceRow(0),/nota:Nota Fiscal:undefined;hora_nf:Hora NF:time/);
+  assert.match(api.renderBetaExtraInvoices().join(''),/nota2:Nota Fiscal 2:undefined;hora_nf2:Hora NF:time/);
+  assert.match(api.renderBetaInvoiceRow(14),/nota15:Nota Fiscal 15:undefined;hora_nf15:Hora NF:time/);
+});
