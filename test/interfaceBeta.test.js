@@ -317,3 +317,13 @@ test('drawer beta compacto usa largura compartilhada e cards em coluna unica', (
   assert.match(css, /\.beta-invoice-row\s*\{\s*grid-template-columns:minmax\(0,1fr\) minmax\(0,105px\)/);
   assert.match(css, /\.drawer-footer-date \.drawer-field > strong\s*\{[^}]*white-space:nowrap/);
 });
+
+
+test('resumo operacional destaca meta e total sem rotulo de volume',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(js,/key==='total'\?'total-row':key==='meta'\?'meta-row'/);
+  assert.match(js,/<th scope="col" aria-label="Indicador"><\/th>/);
+  assert.doesNotMatch(js,/<th>Volume \(kg\)<\/th>/);
+  assert.match(css,/tr:is\(\.meta-row,\.total-row\) > td\s*\{\s*background:var\(--beta-navy\);color:#fff/);
+});
