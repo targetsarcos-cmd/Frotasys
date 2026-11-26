@@ -381,3 +381,20 @@ test('chevron de expandir concluidos usa viewBox e gira ao recolher',()=>{
   assert.match(css,/\.completed-toggle svg\s*\{[^}]*width:15px;height:15px/);
   assert.match(css,/\.completed-toggle\[aria-expanded=true\] svg\s*\{transform:rotate\(180deg\)/);
 });
+
+test('consulta frete beta separa rotas sem desagrupar categorias e eixos',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-fretes.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const routes=[{rota:'ARCOS X AMERICANA',agregado:[{eixos:5,pj:1,pf:2}],rows:[{eixos:5,pj:3,pf:4},{eixos:6,pj:5,pf:6}]},{rota:'ARCOS X OSASCO',rows:[{eixos:7,pj:7,pf:8}]}];
+  const render=new Function('freteRoutes','formatFreteAccounting','escapeAttr','escapeHtml',js.slice(js.indexOf('function renderBetaFreteBoard'))+'return renderBetaFreteBoard;')(()=>routes,String,String,String);
+  const html=render(routes);
+  assert.equal((html.match(/class="rate-route"/g)||[]).length,2);
+  assert.equal((html.match(/class="rate-gap"/g)||[]).length,1);
+  assert.match(html,/rowspan="2"/);
+  assert.match(html,/data-rate-group="agregado"/);
+  assert.match(html,/data-rate-group="rows"/);
+  assert.doesNotMatch(render([]),/rate-gap/);
+  assert.doesNotMatch(render([routes[0]]),/rate-gap/);
+  assert.match(css,/\.rate-gap td\s*\{height:12px;padding:0;border:0;background:transparent/);
+  assert.match(css,/\.rate-table\s*\{[^}]*border-collapse:separate;border-spacing:0/);
+});
