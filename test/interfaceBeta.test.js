@@ -310,7 +310,7 @@ test('relatorios beta usam pagina isolada, referencia original e dados autentica
 
 test('drawer beta compacto usa largura compartilhada e cards em coluna unica', () => {
   const css = fs.readFileSync(path.join(__dirname, '../public/css/workspace-beta.css'), 'utf8');
-  assert.match(css, /--beta-drawer-width:min\(320px,100vw\)/);
+  assert.match(css, /--beta-drawer-width:min\(350px,100vw\)/);
   assert.match(css, /margin-right:var\(--beta-drawer-width\)/);
   assert.match(css, /#travel-drawer\.is-open\s*\{\s*width:var\(--beta-drawer-width\);min-width:0/);
   assert.match(css, /\.drawer-card-grid\.single\s*\{\s*display:grid;grid-template-columns:minmax\(0,1fr\)/);
