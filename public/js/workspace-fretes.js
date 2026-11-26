@@ -52,7 +52,7 @@
 function openFreteActions(event) {
   const cell = event.target.closest('td,th');
   const body = cell?.closest('tbody[data-route-index]');
-  if (!body || !isAdmin() || isBetaReadOnly()) return;
+  if (!body || cell.classList.contains('rate-category-gap') || !isAdmin() || isBetaReadOnly()) return;
   event.preventDefault();
   event.stopPropagation();
   document.getElementById('frete-actions')?.remove();
@@ -102,7 +102,7 @@ document.addEventListener('keydown',event => {
 window.addEventListener('hashchange',() => document.getElementById('frete-actions')?.remove());
 
 function renderBetaFreteBoard(routes) {
-  const categories = [['agregado','Agregado'],['rows','Terceiros']];
+  const categoryGap = '<td class="rate-category-gap" aria-hidden="true"></td>';
   const sections = routes.map(route => {
     const index = freteRoutes().indexOf(route);
     function cells(key,i) {
@@ -115,10 +115,11 @@ function renderBetaFreteBoard(routes) {
     }
     const count = Math.max(route.agregado?.length || 0,route.rows.length,1);
     const name = '<th scope="rowgroup" rowspan="'+count+'"><span data-frete-field="rota" data-route-index="'+index+'" data-value="'+escapeAttr(route.rota)+'">'+escapeHtml(route.rota)+'</span></th>';
-    const rows = Array.from({length:count},(_,i) => '<tr data-row-index="'+i+'">'+(i===0?name:'')+categories.map(([key])=>cells(key,i)).join('')+'</tr>').join('');
+    const rows = Array.from({length:count},(_,i) => '<tr data-row-index="'+i+'">'+(i===0?name:'')+cells('agregado',i)+categoryGap+cells('rows',i)+'</tr>').join('');
     return '<tbody class="rate-route" data-route-index="'+index+'">'+rows+'</tbody>';
-  }).join('<tbody class="rate-gap" aria-hidden="true"><tr><td colspan="7"></td></tr></tbody>');
-  const headers = categories.map(([,label])=>'<th scope="colgroup" colspan="3">'+label+'</th>').join('');
+  }).join('<tbody class="rate-gap" aria-hidden="true"><tr><td colspan="8"></td></tr></tbody>');
+  const headers = '<th class="rate-category-title rate-agregado-title" scope="colgroup" colspan="3">Agregado</th><th class="rate-category-gap" rowspan="2" aria-hidden="true"></th><th class="rate-category-title rate-terceiros-title" scope="colgroup" colspan="3">Terceiros</th>';
+  const columns = '<colgroup><col class="rate-route-col"></colgroup><colgroup><col class="rate-axis-col"><col><col></colgroup><colgroup><col class="rate-gap-col"></colgroup><colgroup><col class="rate-axis-col"><col><col></colgroup>';
   const fields = '<th scope="col">Eixos</th><th scope="col">Valor PJ</th><th scope="col">Valor PF</th>';
-  return '<div class="rate-scroll"><table class="rate-table"><thead><tr><th rowspan="2" scope="col"><button onclick="toggleFreteAlphabeticSort()">Rota ↕</button></th>'+headers+'</tr><tr>'+fields+fields+'</tr></thead>'+ (sections || '<tbody><tr><td colspan="7">Nenhuma rota encontrada.</td></tr></tbody>')+'</table></div>';
+  return '<div class="rate-scroll"><table class="rate-table">'+columns+'<thead><tr><th class="rate-route-title" rowspan="2" scope="col"><button onclick="toggleFreteAlphabeticSort()">Rota ↕</button></th>'+headers+'</tr><tr>'+fields+fields+'</tr></thead>'+ (sections || '<tbody><tr><td colspan="8">Nenhuma rota encontrada.</td></tr></tbody>')+'</table></div>';
 }
