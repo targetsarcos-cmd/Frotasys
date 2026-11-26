@@ -136,3 +136,31 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 .beta-comment-danger {color:#b52c38}
 .beta-comment-observation .beta-obs-editor {width:100%;box-sizing:border-box;resize:vertical;padding:7px;border:1px solid #b9cddd;border-radius:4px;color:#18384f;font:inherit;margin-top:6px}
 .workspace-beta .beta-comment-panel {pointer-events:auto}
+
+/* Plate menu: match the approved stacked-icon reference, including read-only controls. */
+.workspace-beta #ctx-menu.beta-plate-context {
+  box-sizing:border-box;width:245px;min-width:0;max-width:calc(100vw - 16px);
+  max-height:calc(100dvh - 16px);overflow-y:auto;overflow-x:hidden;
+  padding:4px 12px 10px;background:#f3f3f3;border:1px solid #dadada;border-radius:8px;
+  box-shadow:0 5px 18px rgba(15,23,42,.10);color:#0d0d0d;
+  font:400 14px/1.3 'Segoe UI',Arial,sans-serif;z-index:10001;
+}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry {
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;
+  width:100%;box-sizing:border-box;min-height:51px;padding:5px 0;
+  margin:0;border:0;border-radius:4px;background:transparent;color:#0d0d0d;
+  font:400 14px/1.3 'Segoe UI',Arial,sans-serif;text-align:left;cursor:pointer;
+}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry[style*="display: none"] {display:none}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry svg {width:14px;height:14px;flex:none}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry:hover {background:#e6e9ec}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry:focus-visible {outline:2px solid #2678bd;outline-offset:2px}
+.workspace-beta #ctx-menu.beta-plate-context .beta-row-color-menu {border-top:1px solid #dadada;margin:8px 0 0;padding:20px 0 0}
+.workspace-beta #ctx-menu.beta-plate-context .beta-row-color-title {font:600 14px/1.3 'Segoe UI',Arial,sans-serif;color:#0d0d0d;margin:0 0 12px}
+.workspace-beta #ctx-menu.beta-plate-context .beta-row-swatches {display:flex;gap:8px;align-items:center}
+.workspace-beta #ctx-menu.beta-plate-context .beta-row-swatch {width:43px;height:29px;border:0;border-radius:6px;background:var(--swatch);flex:0 1 43px}
+.workspace-beta #ctx-menu.beta-plate-context .beta-row-clear {min-height:51px;margin-top:5px}
+.workspace-beta #ctx-menu.beta-plate-context [aria-disabled=true] {cursor:not-allowed}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-entry[aria-disabled=true] {color:#68727b}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-readonly {font:11px/1.4 'Segoe UI',Arial,sans-serif;padding:7px 0 1px;color:#596a78;border-top:1px solid #dadada}
+.workspace-beta #ctx-menu.beta-plate-context .beta-menu-readonly[hidden] {display:none}

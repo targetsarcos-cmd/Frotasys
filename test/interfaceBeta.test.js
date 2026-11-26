@@ -171,3 +171,12 @@ test('cores da linha possuem lista fechada e compatibilidade com marca amarela a
   assert.deepEqual(rowColorPatch(''),{corLinhaBeta:'',marcadoAmarelo:false});
   for(const color of ['red','#fff',null,undefined,{},'__proto__']) assert.throws(()=>rowColorPatch(color));
 });
+
+test('o menu da placa conserva as opcoes de escrita visiveis, sem contornar permissoes', () => {
+  const script=fs.readFileSync(path.join(__dirname,'../public/js/workspace-comments.js'),'utf8');
+  assert.match(script,/menu.classList.toggle\('beta-plate-context',visible\)/);
+  assert.match(script,/\[detailsItem,obsItem,viewItem,addItem,colorItem\]/);
+  assert.match(script,/function writeMenuAction\(action\) \{\s*if \(!canWrite\(\)\)/);
+  assert.match(script,/item.setAttribute\('aria-disabled',String\(!writable\)\)/);
+  assert.match(script,/menuLabel\(el\('div','ctx-item'\),'add','Adicionar comentário'\)/);
+});
