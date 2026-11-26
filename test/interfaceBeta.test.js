@@ -306,3 +306,14 @@ test('relatorios beta usam pagina isolada, referencia original e dados autentica
   assert.match(bridge,/apiFetch\('\/api\/viagens\/search/);
   assert.match(js,/bridge\.load\(filters\)/);
 });
+
+
+test('drawer beta compacto usa largura compartilhada e cards em coluna unica', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../public/css/workspace-beta.css'), 'utf8');
+  assert.match(css, /--beta-drawer-width:min\(300px,100vw\)/);
+  assert.match(css, /margin-right:var\(--beta-drawer-width\)/);
+  assert.match(css, /#travel-drawer\.is-open\s*\{\s*width:var\(--beta-drawer-width\);min-width:0/);
+  assert.match(css, /\.drawer-card-grid\.single\s*\{\s*display:grid;grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(css, /\.beta-invoice-row\s*\{\s*grid-template-columns:minmax\(0,1fr\) minmax\(0,105px\)/);
+  assert.match(css, /\.drawer-footer-date \.drawer-field > strong\s*\{[^}]*white-space:nowrap/);
+});
