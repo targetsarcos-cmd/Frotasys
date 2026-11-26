@@ -3179,7 +3179,25 @@ function renderDrawerGerais() {
 }
 
 function renderDrawerDocuments() {
-  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), ...(isBetaTripWorkspace() ? renderBetaExtraInvoices() : []), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
+}
+
+const BETA_INVOICE_FIELDS=['nota',...Array.from({length:14},(_,i)=>'nota'+(i+2))];
+
+function renderBetaExtraInvoices(){
+  const trip=selectedViagem();
+  if(!trip)return [];
+  const lastStored=BETA_INVOICE_FIELDS.reduce((last,key,i)=>String(trip[key]||'').trim()?i:last,0);
+  const lastVisible=Math.max(lastStored,BETA_INVOICE_FIELDS.indexOf(state.drawerActiveField),0);
+  const fields=[];
+  for(let index=1;index<=lastVisible;index++){
+    fields.push(drawerField(BETA_INVOICE_FIELDS[index],'Nota Fiscal '+(index+1)));
+  }
+  if(lastStored<14 && canEditDrawerViagem(trip)){
+    const disabled=!String(trip[BETA_INVOICE_FIELDS[lastStored]]||'').trim() || !!state.drawerActiveField || state.drawerSaving;
+    fields.push('<div class="beta-invoice-add"><button type="button" data-drawer-action="add-invoice" title="Adicionar nota fiscal" aria-label="Adicionar nota fiscal"'+(disabled?' disabled':'')+'>+</button></div>');
+  }
+  return fields;
 }
 
 function renderDrawerAgendamento() {
@@ -3570,6 +3588,13 @@ async function handleDrawerClick(event) {
   const action = event.target.closest('[data-drawer-action]')?.dataset.drawerAction;
   if (!action) return;
   if (action === 'close') return closeTravelDrawer();
+  if(action==='add-invoice' && isBetaTripWorkspace()){
+    const trip=selectedViagem();
+    if(!trip||!canEditDrawerViagem(trip)||state.drawerSaving||state.drawerActiveField||!String(trip.nota||'').trim())return;
+    const index=BETA_INVOICE_FIELDS.findIndex((key,i)=>i>0&&!String(trip[key]||'').trim());
+    if(index>0)activateDrawerField(BETA_INVOICE_FIELDS[index]);
+    return;
+  }
   if (action === 'toggle-programado') {
     await toggleDrawerProgramado();
     return;
@@ -3606,7 +3631,7 @@ function handleDrawerContextMenu(event) {
 }
 
 function isDrawerDocumentCopyField(field) {
-  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field);
+  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^nota(?:[2-9]|1[0-5])$/.test(field));
 }
 
 function showDrawerCopyMenu(event, id, { field = '', value = '', copyType = '' } = {}) {
@@ -3655,7 +3680,7 @@ function handleMasterCellDrawerShortcut(event) {
 }
 
 function drawerTabForField(field) {
-  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field)) return 'documentos';
+  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^nota(?:[2-9]|1[0-5])$/.test(field))) return 'documentos';
   if (['agendamento', 'descarga'].includes(field)) return 'agendamento';
   if (['valor_adiantamento'].includes(field)) return 'financeiro';
   if (field === 'obs' || field === 'frete') return 'observacoes';
@@ -5118,10 +5143,11 @@ async function moveConfigOption(field, index, direction) {
 
 const TRIP_FILTER_FIELDS = {
   origem: 'Origem', destino: 'Destino', placa: 'Placa', nome: 'Motorista',
-  status: 'Status', frete: 'Evento', evento: 'Presença de evento'
+  tipo: 'Tipo', status: 'Status', frete: 'Evento', evento: 'Presença de evento'
 };
 
 function tripFilterValue(viagem, field) {
+  if (field === 'tipo') return normalizeTipo(viagem.tipo);
   if (field === 'status') return viagemStatusDisplay(viagem);
   if (field === 'evento') return String(viagem.frete ?? '').trim() ? 'Com evento' : 'Sem evento';
   if (field === 'frete') return String(formatTableCellValue(field, viagem.frete) ?? '').trim();
@@ -6835,7 +6861,7 @@ function inputPlaceholder(field) {
 }
 
 function isDocumentNumberField(field) {
-  return DOCUMENT_NUMBER_FIELDS.includes(field);
+  return DOCUMENT_NUMBER_FIELDS.includes(field) || (isBetaTripWorkspace() && /^nota(?:[2-9]|1[0-5])$/.test(field));
 }
 
 function formatDocumentNumber(value, field = '') {
@@ -7477,6 +7503,19 @@ async function marcarAgendamentoPalete() {
   const viagem = state.viagens.find(item => item._id === id);
   const isPalete = normalizeOption(viagem?.agendamento) === 'PALETE';
   hideAgendamentoMenu();
+  if(isBetaTripWorkspace()){
+    if(!canEditViagemField(viagem,'agendamento') || !canEditViagemField(viagem,'agendamentoVerde'))return;
+    const updated=await apiFetch('/api/viagens/'+encodeURIComponent(id),{
+      method:'PUT',body:JSON.stringify({agendamento:isPalete?'':'PALETE',agendamentoVerde:!isPalete})
+    });
+    if(updated){
+      const index=state.viagens.findIndex(item=>item._id===id);
+      if(index!==-1)state.viagens[index]=updated;
+      if(state.selectedViagemId===id)state.selectedViagemDetails=updated;
+    }
+    renderAll();
+    return;
+  }
   const updated = await updateViagemField(id, 'agendamento', isPalete ? '' : 'PALETE', { skipRender: true });
   if (!updated) return renderAll();
   await updateViagemField(id, 'agendamentoVerde', !isPalete);

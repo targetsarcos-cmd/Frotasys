@@ -195,3 +195,34 @@ test('o menu da placa conserva as opcoes de escrita visiveis, sem contornar perm
   assert.match(script,/item.setAttribute\('aria-disabled',String\(!writable\)\)/);
   assert.match(script,/menuLabel\(el\('div','ctx-item'\),'add','Adicionar comentário'\)/);
 });
+
+test('ate 15 notas fiscais, sem lacunas ou duplicidades internas, preservando nota principal',()=>{
+  const {FIELDS,invoicePatch,invoiceEntries}=require('../beta/trip-invoices');
+  assert.equal(FIELDS.length,15);
+  assert.deepEqual(invoicePatch({nota:'123.456'},{nota2:'234567'}),{nota2:'234.567'});
+  assert.deepEqual(invoicePatch({nota:'123.456',nota2:'234.567'},{nota:''}),{nota:'234.567',nota2:''});
+  assert.throws(()=>invoicePatch({nota:'123.456'},{nota2:'123456'}),/repetida/);
+  assert.throws(()=>invoicePatch({},{nota16:'123'}),/15/);
+  assert.throws(()=>invoicePatch({},{nota2:{}}),/invalido/);
+  assert.equal(invoiceEntries(Object.fromEntries(FIELDS.map((key,i)=>[key,String(i+1)]))).length,15);
+});
+test('cadastro efetuado libera o status sem alterar as demais regras',()=>{
+  const {calculateTripStatus}=require('../tripStatus');
+  const trip={status:'SEM CADASTRO',pamcard:'',dt:'123',programado:false};
+  assert.equal(calculateTripStatus(trip),'SEM CADASTRO / DT CRIADA');
+  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK'}),'ENVIAR PEDIDO');
+  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK',programado:true}),'AGUARDANDO CARREGAMENTO');
+  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK',nota:'456',num_pedagio:'789'}),'EMITIR CTE');
+});
+test('agendamento verde tem estilo na tabela beta e palete usa uma unica gravacao',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  assert.match(css,/td\[data-field="agendamento"\]\.has-agendamento/);
+  assert.match(js,/agendamento:isPalete\?'':'PALETE',agendamentoVerde:!isPalete/);
+});
+
+test('filtro tipo usa modalidade normalizada e combina com os demais filtros',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  assert.match(js,/tipo: 'Tipo', status: 'Status'/);
+  assert.match(js,/if \(field === 'tipo'\) return normalizeTipo\(viagem.tipo\)/);
+});

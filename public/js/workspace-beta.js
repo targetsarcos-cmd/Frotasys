@@ -131,7 +131,7 @@
         const trip = index.get(row.dataset.id);
         decorate(row, trip);
         const show = trip && (tab === 'all' || viagemStatusDisplay(trip) === tab) &&
-          (!term || normalize(row.textContent + ' ' + (trip.frete || '') + ' ' + (trip.cte || '') + ' ' + (trip.nota || '')).includes(term));
+          (!term || normalize(row.textContent + ' ' + (trip.frete || '') + ' ' + (trip.cte || '') + ' ' + BETA_INVOICE_FIELDS.map(key=>trip[key]||'').join(' ')).includes(term));
         row.hidden = !show;
         if (show) {
           n++;

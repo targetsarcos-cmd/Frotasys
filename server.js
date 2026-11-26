@@ -11,6 +11,7 @@ const betaEditable = process.env.FROTASYS_INTERFACE_BETA === 'editable';
 const betaWorkspace = betaReadOnly || betaEditable;
 const betaAccess = betaWorkspace && require('./beta/access');
 const betaMode = betaEditable && require('./beta/mode');
+const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
 const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
   betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
@@ -377,6 +378,15 @@ async function selectDocsByJson(table, filters = {}, options = {}) {
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(supabaseToFrontend);
+}
+
+async function searchBetaInvoices(value, filters={}, options={}) {
+  if(!value)return [];
+  const variants=[...new Set([value,betaInvoices.digits(value)])];
+  const lists=await Promise.all(betaInvoices.FIELDS.map(key=>selectDocsByJson(TABLES.viagens,filters,{
+    ...options,in:{...(options.in||{}),[key]:variants}
+  })));
+  return [...new Map(lists.flat().map(doc=>[doc._id,doc])).values()];
 }
 
 async function selectJsonTextValues(table, key) {
@@ -1082,7 +1092,7 @@ function normalizeUniqueValue(value) {
 }
 
 function isDocumentNumberField(field) {
-  return DOCUMENT_NUMBER_FIELDS.includes(field);
+  return DOCUMENT_NUMBER_FIELDS.includes(field) || (betaWorkspace && betaInvoices.FIELDS.includes(field));
 }
 
 function formatDocumentNumber(value, field = '') {
@@ -1361,7 +1371,7 @@ function buildViagemHistoryEntries(current, patch, profile, action = 'ALTERACAO'
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${index}`,
     tipo: action,
     campo: item.field,
-    label: item.field ? (VIAGEM_FIELD_LABELS[item.field] || item.field.toUpperCase()) : 'CADASTRO',
+    label: item.field ? (VIAGEM_FIELD_LABELS[item.field] || (/^nota(?:[2-9]|1[0-5])$/.test(item.field) ? 'NOTA FISCAL '+item.field.slice(4) : item.field.toUpperCase())) : 'CADASTRO',
     anterior: item.before,
     atual: item.after,
     usuario: user,
@@ -1394,7 +1404,24 @@ function isHexColor(color) {
 }
 
 async function findDuplicateViagemFields(data, currentId = null) {
+  if (betaEditable) {
+    const entries=betaInvoices.invoiceEntries(data);
+    const values=[...new Set(entries.flatMap(item=>[item.value,betaInvoices.digits(item.value)]))];
+    if(values.length){
+      const conditions=betaInvoices.FIELDS.map(key=>'dados->>'+key+'.in.('+values.join(',')+')').join(',');
+      let query=supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT).or(conditions);
+      if(currentId) query=query.neq('id',currentId);
+      const {data:matches,error}=await query.limit(1);
+      if(error)throw error;
+      if(matches?.length){
+        const existing=new Set(betaInvoices.invoiceEntries(supabaseToFrontend(matches[0])).map(item=>betaInvoices.digits(item.value)));
+        const match=entries.find(item=>existing.has(betaInvoices.digits(item.value)));
+        if(match)return {key:match.key,label:'NOTA FISCAL',value:match.value};
+      }
+    }
+  }
   const filledFields = UNIQUE_VIAGEM_FIELDS
+    .filter(field=>!betaEditable || field.key!=='nota')
     .map(field => ({ ...field, value: comparableUniqueValue(field.key, data[field.key]) }))
     .filter(field => field.value);
 
@@ -2067,7 +2094,7 @@ app.get('/api/viagens/search', async (req, res) => {
 
     if (!dataInicio && !dataFim && !nomeTerm && !placaTerm) {
       if (dtTerm && req.query.dt) options.ilike = { ...(options.ilike || {}), dt: req.query.dt };
-      if (notaTerm && req.query.nota) query.nota = formatDocumentNumber(req.query.nota, 'nota');
+      if (notaTerm && req.query.nota && !betaWorkspace) query.nota = formatDocumentNumber(req.query.nota, 'nota');
       if (contratoTerm && req.query.contrato) query.contrato = formatDocumentNumber(req.query.contrato, 'contrato');
       if (cteTerm && req.query.cte) query.cte = formatDocumentNumber(req.query.cte, 'cte');
     }
@@ -2077,16 +2104,16 @@ app.get('/api/viagens/search', async (req, res) => {
       const notaValue = formatDocumentNumber(term, 'nota');
       const cteValue = formatDocumentNumber(term, 'cte');
       const [notaDocs, cteDocs] = await Promise.all([
-        selectDocsByJson(TABLES.viagens, { nota: notaValue }, { limit: VIAGENS_SEARCH_LIMIT }),
+        betaWorkspace ? searchBetaInvoices(notaValue,{}, {limit:VIAGENS_SEARCH_LIMIT}) : selectDocsByJson(TABLES.viagens, { nota: notaValue }, { limit: VIAGENS_SEARCH_LIMIT }),
         selectDocsByJson(TABLES.viagens, { cte: cteValue }, { limit: VIAGENS_SEARCH_LIMIT })
       ]);
       docs = [...new Map([...notaDocs, ...cteDocs].map(doc => [doc._id, doc])).values()];
     } else {
       const hasBoundedRange = Boolean(dataInicio && dataFim);
-      docs = await selectDocsByJson(TABLES.viagens, query, {
-        ...options,
-        limit: hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT
-      });
+      const searchOptions={...options,limit:hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT};
+      docs=betaWorkspace && notaTerm
+        ? await searchBetaInvoices(formatDocumentNumber(req.query.nota,'nota'),query,searchOptions)
+        : await selectDocsByJson(TABLES.viagens,query,searchOptions);
     }
 
     const matches = docs
@@ -2096,19 +2123,19 @@ app.get('/api/viagens/search', async (req, res) => {
         if (dataFim && data > dataFim) return false;
 
         const dt = comparableSearchValue('dt', doc.dt);
-        const nota = comparableSearchValue('nota', doc.nota);
+        const notas = betaWorkspace ? betaInvoices.invoiceEntries(doc).map(item=>betaInvoices.digits(item.value)) : [comparableSearchValue('nota',doc.nota)];
         const contrato = comparableSearchValue('contrato', doc.contrato);
         const cte = comparableSearchValue('cte', doc.cte);
         const nome = comparableSearchValue('nome', doc.nome);
         const placa = comparableSearchValue('placa', doc.placa);
         if (evento && !String(doc.frete || '').toLowerCase().includes(evento.toLowerCase())) return false;
         if (dtTerm && dt !== dtTerm) return false;
-        if (notaTerm && nota !== notaTerm) return false;
+        if (notaTerm && !notas.includes(notaTerm)) return false;
         if (contratoTerm && contrato !== contratoTerm) return false;
         if (cteTerm && cte !== cteTerm) return false;
         if (nomeTerm && !nome.includes(nomeTerm)) return false;
         if (placaTerm && !placa.includes(placaTerm)) return false;
-        if (term) return nota === term || cte === term;
+        if (term) return notas.includes(term) || cte === term;
         return true;
       })
       .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
@@ -2266,6 +2293,10 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const payload = { ...req.body };
     if (betaEditable && (Object.hasOwn(payload, 'comentariosBeta') || Object.hasOwn(payload, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
+    if (betaEditable) {
+      try { Object.assign(payload,betaInvoices.invoicePatch({},payload)); }
+      catch(error) { return res.status(400).json({error:error.message}); }
+    }
     normalizeViagemDocumentNumbers(payload);
     if (betaEditable) payload.secao = betaMode.persistedSection(payload);
     applyFrotaContratoRule(payload);
@@ -2335,6 +2366,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (Object.hasOwn(patch, 'dt') && String(patch.dt || '').trim() !== String(current.dt || '').trim()) patch.pedidoEnviadoDt = '';
     delete patch.__manualStatus;
     delete patch.status;
+    if (betaEditable) {
+      try { Object.assign(patch,betaInvoices.invoicePatch(current,patch)); }
+      catch(error) { return res.status(400).json({error:error.message}); }
+    }
     normalizeViagemDocumentNumbers(patch);
     applyFrotaContratoRule(patch);
     if (Object.prototype.hasOwnProperty.call(patch, 'data')) {
