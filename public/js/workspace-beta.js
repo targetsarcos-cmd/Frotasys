@@ -54,6 +54,7 @@
     event.currentTarget.querySelector('span').textContent = label;
   };
   byId('logout').onclick = () => byId('btn-logout').click();
+  byId('newTrip').onclick = () => { if (canEditViagens()) byId('btn-nova-viagem').click(); };
   const reminder = document.createElement('div');
   reminder.className = 'header-reminder';
   reminder.append(byId('reminder-note'));

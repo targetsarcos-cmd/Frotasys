@@ -103,3 +103,23 @@ test('a tabela de concluídos inicia recolhida e preserva a estrutura original',
   assert.ok(result.indexOf('/js/workspace-trip-sections.js') < result.indexOf('/js/workspace-beta.js'));
   assert.doesNotMatch(page, /table-concluidos/);
 });
+
+test('modo de escrita exige opt-in e credencial privada do projeto correto', () => {
+  const { betaMode, validateEditableConfig, persistedSection } = require('../beta/mode');
+  const jwt = claims => 'a.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.b';
+  const env = { SUPABASE_URL:'https://mockproject.supabase.co', BETA_USER_ID:'11111111-1111-1111-1111-111111111111',
+    SUPABASE_ANON_KEY:jwt({role:'anon',ref:'mockproject'}), BETA_WRITE_SERVICE_ROLE:jwt({role:'service_role',ref:'mockproject'}) };
+  assert.equal(betaMode(env), 'readonly');
+  assert.equal(betaMode({...env,BETA_ENABLE_WRITES:'true'}), 'editable');
+  assert.equal(betaMode({...env,BETA_ENABLE_WRITES:'false'}), 'readonly');
+  assert.ok(validateEditableConfig(env));
+  for (const override of [{BETA_USER_ID:''},{BETA_WRITE_SERVICE_ROLE:''},{BETA_WRITE_SERVICE_ROLE:env.SUPABASE_ANON_KEY},
+    {BETA_WRITE_SERVICE_ROLE:jwt({role:'service_role',ref:'wrong'})},{SUPABASE_URL:'https://example.invalid'}]) {
+    assert.throws(() => validateEditableConfig({...env,...override}));
+  }
+  assert.equal(persistedSection({nota:'  '}), 'agenciando');
+  assert.equal(persistedSection({nota:'123',status:'CONCLUIDO'}), 'arcos');
+  const page = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  assert.match(workspace(page), /data-beta-mode="readonly"/);
+  assert.match(workspace(page,{editable:true}), /data-beta-mode="editable"/);
+});

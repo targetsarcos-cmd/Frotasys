@@ -7,13 +7,17 @@ const fs = require('fs/promises');
 const zlib = require('zlib');
 const ExcelJS = require('exceljs');
 const betaReadOnly = process.env.FROTASYS_INTERFACE_BETA === 'readonly';
-const betaAccess = betaReadOnly && require('./beta/access');
-const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) : require('./supabaseClient');
+const betaEditable = process.env.FROTASYS_INTERFACE_BETA === 'editable';
+const betaWorkspace = betaReadOnly || betaEditable;
+const betaAccess = betaWorkspace && require('./beta/access');
+const betaMode = betaEditable && require('./beta/mode');
+const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
+  betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server(betaReadOnly ? { noServer: true } : { server });
+const wss = new WebSocket.Server(betaWorkspace ? { noServer: true } : { server });
 
 const TABLES = {
   viagens: 'viagens',
@@ -54,10 +58,10 @@ const DEFAULT_WORK_TYPES = [
   { name: 'CT-e', code: 'CTE', color: '#2563eb', icon: 'file', displayOrder: 2 },
   { name: 'Manifesto', code: 'MANIFESTO', color: '#7c3aed', icon: 'file-text', displayOrder: 3 },
   { name: 'Nota Fiscal', code: 'NOTA_FISCAL', color: '#16a34a', icon: 'receipt', displayOrder: 4 },
-  { name: 'Ped�gio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
-  { name: 'Confer�ncia', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
+  { name: 'Pedágio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
+  { name: 'Conferência', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
   { name: 'Cadastro', code: 'CADASTRO', color: '#4f46e5', icon: 'user', displayOrder: 7 },
-  { name: 'Pend�ncia', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
+  { name: 'Pendência', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
   { name: 'Agendamento', code: 'AGENDAMENTO', color: '#059669', icon: 'calendar', displayOrder: 9 },
   { name: 'Financeiro', code: 'FINANCEIRO', color: '#b7791f', icon: 'money', displayOrder: 10 },
   { name: 'Outro', code: 'OUTRO', color: '#64748b', icon: 'dot', displayOrder: 11 }
@@ -241,15 +245,15 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
   };
 }
 
-if (betaReadOnly) {
+if (betaWorkspace) {
   server.on('upgrade', (_req, socket) => socket.destroy());
   app.use((req, res, next) => {
-    if (!betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
+    if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();
   });
   app.get(['/', '/index.html'], async (_req, res) => {
     const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
-    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source));
+    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable }));
   });
 }
 app.use(cors());
@@ -504,14 +508,14 @@ function slug(value) {
 }
 
 async function ensureDefaultOperacoes() {
-  if (betaReadOnly) return;
+  if (betaWorkspace) return;
   const total = await countDocs(TABLES.operacoes);
   if (total > 0) return;
   await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
 async function ensureDefaultConfigOptions() {
-  if (betaReadOnly) return;
+  if (betaWorkspace) return;
   const existing = await selectDocs(TABLES.configOptions);
 
   const docs = [];
@@ -956,7 +960,7 @@ async function workTypeDocs({ includeDeleted = false } = {}) {
 }
 
 async function ensureDefaultWorkTypes() {
-  if (betaReadOnly) return;
+  if (betaWorkspace) return;
   const existing = await workTypeDocs({ includeDeleted: true });
   if (existing.length) return existing.filter(doc => !doc.deletedAt);
   const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
@@ -1536,10 +1540,11 @@ function requireAuth(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
 
-    if (betaReadOnly && data.user.id !== process.env.BETA_USER_ID) return res.status(403).json({ error: 'Acesso restrito a beta.' });
+    if (betaWorkspace && data.user.id !== process.env.BETA_USER_ID) return res.status(403).json({ error: 'Acesso restrito a beta.' });
     const profile = await profileForUser(data.user.id);
     if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
 
+    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role)) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
     req.authUser = data.user;
     req.userProfile = profile;
     next();
@@ -2222,6 +2227,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const payload = { ...req.body };
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     normalizeViagemDocumentNumbers(payload);
+    if (betaEditable) payload.secao = betaMode.persistedSection(payload);
     applyFrotaContratoRule(payload);
     const previousByPlaca = await latestViagemByPlaca(payload.placa);
     const nomeAlteradoDoHistorico = previousByPlaca &&
@@ -2279,6 +2285,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
+    if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (Object.hasOwn(patch, 'pedidoEnviadoDt') &&
         (Object.keys(patch).length !== 1 || !current.dt || patch.pedidoEnviadoDt !== String(current.dt).trim())) {
@@ -2339,6 +2346,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
 
     const nextData = applyFrotaContratoRule({ ...current, ...patch });
+    if (betaEditable) {
+      patch.secao = betaMode.persistedSection(nextData);
+      nextData.secao = patch.secao;
+    }
     if (patch.programado === true && !current.programado &&
         calculateTripStatus({...nextData, programado:false}) === 'ENVIAR PEDIDO') {
       return res.status(409).json({ error: 'Envie o pedido pelo WhatsApp antes de programar.' });
@@ -2382,7 +2393,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   }
 });
 
-app.delete('/api/viagens/:id', async (req, res) => {
+app.delete('/api/viagens/:id', (req, res, next) => betaEditable ? requireViagemEditor(req, res, next) : next(), async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
