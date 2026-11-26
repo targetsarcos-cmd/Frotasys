@@ -3,7 +3,33 @@
   const shell = document.getElementById('beta-shell');
   const byId = id => document.getElementById(id);
   const sections = [['agenciando','theadBooked','countBooked'], ['arcos','thead','countBilled'], ['concluidos',null,'countCompleted']];
-  const widths = {placa:8,nome:13,tipo:10,origem:8,destino:9,peso:7,agendamento:9,frete:6,status:17,trabalho:10};
+  const actionIcons = {
+    eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+    more:'<circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/>',
+    history:'<path d="M3 12a9 9 0 1 1 3 6.7M3 7v5h5M12 7v5l3 2"/>',
+    send:'<path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/>',
+    chat:'<path d="M20 11.5a8 8 0 0 1-8 8H5l1.8-4A8 8 0 1 1 20 11.5Z"/><path d="M9 8c.5 3 2 4.5 5 5l1-1.5M9 8l1.5-1"/>',
+    copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+    trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v6M14 10v6"/>'
+  };
+  function decorateActions(row){
+    const selectors=[
+      ['.row-action-wrap > button','eye'],
+      ['.row-action-menu summary','more'],
+      ['.row-action-popover button:has(.table-history-icon)','history'],
+      ['.row-action-popover .request-arrow-action','send'],
+      ['.row-action-popover .conversation-action','chat'],
+      ['.row-action-popover button:has(.table-copy-icon)','copy'],
+      ['.row-action-popover button:has(.table-delete-icon)','trash']
+    ];
+    for(const [selector,name] of selectors){
+      const control=row.querySelector(selector);
+      if(!control||control.dataset.betaIcon)continue;
+      control.dataset.betaIcon=name;
+      control.innerHTML='<svg class="beta-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+actionIcons[name]+'</svg>';
+      if(name==='more')control.title='Abrir ações';
+    }
+  }
   const typeStyles = {CARRETEIRO:'car','CARRETEIRO J':'carj',AGREGADO:'ag',FROTA:'frota',DEDICADO:'ded'};
   const statusGauge = document.createElement('div');
   statusGauge.className = 'beta-status-gauge';
@@ -92,6 +118,7 @@
   function decorate(row, trip) {
     row.classList.remove('is-sem-cadastro', 'is-conferir-motorista');
     window.FrotasysBetaComments.decorate(row, trip);
+    decorateActions(row);
     const driver = row.querySelector('.driver-cell strong');
     if (driver) driver.className = 'driver';
     const type = row.querySelector('.type-chip');
@@ -148,13 +175,9 @@
       else visible += n;
       const cols = visibleTableFields();
       const fields = [...cols,{key:'actions'}];
-      const weight = fields.reduce((sum,f)=>sum+(f.key==='status' ? 0 : widths[f.key] || 7),0);
-      table.querySelector('colgroup').innerHTML = fields.map(f => {
-        const width = f.key === 'status' ? 'var(--beta-status-column)' :
-          'calc((100% - var(--beta-status-column)) * '+((widths[f.key] || 7)/weight)+')';
-        return '<col style="width:'+width+'">';
-      }).join('');
-      table.style.minWidth = Math.max(1000,cols.length*105)+'px';
+      const layout = window.FrotasysBetaTableLayout.layout(fields.map(f=>f.key));
+      table.querySelector('colgroup').innerHTML = layout.columns.map(width=>'<col style="width:'+width+'">').join('');
+      table.style.minWidth = layout.minWidth;
     }
     statusGauge.replaceChildren(...[...labels].map(label => {
       const sample = document.createElement('span');
