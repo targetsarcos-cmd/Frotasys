@@ -8,6 +8,18 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .tablewrap table { width:100%; border-collapse:collapse; margin:0; }
 #beta-shell .tablewrap th {position:sticky;top:0;text-align:left;cursor:pointer}
 #beta-shell .tablewrap td {background:transparent;text-align:left;text-transform:none}
+#beta-shell {--beta-status-width:48px;--beta-status-column:calc(var(--beta-status-width) + 18px)}
+#beta-shell .beta-status-gauge {position:absolute;inset:0 auto auto 0;visibility:hidden;pointer-events:none;display:grid;width:max-content}
+#beta-shell .beta-status-gauge > span {grid-area:1/1}
+#beta-shell .beta-status-gauge > span,#beta-shell .tablewrap .beta-status-bar {
+  box-sizing:border-box;font:700 10px/17px 'Segoe UI',Arial,sans-serif;letter-spacing:0;
+  text-transform:none;white-space:nowrap;padding:0 7px;border-width:1px;border-style:solid;
+}
+#beta-shell .tablewrap .beta-status-bar {
+  display:inline-flex;align-items:center;justify-content:center;width:var(--beta-status-width);
+  height:23px;min-height:23px;min-width:0;max-width:none;margin:0;border-radius:4px;
+}
+#beta-shell .tablewrap .beta-status-bar.status-select {background:var(--status-color)!important}
 #beta-shell .tablewrap :is(td,th):is([data-field=tipo],[data-field=status],[data-field=trabalho],.work-cell,.master-actions,.col-actions) {text-align:center}
 #beta-shell .tablewrap :is(td,th):is([data-field=frete],[data-field=peso]) {text-align:right}
 #beta-shell .tablewrap .plate {color:#075b9e;font-weight:700;letter-spacing:.4px}

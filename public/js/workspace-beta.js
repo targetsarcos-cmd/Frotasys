@@ -5,6 +5,15 @@
   const sections = [['arcos','thead','countBilled'], ['agenciando','theadBooked','countBooked']];
   const widths = {placa:8,nome:13,tipo:10,origem:8,destino:9,peso:7,agendamento:9,frete:6,status:17,trabalho:10};
   const typeStyles = {CARRETEIRO:'car','CARRETEIRO J':'carj',AGREGADO:'ag',FROTA:'frota',DEDICADO:'ded'};
+  const statusGauge = document.createElement('div');
+  statusGauge.className = 'beta-status-gauge';
+  statusGauge.setAttribute('aria-hidden','true');
+  shell.append(statusGauge);
+  function syncStatusWidth() {
+    const width = statusGauge.childElementCount ? statusGauge.offsetWidth : 48;
+    if (width) shell.style.setProperty('--beta-status-width',width+'px');
+  }
+  if (typeof ResizeObserver === 'function') new ResizeObserver(syncStatusWidth).observe(statusGauge);
   let tab = 'all';
 
   function adopt(targetId, sourceId, useMarkup = false) {
@@ -85,6 +94,7 @@
         status.removeAttribute('style');
         status.className = 'pill st-' + style;
       }
+      status.classList.add('beta-status-bar');
     }
     const sched = row.querySelector('.schedule-chip');
     if (sched) sched.className = 'sched';
@@ -98,6 +108,7 @@
       if (key) groups[key]++;
     }
     const term = normalize(byId('tableSearch').value.trim());
+    const labels = new Set();
     let visible = 0;
     for (const [sec,,countId] of sections) {
       const table = byId('table-'+sec), body = byId('tbody-'+sec);
@@ -108,7 +119,11 @@
         const show = trip && (tab === 'all' || group(viagemStatusDisplay(trip)) === tab) &&
           (!term || normalize(row.textContent + ' ' + (trip.frete || '') + ' ' + (trip.cte || '') + ' ' + (trip.nota || '')).includes(term));
         row.hidden = !show;
-        if (show) n++;
+        if (show) {
+          n++;
+          const badge = row.querySelector('.beta-status-bar');
+          if (badge) labels.add(badge.textContent.trim());
+        }
       }
       const separator = body.querySelector('.table-completion-separator');
       if (separator) separator.hidden = tab !== 'all' || !!term;
@@ -117,10 +132,21 @@
       byId(countId).textContent = n + (n === 1 ? ' registro' : ' registros');
       visible += n;
       const cols = visibleTableFields();
-      table.querySelector('colgroup').innerHTML = [...cols,{key:'actions'}].map(f =>
-        '<col style="width:'+ ((widths[f.key] || 7) / (cols.reduce((sum,c)=>sum+(widths[c.key]||7),0)+7)*100) +'%">').join('');
+      const fields = [...cols,{key:'actions'}];
+      const weight = fields.reduce((sum,f)=>sum+(f.key==='status' ? 0 : widths[f.key] || 7),0);
+      table.querySelector('colgroup').innerHTML = fields.map(f => {
+        const width = f.key === 'status' ? 'var(--beta-status-column)' :
+          'calc((100% - var(--beta-status-column)) * '+((widths[f.key] || 7)/weight)+')';
+        return '<col style="width:'+width+'">';
+      }).join('');
       table.style.minWidth = Math.max(1000,cols.length*105)+'px';
     }
+    statusGauge.replaceChildren(...[...labels].map(label => {
+      const sample = document.createElement('span');
+      sample.textContent = label;
+      return sample;
+    }));
+    syncStatusWidth();
     byId('footCount').textContent = 'Exibindo '+visible+' de '+scope.length+' viagens';
     for (const button of byId('tabs').querySelectorAll('[data-tab]')) {
       const active = tab === button.dataset.tab;
