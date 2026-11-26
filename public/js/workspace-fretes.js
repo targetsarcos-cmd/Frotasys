@@ -116,8 +116,8 @@ function renderBetaFreteBoard(routes) {
     const count = Math.max(route.agregado?.length || 0,route.rows.length,1);
     const name = '<th scope="rowgroup" rowspan="'+count+'"><span data-frete-field="rota" data-route-index="'+index+'" data-value="'+escapeAttr(route.rota)+'">'+escapeHtml(route.rota)+'</span></th>';
     const rows = Array.from({length:count},(_,i) => '<tr data-row-index="'+i+'">'+(i===0?name:'')+categories.map(([key])=>cells(key,i)).join('')+'</tr>').join('');
-    return '<tbody data-route-index="'+index+'">'+rows+'</tbody>';
-  }).join('');
+    return '<tbody class="rate-route" data-route-index="'+index+'">'+rows+'</tbody>';
+  }).join('<tbody class="rate-gap" aria-hidden="true"><tr><td colspan="7"></td></tr></tbody>');
   const headers = categories.map(([,label])=>'<th scope="colgroup" colspan="3">'+label+'</th>').join('');
   const fields = '<th scope="col">Eixos</th><th scope="col">Valor PJ</th><th scope="col">Valor PF</th>';
   return '<div class="rate-scroll"><table class="rate-table"><thead><tr><th rowspan="2" scope="col"><button onclick="toggleFreteAlphabeticSort()">Rota ↕</button></th>'+headers+'</tr><tr>'+fields+fields+'</tr></thead>'+ (sections || '<tbody><tr><td colspan="7">Nenhuma rota encontrada.</td></tr></tbody>')+'</table></div>';
