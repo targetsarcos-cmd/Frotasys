@@ -428,12 +428,13 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table thead {color:#fff;background:#152e43}
 #beta-fretes .rate-table thead tr+tr {background:#e4edf4;color:#284a62}
 #beta-fretes .rate-table tbody:nth-child(odd) {background:#f5f8fb}
-#beta-fretes .rate-table th[scope=rowgroup] {text-align:left;width:25%}
+#beta-fretes .rate-table th[scope=rowgroup] {text-align:center;width:25%}
 #beta-fretes .rate-table thead button {color:inherit;background:none;border:0;font:inherit}
 #beta-fretes .rate-table [contenteditable=true] {display:inline-block;min-width:3em;min-height:1.3em;vertical-align:middle;border-bottom:1px dashed #9db7c9}
 #beta-fretes .rate-table [contenteditable=true]:focus {outline:2px solid #3684be;background:white}
-#beta-fretes .rate-table td button,#beta-fretes .rate-remove {border:0;background:transparent;color:#185f92;font:600 12px 'Segoe UI',sans-serif}
-#beta-fretes .rate-table .rate-remove {margin-left:6px;color:#a74444}
+#beta-fretes #frete-actions {position:fixed;z-index:90;display:grid;min-width:165px;padding:4px;background:white;border:1px solid #cbdce9;border-radius:6px;box-shadow:0 5px 18px #17395026}
+#beta-fretes #frete-actions button {text-align:left;border:none;padding:8px;background:transparent;color:#183c59;font:500 13px 'Segoe UI',sans-serif}
+#beta-fretes #frete-actions button:is(:hover,:focus-visible) {background:#e8f2fa}
 #beta-fretes .rate-empty {color:#728696}
 @media(max-width:850px){#beta-fretes .frete-query-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 

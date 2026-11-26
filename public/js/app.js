@@ -2496,7 +2496,7 @@ function renderFreteQueryPanel() {
       <label>
         <span>EIXOS</span>
         <select id="frete-query-eixo">
-          ${renderOptions(['', ...freteEixosOptions().map(eixo => `${eixo} EIXO`)], '')}
+          ${renderOptions(['', ...freteEixosOptions().map(eixo => `${eixo} Eixos`)], '')}
         </select>
       </label>
       <button type="button" class="btn-primary" onclick="consultarFreteValor()">Consultar</button>
@@ -2689,6 +2689,10 @@ async function deleteFreteEixo(routeIndex, rowIndex, group = 'rows') {
 
 async function commitFreteBoardEdit(cell) {
   if (!isAdmin()) return;
+  if (isBetaTripWorkspace()) {
+    cell.removeAttribute('contenteditable');
+    if (isBetaReadOnly() || cell.textContent.trim() === cell.dataset.value) return;
+  }
   const field = cell.dataset.freteField;
   const routeIndex = Number(cell.dataset.routeIndex);
   const rowIndex = Number(cell.dataset.rowIndex);
@@ -2795,7 +2799,7 @@ function freteQueryGroup() {
 
 function updateFreteQueryGroup() {
   const select = document.getElementById('frete-query-eixo');
-  setSelectOptions(select, ['', ...freteEixosOptions().map(eixo => eixo+' EIXO')]);
+  setSelectOptions(select, ['', ...freteEixosOptions().map(eixo => eixo+' Eixos')]);
   document.getElementById('frete-query-result').textContent = '';
 }
 

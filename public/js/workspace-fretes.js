@@ -18,6 +18,7 @@
   const homeTitle = title.textContent;
   const grid = document.getElementById('frete-consult-grid');
   page.append(grid);
+  page.addEventListener('contextmenu',openFreteActions);
 
   function navigate() {
     const active = location.hash === '#fretes';
@@ -48,26 +49,74 @@
   navigate();
 })();
 
+function openFreteActions(event) {
+  const cell = event.target.closest('td,th');
+  const body = cell?.closest('tbody[data-route-index]');
+  if (!body || !isAdmin() || isBetaReadOnly()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  document.getElementById('frete-actions')?.remove();
+  const menu = document.createElement('div');
+  menu.id = 'frete-actions';
+  const index = Number(body.dataset.routeIndex);
+  const field = cell.querySelector('[data-frete-field]');
+  const group = cell.dataset.group;
+  const rowIndex = Number(cell.parentElement.dataset.rowIndex);
+  function action(label,run) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.onclick = () => {
+      menu.remove();
+      if (body.isConnected && isAdmin() && !isBetaReadOnly()) run();
+    };
+    menu.append(button);
+  }
+  if (field) action('Editar '+({rota:'rota',eixos:'eixos',pj:'valor PJ',pf:'valor PF'}[field.dataset.freteField]),() => {
+    field.setAttribute('contenteditable','true');
+    field.focus();
+    const range = document.createRange();
+    range.selectNodeContents(field);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  for (const [key,label] of [['agregado','Agregado'],['rows','Terceiros']]) {
+    if (!group || group === key) action('Adicionar eixos · '+label,() => addFreteEixo(index,key));
+  }
+  if (group && field) action('Excluir eixos · '+(group === 'rows' ? 'Terceiros' : 'Agregado'),() => deleteFreteEixo(index,rowIndex,group));
+  if (!group) action('Excluir rota',() => deleteFreteRoute(index));
+  body.closest('.rate-scroll').append(menu);
+  menu.style.left = Math.max(4,Math.min(event.clientX,window.innerWidth-menu.offsetWidth-4))+'px';
+  menu.style.top = Math.max(4,Math.min(event.clientY,window.innerHeight-menu.offsetHeight-4))+'px';
+  menu.firstElementChild.focus();
+}
+
+document.addEventListener('pointerdown',event => {
+  const menu = document.getElementById('frete-actions');
+  if (menu && !menu.contains(event.target)) menu.remove();
+});
+document.addEventListener('keydown',event => {
+  if (event.key === 'Escape') document.getElementById('frete-actions')?.remove();
+});
+window.addEventListener('hashchange',() => document.getElementById('frete-actions')?.remove());
+
 function renderBetaFreteBoard(routes) {
-  const edit = isAdmin() && !isBetaReadOnly();
   const categories = [['agregado','Agregado'],['rows','Terceiros']];
   const sections = routes.map(route => {
     const index = freteRoutes().indexOf(route);
     function cells(key,i) {
       const row = route[key]?.[i];
-      if (!row) return '<td colspan="3" class="rate-empty">&mdash;</td>';
+      if (!row) return '<td colspan="3" data-group="'+key+'" class="rate-empty">&mdash;</td>';
       return ['eixos','pj','pf'].map(field => {
         const value = field === 'eixos' ? row.eixos : formatFreteAccounting(row[field]);
-        const remove = edit && field === 'eixos' ? '<button type="button" class="rate-remove" aria-label="Excluir eixo '+row.eixos+'" onclick="deleteFreteEixo('+index+','+i+',\''+key+'\')">&times;</button>' : '';
-        return '<td><span contenteditable="'+edit+'" data-frete-field="'+field+'" data-rate-group="'+key+'" data-route-index="'+index+'" data-row-index="'+i+'" data-value="'+escapeAttr(value)+'">'+escapeHtml(value)+'</span>'+remove+'</td>';
+        return '<td data-group="'+key+'"><span data-frete-field="'+field+'" data-rate-group="'+key+'" data-route-index="'+index+'" data-row-index="'+i+'" data-value="'+escapeAttr(value)+'">'+escapeHtml(value)+'</span></td>';
       }).join('');
     }
     const count = Math.max(route.agregado?.length || 0,route.rows.length,1);
-    const name = '<th scope="rowgroup" rowspan="'+(count+(edit?1:0))+'"><span contenteditable="'+edit+'" data-frete-field="rota" data-route-index="'+index+'" data-value="'+escapeAttr(route.rota)+'">'+escapeHtml(route.rota)+'</span>'+
-      (edit ? '<button type="button" class="rate-remove" aria-label="Excluir rota" onclick="deleteFreteRoute('+index+')">&times;</button>' : '')+'</th>';
-    const rows = Array.from({length:count},(_,i) => '<tr>'+(i===0?name:'')+categories.map(([key])=>cells(key,i)).join('')+'</tr>').join('');
-    const add = edit ? '<tr>'+categories.map(([key,label])=>'<td colspan="3"><button type="button" onclick="addFreteEixo('+index+',\''+key+'\')">+ Eixo '+label+'</button></td>').join('')+'</tr>' : '';
-    return '<tbody>'+rows+add+'</tbody>';
+    const name = '<th scope="rowgroup" rowspan="'+count+'"><span data-frete-field="rota" data-route-index="'+index+'" data-value="'+escapeAttr(route.rota)+'">'+escapeHtml(route.rota)+'</span></th>';
+    const rows = Array.from({length:count},(_,i) => '<tr data-row-index="'+i+'">'+(i===0?name:'')+categories.map(([key])=>cells(key,i)).join('')+'</tr>').join('');
+    return '<tbody data-route-index="'+index+'">'+rows+'</tbody>';
   }).join('');
   const headers = categories.map(([,label])=>'<th scope="colgroup" colspan="3">'+label+'</th>').join('');
   const fields = '<th scope="col">Eixos</th><th scope="col">Valor PJ</th><th scope="col">Valor PF</th>';
