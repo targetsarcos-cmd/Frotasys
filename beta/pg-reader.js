@@ -1,4 +1,8 @@
 'use strict';
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+// Public database roots shipped by the official Supabase CLI (2021 and 2025).
+const poolerCa = readFileSync(join(__dirname, 'supabase-roots.pem'), 'utf8');
 
 const tables = new Set(['viagens', 'metas', 'operacoes', 'config_options', 'user_profiles']);
 const columns = new Set(['id', 'dados', 'created_at', 'updated_at', 'user_id', 'nome', 'email', 'role', 'ativo']);
@@ -76,7 +80,7 @@ function poolSettings(env, url) {
     throw Error('Configure a URL do projeto, o host do Session pooler e a senha do leitor.');
   }
   return { host, port: 5432, database: 'postgres', user: 'frotasys_beta_reader.' + ref[1],
-    password: env.BETA_READER_PASSWORD, ssl: { rejectUnauthorized: true }, max: 3,
+    password: env.BETA_READER_PASSWORD, ssl: { ca: poolerCa, rejectUnauthorized: true }, max: 3,
     connectionTimeoutMillis: 10000, idleTimeoutMillis: 30000 };
 }
 
