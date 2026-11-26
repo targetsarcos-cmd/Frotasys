@@ -13,7 +13,9 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
-      - key: BETA_READ_JWT
+      - key: BETA_POOLER_HOST
+        sync: false
+      - key: BETA_READER_PASSWORD
         sync: false
       - key: BETA_USER_ID
         sync: false

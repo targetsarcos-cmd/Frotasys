@@ -4,6 +4,35 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { settings, readTransport, canRead } = require('../beta/access');
 const workspace = require('../beta/workspace');
+const { fromTable, poolSettings } = require('../beta/pg-reader');
+
+test('pooler exige TLS, host do Supabase e usuário dedicado', () => {
+  const url = new URL('https://mockproject.supabase.co');
+  const env = { BETA_POOLER_HOST: 'aws-0-test.pooler.supabase.com', BETA_READER_PASSWORD: 'fixture' };
+  const config = poolSettings(env, url);
+  assert.equal(config.user, 'frotasys_beta_reader.mockproject');
+  assert.equal(config.port, 5432);
+  assert.equal(config.ssl.rejectUnauthorized, true);
+  assert.throws(() => poolSettings({ ...env, BETA_POOLER_HOST: 'example.invalid' }, url));
+  assert.throws(() => poolSettings({ ...env, BETA_READER_PASSWORD: '' }, url));
+});
+
+test('consultas da programação parametrizam valores e preservam projeção, ordem e limites', async () => {
+  const calls = [];
+  const pool = { query: async (sql, args) => { calls.push({sql,args}); return {rows:[]}; } };
+  const table = fromTable(pool, 'viagens');
+  assert.throws(() => fromTable(pool, 'pg_authid'));
+  assert.throws(() => table.select('senha'));
+  assert.equal(table.update, undefined);
+  const q = table.select('data:dados->>data').eq('id','fixture').in('dados->>origem',['ARCOS'])
+    .not('dados->>data','is',null).order('dados->>data',{ascending:false}).limit(25);
+  assert.deepEqual((await q).data, []);
+  assert.deepEqual(calls[0].args, ['fixture',['ARCOS'],25]);
+  assert.match(calls[0].sql, /IS NOT NULL ORDER BY .* DESC LIMIT \$3$/);
+  assert.equal((await table.select('id').maybeSingle()).data, null);
+  assert.equal((await fromTable({ query: async () => ({rows:[{total:'7'}]}) },'viagens')
+    .select('id',{count:'exact',head:true})).count, 7);
+});
 
 test('a composição da beta conserva os controles da interface original', () => {
   const page = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
