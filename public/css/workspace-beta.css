@@ -452,9 +452,9 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table .rate-route:first-of-type tr:first-child > * {border-top:1px solid #c4d4e2}
 #beta-fretes .rate-table thead button {color:inherit;background:none;border:0;font:inherit}
 #beta-fretes .rate-table .rate-route-title button {color:#fff;font-size:14px;font-weight:700}
-#beta-fretes .rate-table :is(thead, .rate-route) .rate-category-gap {width:14px;min-width:14px;max-width:14px;padding:0;border:0;border-radius:0;background:#edf2f6;box-shadow:none;cursor:default}
+#beta-fretes .rate-table thead th.rate-category-gap,#beta-fretes .rate-table .rate-route tr > td.rate-category-gap {width:14px;min-width:14px;max-width:14px;padding:0;border:0;border-radius:0;background:#edf2f6;box-shadow:none;cursor:default}
 #beta-fretes .rate-table .rate-route td[data-group=agregado]:has(+ .rate-category-gap) {border-right-color:#c4d4e2}
-#beta-fretes .rate-table .rate-route td[data-group=rows]:first-of-type,#beta-fretes .rate-table .rate-route .rate-category-gap + td {border-left:1px solid #c4d4e2}
+#beta-fretes .rate-table .rate-route .rate-category-gap + td {border-left:1px solid #c4d4e2}
 #beta-fretes .rate-table .rate-route tr:first-child .rate-category-gap + td {border-top-left-radius:7px}
 #beta-fretes .rate-table .rate-route tr:last-child .rate-category-gap + td {border-bottom-left-radius:7px}
 #beta-fretes .rate-table .rate-route tr:first-child td:has(+ .rate-category-gap) {border-top-right-radius:7px}
