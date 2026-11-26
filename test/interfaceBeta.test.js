@@ -370,3 +370,14 @@ test('beta ordena abas pelo fluxo operacional sem filtro de concluidos', () => {
   assert.match(js,/tabs\.insertBefore\(button, tabs\.children\[tabPosition\] \|\| null\)/);
   assert.match(js,/setCompletedExpanded\(!completedExpanded\)/);
 });
+
+test('chevron de expandir concluidos usa viewBox e gira ao recolher',()=>{
+  const shell=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const button=shell.match(/<button\b[^>]*id="toggleCompleted"[^>]*>[\s\S]*?<\/button>/)?.[0];
+  assert.ok(button);
+  assert.match(button,/<svg\b[^>]*viewBox="0 0 24 24"/);
+  assert.match(button,/<path d="m6 9 6 6 6-6"\/>/);
+  assert.match(css,/\.completed-toggle svg\s*\{[^}]*width:15px;height:15px/);
+  assert.match(css,/\.completed-toggle\[aria-expanded=true\] svg\s*\{transform:rotate\(180deg\)/);
+});
