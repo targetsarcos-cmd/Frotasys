@@ -294,3 +294,15 @@ test('secoes beta nao exibem contadores nos titulos e preservam totais do rodape
   assert.match(js,/byId\('footCount'\)\.textContent/);
   assert.match(shell,/id="toggleCompleted"/);
 });
+
+test('relatorios beta usam pagina isolada, referencia original e dados autenticados',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../public/beta-reports.html'),'utf8');
+  const bridge=fs.readFileSync(path.join(__dirname,'../public/js/beta-reports-bridge.js'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/beta-reports-reference.js'),'utf8');
+  assert.match(html,/beta-reports-reference\.css/);
+  assert.match(html,/class="workspace is-empty"/);
+  assert.doesNotMatch(html,/const destinations=|Nenhum dado disponível na demonstração/);
+  assert.match(bridge,/buildReportsData\(viagens,metas/);
+  assert.match(bridge,/apiFetch\('\/api\/viagens\/search/);
+  assert.match(js,/bridge\.load\(filters\)/);
+});

@@ -279,3 +279,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 
 .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing {grid-template-columns:minmax(0,1fr);gap:3px}
 .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing > input {min-height:30px}
+
+/* Report reference is a full-page, isolated same-origin document, never a modal. */
+.workspace-beta.beta-report-reference-active{overflow:hidden}
+.workspace-beta #beta-reports-page{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1200;background:#edf2f6;display:block}

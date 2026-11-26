@@ -1264,6 +1264,7 @@ function closeFreteConsultModal() {
 }
 
 function openReportsModal() {
+  if (isBetaTripWorkspace() && window.FrotasysBetaReports) return window.FrotasysBetaReports.open();
   syncDynamicSelects();
   const start = document.getElementById('report-start-date');
   const end = document.getElementById('report-end-date');
@@ -1277,6 +1278,7 @@ function openReportsModal() {
 }
 
 function closeReportsModal() {
+  window.FrotasysBetaReports?.close();
   document.body.classList.remove('reports-page-active');
   document.getElementById('reports-overlay').classList.add('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
