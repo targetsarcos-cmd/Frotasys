@@ -1,6 +1,7 @@
 services:
   - type: web
     name: frotasys-interface-beta
+    plan: free
     runtime: node
     branch: feature/interface-v2
     buildCommand: npm ci
