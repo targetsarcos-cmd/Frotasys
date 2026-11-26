@@ -865,7 +865,7 @@ function canEditViagemField(viagem, field) {
 }
 
 function canDeleteViagem(viagem) {
-  if (isBetaReadOnly()) return false;
+  if (isBetaReadOnly() || (isBetaTripWorkspace() && !canEditViagens())) return false;
   return isAdmin() || !isViagemConcluida(viagem);
 }
 
