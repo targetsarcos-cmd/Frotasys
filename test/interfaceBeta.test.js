@@ -411,3 +411,38 @@ test('consulta frete beta separa rotas sem desagrupar categorias e eixos',()=>{
   assert.match(css,/\.rate-route-title button\s*\{color:#fff;font-size:14px/);
   assert.match(css,/\.rate-route th\[scope=rowgroup\]\s*\{[^}]*background:#152e43;[^}]*color:#fff;font-size:14px/);
 });
+
+test('consulta rapida beta compara PF e PJ de agregado e terceiros sem inventar valores',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-fretes.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const extract=(source,start,end)=>source.slice(source.indexOf('function '+start+'('),source.indexOf('function '+end+'('));
+  const accounting=extract(app,'formatFreteAccounting','freteOriginTone');
+  const render=new Function('escapeHtml',accounting+extract(js,'renderBetaFreteQueryResult','renderBetaFreteBoard')+'return renderBetaFreteQueryResult;')(String);
+  const route={agregado:[{eixos:7,pf:0,pj:null},{eixos:9,pf:5500,pj:5400}],rows:[{eixos:7,pf:5166,pj:5026},{eixos:5,pf:4000,pj:3900}]};
+  const h=render(route,7);
+  assert.equal((h.match(/Pessoa Física/g)||[]).length,2);
+  assert.equal((h.match(/Pessoa Jurídica/g)||[]).length,2);
+  assert.match(h,/beta-rate-result-agregado/);
+  assert.match(h,/beta-rate-result-rows/);
+  assert.match(h,/R\$\s*0,00/);
+  assert.match(h,/R\$\s*5\.166,00/);
+  assert.match(h,/R\$\s*5\.026,00/);
+  assert.equal((h.match(/Não cadastrado/g)||[]).length,1);
+  assert.equal((render(route,9).match(/Não cadastrado/g)||[]).length,2);
+  assert.equal((render(route,6).match(/Não cadastrado/g)||[]).length,4);
+  assert.match(render(undefined,7),/Nenhuma rota/);
+  const axes=new Function('isBetaTripWorkspace','freteRoutes','freteQueryGroup',extract(app,'freteEixosOptions','updateFreteQueryDestinations')+'return freteEixosOptions();');
+  assert.deepEqual(axes(()=>true,()=>[route],()=>'rows'),[5,7,9]);
+  assert.deepEqual(axes(()=>false,()=>[route],()=>'rows'),[5,7]);
+  const panel=new Function('isBetaTripWorkspace','renderOptions','freteOriginOptions','freteEixosOptions',extract(app,'renderFreteQueryPanel','renderFreteRouteBoard')+'return renderFreteQueryPanel();');
+  assert.doesNotMatch(panel(()=>true,()=>'',()=>[],()=>[]),/frete-query-group/);
+  const result={innerHTML:''};
+  const document={getElementById:id=>({'frete-query-origem':{value:'ARCOS'},'frete-query-destino':{value:'OSASCO'},'frete-query-eixo':{value:'7 Eixos'},'frete-query-result':result}[id])};
+  const query=new Function('document','normalizeOption','freteRoutes','isBetaTripWorkspace','renderBetaFreteQueryResult',extract(app,'consultarFreteValor','scheduleMetaGoalAlert')+'consultarFreteValor();');
+  query(document,String,()=>[{...route,origem:'ARCOS',destino:'OSASCO'}],()=>true,render);
+  assert.equal(result.innerHTML,h);
+  assert.match(css,/\.beta-rate-result-agregado h4\s*\{background:#f8e8b0/);
+  assert.match(css,/\.beta-rate-result-rows h4\s*\{background:#f6d3d4/);
+  assert.match(css,/\.frete-query-form\s*\{display:grid;grid-template-columns:repeat\(3,/);
+});
