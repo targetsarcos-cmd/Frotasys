@@ -24,7 +24,7 @@ function applyCommentAction(existing, input, actor, options = {}) {
     threads.push({ id:uuid(), messages:[message()], resolvedAt:null });
     return threads;
   }
-  if (!['reply','edit','resolve'].includes(action)) throw new CommentError('Acao de comentario invalida.');
+  if (!['reply','edit','resolve','delete','delete-thread'].includes(action)) throw new CommentError('Acao de comentario invalida.');
   const thread = threads.find(item => item.id === input.threadId);
   if (!thread) throw new CommentError('Comentario nao encontrado.', 404);
   if (thread.resolvedAt) throw new CommentError('Comentario resolvido. O historico esta bloqueado.', 409);
@@ -38,8 +38,17 @@ function applyCommentAction(existing, input, actor, options = {}) {
     thread.messages.push(message());
     return threads;
   }
+  if (action === 'delete-thread') {
+    if (role !== 'admin' && !thread.messages.every(item => item.authorId === id)) throw new CommentError('Somente o administrador pode excluir a conversa com outros autores.', 403);
+    return threads.filter(item => item.id !== thread.id);
+  }
   const target = thread.messages.find(item => item.id === input.messageId);
   if (!target) throw new CommentError('Mensagem nao encontrada.', 404);
+  if (action === 'delete') {
+    if (target.authorId !== id && role !== 'admin') throw new CommentError('Sem permissao para excluir a mensagem.', 403);
+    thread.messages = thread.messages.filter(item => item.id !== target.id);
+    return thread.messages.length ? threads : threads.filter(item => item.id !== thread.id);
+  }
   if (target.authorId !== id) throw new CommentError('Somente o autor pode editar a mensagem.', 403);
   target.text = body();
   target.editedAt = now();
