@@ -7312,11 +7312,12 @@ function showCtxMenu(e, id, mode = 'row') {
   yellowItem.style.display = mode === 'placa' || !canEditViagens() || !viagem ? 'none' : '';
   driverSwapItem.style.display = mode === 'nome' && isConferirMotoristaPendente(viagem) && canEditViagem(viagem) ? '' : 'none';
   yellowItem.textContent = viagem?.marcadoAmarelo ? 'Remover amarelo' : 'Marcar amarelo';
+  if (isBetaTripWorkspace()) window.FrotasysBetaComments?.configureMenu(mode, viagem);
   if (copyItem.style.display === 'none' && editItem.style.display === 'none' && yellowItem.style.display === 'none' && driverSwapItem.style.display === 'none') return;
   const menu = document.getElementById('ctx-menu');
   menu.style.left = `${Math.min(e.clientX, window.innerWidth - 160)}px`;
-  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 90)}px`;
   menu.classList.remove('hidden');
+  menu.style.top = `${Math.max(4, Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8))}px`;
 }
 
 function hideCtxMenu() {

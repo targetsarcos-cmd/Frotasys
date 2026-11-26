@@ -89,9 +89,9 @@
     return '';
   }
   const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  function decorate(row) {
-    const plate = row.querySelector('.master-plate');
-    if (plate) plate.className = 'plate';
+  function decorate(row, trip) {
+    row.classList.remove('is-sem-cadastro', 'is-conferir-motorista');
+    window.FrotasysBetaComments.decorate(row, trip);
     const driver = row.querySelector('.driver-cell strong');
     if (driver) driver.className = 'driver';
     const type = row.querySelector('.type-chip');
@@ -129,7 +129,7 @@
       let n = 0;
       for (const row of body.querySelectorAll('tr[data-id]')) {
         const trip = index.get(row.dataset.id);
-        decorate(row);
+        decorate(row, trip);
         const show = trip && (tab === 'all' || viagemStatusDisplay(trip) === tab) &&
           (!term || normalize(row.textContent + ' ' + (trip.frete || '') + ' ' + (trip.cte || '') + ' ' + (trip.nota || '')).includes(term));
         row.hidden = !show;
