@@ -1,7 +1,7 @@
 /* Same-origin report page uses the authenticated application's existing data model. */
 (() => {
   'use strict';
-  let frame=null, previousFocus=null;
+  let frame=null, previousFocus=null, previousInert=false;
   const nav={'Operações':'navHome','Lembretes':'btn-lembretes','Cadastros':'btn-frete-consult','Registros':'btn-lista-espera','Usuários':'btn-users-admin','Configurações':'btn-settings','Menu':'collapseNav','Nova viagem':'btn-nova-viagem','Perfil':'btn-logout'};
   function open(){
     if(frame)return;
@@ -13,12 +13,17 @@
     frame.src='/beta-reports.html';
     document.body.classList.add('beta-report-reference-active');
     document.body.append(frame);
+    const shell=document.getElementById('beta-shell');
+    previousInert=!!shell?.inert;
+    if(shell)shell.inert=true;
     frame.focus();
   }
   function close(){
     if(!frame)return;
     frame.remove();frame=null;
     document.body.classList.remove('beta-report-reference-active');
+    const shell=document.getElementById('beta-shell');
+    if(shell)shell.inert=previousInert;
     previousFocus?.focus?.();previousFocus=null;
   }
   function authorized(){return !!frame&&isBetaTripWorkspace()&&!!state.userProfile;}
@@ -57,7 +62,6 @@
       if(input){input.value=String(value||'');document.getElementById('header-search-form')?.requestSubmit();}
       return;
     }
-    if(action==='Menu')return;
     if(nav[action])document.getElementById(nav[action])?.click();
   }
   window.FrotasysBetaReports={open,close,config,load,navigate};

@@ -24,7 +24,7 @@ function metric(index,value,foot,progress){
 function draw(data){
   report=data;
   const meta=Number(data.metaTotal)||0,fat=Number(data.fatTotal)||0,ag=Number(data.agencTotal)||0,total=fat+ag,falta=meta-total;
-  const dest=data.destinos||[],period=date(data.filters.start)+' a '+date(data.filters.end);
+  const dest=(data.destinos||[]).map(d=>({...d,destino:/^[A-Z]{1,5}$/.test(d.destino)?d.destino:String(d.destino).toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase())})),period=date(data.filters.start)+' a '+date(data.filters.end);
   const p=pct(total,meta), fp=pct(fat,meta), ap=pct(ag,fat), mp=pct(falta,meta);
   $('workspace').classList.remove('is-empty');
   ['export','copy','copy2','print'].forEach(id=>$(id).disabled=false);
@@ -33,7 +33,8 @@ function draw(data){
   metric(2,fat,'Volume faturado <strong class="blue">'+(meta?decimal(1).format(fp)+'% da meta':'Sem meta')+'</strong>',fp);
   metric(3,falta,'Saldo após agenciamento <strong class="red">'+(meta?decimal(1).format(mp)+'% da meta':'Sem meta')+'</strong>',mp);
   const context=q('.main-grid .panel-head .meta small');
-  context.textContent=data.operationLabel+' · '+period;
+  context.replaceChildren(document.createTextNode(data.operationLabel+' · '));
+  const periodLabel=document.createElement('span');periodLabel.id='periodLabel';periodLabel.textContent=period;context.append(periodLabel);
   headers=['Indicador',...dest.map(d=>d.destino),'Total (kg)'];
   const series=[['Meta','', '',d=>d.meta,meta],['Faturado','blue','billed',d=>d.faturado,fat],['Agenciado','orange','booked',d=>d.agenciado,ag],['Total','total','total',d=>d.faturado+d.agenciado,total],['Falta','falta','missing',d=>d.meta-d.faturado-d.agenciado,falta]];
   rows=series.map(([label,,,fn,sum])=>[label,...dest.map(fn),sum]);

@@ -9,3 +9,5 @@
 .global-search .searchend .ico{width:15px;height:15px}
 .navitem:focus-visible,.profile:focus-visible{outline:2px solid #85d1ff}
 @media(max-width:700px){.global-search{display:none}}
+
+.navitem[hidden]{display:none!important}
