@@ -58,8 +58,12 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .tablewrap :is(.driver-cell,.route-cell) {justify-items:start;justify-content:start;text-align:left}
 #beta-shell #filterCount:empty {display:none}
 .workspace-beta .travel-drawer.is-open {background:#edf2f6;border-left:1px solid #c4d4e1;box-shadow:-6px 0 22px #12324c24}
-.workspace-beta #travel-drawer .drawer-head {background:#f6f9fc;color:#193d5a}
-.workspace-beta #travel-drawer .drawer-head :is(h2,p,button) {color:#193d5a}
+.workspace-beta {--beta-navy:#142b42}
+.workspace-beta #travel-drawer .drawer-head {background:var(--beta-navy);color:#fff;border-bottom-color:#233f58}
+.workspace-beta #travel-drawer .drawer-head :is(h2,p,button) {color:#fff}
+.workspace-beta #travel-drawer .drawer-head .drawer-close {background:transparent;border:1px solid #ffffff45;box-shadow:none}
+.workspace-beta #travel-drawer .drawer-head .drawer-close:hover {background:#ffffff18;border-color:#ffffff80}
+.workspace-beta #travel-drawer .drawer-head .drawer-close:focus-visible {outline:2px solid #8ad4ff;outline-offset:2px}
 .workspace-beta.reports-page-active #beta-shell {min-height:0}
 .workspace-beta.reports-page-active #reports-overlay {margin-left:var(--beta-rail,184px)}
 .workspace-beta:has(#beta-shell.nav-compact) {--beta-rail:64px}
@@ -229,3 +233,17 @@ body.workspace-beta { margin:0; background:#edf2f6; }
   .workspace-beta.travel-drawer-open #beta-shell .tablewrap :is(th,td) {padding-inline:5px}
   .workspace-beta.travel-drawer-open #beta-shell .tablewrap :is([data-field=tipo],.work-cell,.master-actions) {padding-inline:4px}
 }
+
+/* Match the navigation navy on the operational column headers and summary heading. */
+#beta-shell .operations-panel .trip-section .tablewrap thead th {
+  background:var(--beta-navy);color:#fff;border-bottom-color:#233f58;
+}
+#beta-shell .operations-panel .trip-section .tablewrap thead th:hover {color:#c6e6ff}
+#beta-shell .operations-panel .trip-section .tablewrap thead th.is-sorted {color:#fff}
+#beta-shell .report-panel .report-header {
+  background:var(--beta-navy);color:#fff;border-bottom-color:#233f58;border-radius:7px 7px 0 0;
+}
+#beta-shell .report-panel .report-header h2,
+#beta-shell .report-panel .report-header p,
+#beta-shell .report-panel .report-header .report-context,
+#beta-shell .report-panel .report-heading > svg {color:#fff}
