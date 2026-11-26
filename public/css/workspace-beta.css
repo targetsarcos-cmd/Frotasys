@@ -276,3 +276,6 @@ body.workspace-beta { margin:0; background:#edf2f6; }
   .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field {grid-template-columns:minmax(0,1fr);gap:3px}
   .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field > strong {justify-content:flex-start}
 }
+
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing {grid-template-columns:minmax(0,1fr);gap:3px}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing > input {min-height:30px}

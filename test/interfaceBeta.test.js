@@ -285,3 +285,10 @@ test('drawer beta renderiza nota e hora juntas para as 15 posicoes',()=>{
   assert.match(api.renderBetaExtraInvoices().join(''),/nota2:Nota Fiscal 2:undefined;hora_nf2:Hora NF:time/);
   assert.match(api.renderBetaInvoiceRow(14),/nota15:Nota Fiscal 15:undefined;hora_nf15:Hora NF:time/);
 });
+
+test('contadores das secoes beta exibem somente o numero de viagens',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const shell=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  assert.match(js,/byId\(countId\)\.textContent = String\(n\)/);
+  assert.match(shell,/id="countCompleted">0<\/span>/);
+});
