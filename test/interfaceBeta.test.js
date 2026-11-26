@@ -227,18 +227,33 @@ test('filtro tipo usa modalidade normalizada e combina com os demais filtros',()
   assert.match(js,/if \(field === 'tipo'\) return normalizeTipo\(viagem.tipo\)/);
 });
 
-test('layout beta reserva largura de trabalho, acoes e tipo e ajusta largura minima',()=>{
+test('layout beta inclui produto e reserva largura dos controles',()=>{
   const {layout}=require('../public/js/workspace-table-layout');
-  const normal=layout(['placa','nome','tipo','origem','destino','peso','agendamento','status','trabalho','actions']);
-  assert.equal(normal.columns.length,10);
-  assert.equal(normal.columns[8],'144px');
-  assert.equal(normal.columns[9],'76px');
-  assert.equal(normal.columns[2],'108px');
-  assert.equal(normal.columns[7],'var(--beta-status-column)');
-  assert.equal(normal.minWidth,'calc(945px + var(--beta-status-column))');
-  const extra=layout(['placa','nome','tipo','origem','destino','peso','agendamento','nota','status','trabalho','actions']);
-  assert.equal(extra.minWidth,'calc(1045px + var(--beta-status-column))');
-  assert.equal(layout(['placa','actions']).minWidth,'calc(167px)');
+  const keys=['placa','nome','tipo','origem','destino','produto','peso','agendamento','status','trabalho','actions'];
+  const normal=layout(keys);
+  assert.equal(normal.columns.length,11);
+  assert.equal(normal.columns[9],'132px');
+  assert.equal(normal.columns[10],'72px');
+  assert.equal(normal.columns[2],'104px');
+  assert.equal(normal.columns[8],'var(--beta-status-column)');
+  assert.equal(normal.minWidth,'calc(963px + var(--beta-status-column))');
+  assert.equal(layout([...keys,'nota']).minWidth,'calc(1063px + var(--beta-status-column))');
+  assert.equal(layout(['placa','actions']).minWidth,'calc(157px)');
+});
+test('produto e fixo apos destino somente na beta e nao duplica preferencias antigas',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const base=js.slice(js.indexOf('const BASE_FIELDS ='),js.indexOf('const FIELDS = BASE_FIELDS;'));
+  const helpers=js.slice(js.indexOf('function optionalTableFields()'),js.indexOf('function allSortableTableFields()'));
+  const get=new Function('state','isBetaTripWorkspace',base+helpers+';return {visibleTableFields,optionalTableFields};');
+  const beta=get({additionalColumns:['produto','frete']},()=>true);
+  const keys=beta.visibleTableFields().map(f=>f.key);
+  assert.equal(keys.indexOf('produto'),keys.indexOf('destino')+1);
+  assert.equal(keys.filter(key=>key==='produto').length,1);
+  assert.ok(keys.includes('frete'));
+  assert.ok(!beta.optionalTableFields().some(f=>f.key==='produto'));
+  const classic=get({additionalColumns:[]},()=>false);
+  assert.ok(!classic.visibleTableFields().some(f=>f.key==='produto'));
+  assert.ok(classic.optionalTableFields().some(f=>f.key==='produto'));
 });
 test('acoes beta preservam controles e substituem apenas seu conteudo visual',()=>{
   const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');

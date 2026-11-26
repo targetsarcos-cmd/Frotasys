@@ -3900,15 +3900,21 @@ function renderTableRow(v) {
   </tr>`;
 }
 
+function optionalTableFields() {
+  return isBetaTripWorkspace() ? EXTRA_FIELDS.filter(field => field.key !== 'produto') : EXTRA_FIELDS;
+}
+
 function visibleTableFields() {
+  const base = isBetaTripWorkspace() ? BASE_FIELDS.flatMap(field => field.key === 'destino'
+    ? [field, EXTRA_FIELDS.find(item => item.key === 'produto')] : [field]) : BASE_FIELDS;
   const selected = new Set((state.additionalColumns || []).map(String));
-  const extras = EXTRA_FIELDS.filter(field => selected.has(field.key));
-  const agendamentoIndex = BASE_FIELDS.findIndex(field => field.key === 'agendamento');
-  if (agendamentoIndex === -1) return [...BASE_FIELDS, ...extras];
+  const extras = optionalTableFields().filter(field => selected.has(field.key));
+  const agendamentoIndex = base.findIndex(field => field.key === 'agendamento');
+  if (agendamentoIndex === -1) return [...base, ...extras];
   return [
-    ...BASE_FIELDS.slice(0, agendamentoIndex + 1),
+    ...base.slice(0, agendamentoIndex + 1),
     ...extras,
-    ...BASE_FIELDS.slice(agendamentoIndex + 1)
+    ...base.slice(agendamentoIndex + 1)
   ];
 }
 
@@ -5348,7 +5354,7 @@ function saveTableSortPreference() {
 }
 
 function normalizeAdditionalColumns(values) {
-  const allowed = new Set(EXTRA_FIELDS.map(field => field.key));
+  const allowed = new Set(optionalTableFields().map(field => field.key));
   const seen = new Set();
   return (Array.isArray(values) ? values : [])
     .map(String)
@@ -5379,7 +5385,7 @@ function renderColumnPicker() {
   menu.innerHTML = `<div class="column-picker-title">Adicionar colunas</div>
     <div class="column-picker-fixed">As colunas atuais ficam sempre vis&iacute;veis.</div>
     <div class="column-picker-options">
-      ${EXTRA_FIELDS.map(field => `<label class="column-picker-option">
+      ${optionalTableFields().map(field => `<label class="column-picker-option">
         <input type="checkbox" value="${escapeAttr(field.key)}" ${selected.has(field.key) ? 'checked' : ''} onchange="toggleAdditionalColumn('${escapeAttr(field.key)}', this.checked)">
         <span>${escapeHtml(field.label)}</span>
       </label>`).join('')}

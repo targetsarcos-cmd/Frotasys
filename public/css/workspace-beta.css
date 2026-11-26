@@ -185,18 +185,18 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 .workspace-beta #travel-drawer .beta-invoice-add button:hover:not(:disabled) {background:#e5f0fa;border-color:#2580c4}
 .workspace-beta #travel-drawer .beta-invoice-add button:disabled {opacity:.45;cursor:not-allowed}
 
-/* Operational density: larger text, fewer redundant gutters and reserved control widths. */
+/* Operational density: original typography, compact gutters and reserved control widths. */
 #beta-shell {--beta-status-column:calc(var(--beta-status-width) + 12px)}
 #beta-shell .tablewrap :is(th,td) {box-sizing:border-box;padding-inline:6px}
-#beta-shell .tablewrap thead th {font-size:11px;height:34px;padding-block:7px;letter-spacing:.15px}
-#beta-shell .tablewrap tbody td {font-size:13px;height:35px;padding-block:3px}
-#beta-shell .tablewrap :is(.driver,.route-cell strong,td[data-field=peso] strong) {font-size:13px;font-weight:500}
-#beta-shell .tablewrap .beta-comment-plate {font-size:13px;letter-spacing:.2px}
-#beta-shell .tablewrap .pill[class*="type-"] {font-size:11px;box-sizing:border-box;width:96px;max-width:100%;padding-inline:3px}
-#beta-shell .beta-status-gauge > span,#beta-shell .tablewrap .beta-status-bar {font-size:11px;padding-inline:5px}
-#beta-shell .tablewrap .sched {font-size:12px;gap:4px}
+#beta-shell .tablewrap thead th {font-size:10px;height:34px;padding-block:7px;letter-spacing:.15px}
+#beta-shell .tablewrap tbody td {font-size:12px;height:35px;padding-block:3px}
+#beta-shell .tablewrap :is(.driver,.route-cell strong,td[data-field=peso] strong,td[data-field=produto] strong) {font-size:12px;font-weight:500}
+#beta-shell .tablewrap .beta-comment-plate {font-size:12px;letter-spacing:.4px}
+#beta-shell .tablewrap .pill[class*="type-"] {font-size:10px;box-sizing:border-box;width:96px;max-width:100%;padding-inline:3px}
+#beta-shell .beta-status-gauge > span,#beta-shell .tablewrap .beta-status-bar {font-size:10px;padding-inline:7px}
+#beta-shell .tablewrap .sched {font-size:11px;gap:4px}
 #beta-shell .tablewrap .work-cell {padding-inline:4px;text-overflow:clip;white-space:nowrap;overflow:hidden}
-#beta-shell .tablewrap .work-start-btn {box-sizing:border-box;width:100%!important;max-width:128px;min-width:0;font-size:10px!important;height:26px!important;gap:4px!important;padding:3px 5px;white-space:nowrap;border-radius:5px!important;font-weight:650}
+#beta-shell .tablewrap .work-start-btn {box-sizing:border-box;width:100%!important;max-width:120px;min-width:0;font-size:9px!important;height:26px!important;gap:4px!important;padding:3px 5px;white-space:nowrap;border-radius:5px!important;font-weight:650}
 #beta-shell .tablewrap .work-session-card {width:100%!important;max-width:128px;min-width:0;box-sizing:border-box}
 #beta-shell .tablewrap .work-avatar-stack {box-sizing:border-box;min-width:0!important;width:100%;max-width:134px!important;padding-inline:4px!important}
 #beta-shell .tablewrap .master-actions {padding-inline:4px;text-overflow:clip;overflow:visible}
@@ -219,4 +219,13 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .tablewrap :is(.row-action-wrap > button,.row-action-menu summary,.row-action-popover button):focus-visible {outline:2px solid #2479bd;outline-offset:2px}
 @media(min-width:1251px){
   .workspace-beta.travel-drawer-open #beta-shell .workspace {padding-inline:14px}
+}
+
+/* Keep the added product column compact while preserving the original data value. */
+#beta-shell .tablewrap :is(th,td)[data-field=produto] {text-align:center;white-space:nowrap}
+#beta-shell .tablewrap :is(th,td)[data-field=tipo] {padding-inline:4px}
+#beta-shell .tablewrap :is(th,td)[data-field=agendamento] {padding-inline:5px}
+@media(min-width:1251px){
+  .workspace-beta.travel-drawer-open #beta-shell .tablewrap :is(th,td) {padding-inline:5px}
+  .workspace-beta.travel-drawer-open #beta-shell .tablewrap :is([data-field=tipo],.work-cell,.master-actions) {padding-inline:4px}
 }
