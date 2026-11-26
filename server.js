@@ -7,13 +7,17 @@ const fs = require('fs/promises');
 const zlib = require('zlib');
 const ExcelJS = require('exceljs');
 const betaReadOnly = process.env.FROTASYS_INTERFACE_BETA === 'readonly';
-const betaAccess = betaReadOnly && require('./beta/access');
-const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) : require('./supabaseClient');
+const betaEditable = process.env.FROTASYS_INTERFACE_BETA === 'editable';
+const betaWorkspace = betaReadOnly || betaEditable;
+const betaAccess = betaWorkspace && require('./beta/access');
+const betaMode = betaEditable && require('./beta/mode');
+const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
+  betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server(betaReadOnly ? { noServer: true } : { server });
+const wss = new WebSocket.Server(betaWorkspace ? { noServer: true } : { server });
 
 const TABLES = {
   viagens: 'viagens',
@@ -54,10 +58,10 @@ const DEFAULT_WORK_TYPES = [
   { name: 'CT-e', code: 'CTE', color: '#2563eb', icon: 'file', displayOrder: 2 },
   { name: 'Manifesto', code: 'MANIFESTO', color: '#7c3aed', icon: 'file-text', displayOrder: 3 },
   { name: 'Nota Fiscal', code: 'NOTA_FISCAL', color: '#16a34a', icon: 'receipt', displayOrder: 4 },
-  { name: 'Ped�gio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
-  { name: 'Confer�ncia', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
+  { name: 'Pedágio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
+  { name: 'Conferência', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
   { name: 'Cadastro', code: 'CADASTRO', color: '#4f46e5', icon: 'user', displayOrder: 7 },
-  { name: 'Pend�ncia', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
+  { name: 'Pendência', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
   { name: 'Agendamento', code: 'AGENDAMENTO', color: '#059669', icon: 'calendar', displayOrder: 9 },
   { name: 'Financeiro', code: 'FINANCEIRO', color: '#b7791f', icon: 'money', displayOrder: 10 },
   { name: 'Outro', code: 'OUTRO', color: '#64748b', icon: 'dot', displayOrder: 11 }
@@ -78,7 +82,7 @@ const UNIQUE_VIAGEM_FIELDS = [
   { key: 'dt', label: 'DT' },
   { key: 'nota', label: 'NOTA' },
   { key: 'cte', label: 'CT-E' },
-  { key: 'num_pedagio', label: 'Nº DO PEDÁGIO' }
+  { key: 'num_pedagio', label: 'NÂº DO PEDÃGIO' }
 ];
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
@@ -96,7 +100,7 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'carroceria', header: 'Carroceria', width: 16 },
   { key: 'pamcard', header: 'PANCARD', width: 14 },
   { key: 'status', header: 'STATUS', width: 14 },
-  { key: 'usuario', header: 'USUÁRIO', width: 14 },
+  { key: 'usuario', header: 'USUÃRIO', width: 14 },
   { key: 'agendamento', header: 'AGENDAMENTO', width: 14 },
   { key: 'descarga', header: 'DESCARGA', width: 18 },
   { key: 'telefone', header: 'TELEFONE', width: 18 },
@@ -107,8 +111,8 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'dt', header: 'DT', width: 12 },
   { key: 'cte', header: 'CT-E', width: 12 },
   { key: 'nota', header: 'NOTA', width: 12 },
-  { key: 'num_pedagio', header: 'NUMERO PEDÁGIO', width: 16 },
-  { key: 'vlr_pedagio', header: 'VALOR PEDÁGIO', width: 16 },
+  { key: 'num_pedagio', header: 'NUMERO PEDÃGIO', width: 16 },
+  { key: 'vlr_pedagio', header: 'VALOR PEDÃGIO', width: 16 },
   { key: 'frete', header: 'EVENTO', width: 32 },
   { key: 'horas', header: 'HORAS', width: 10 }
 ];
@@ -146,7 +150,7 @@ const VIAGEM_FIELD_LABELS = {
   data: 'DATA',
   secao: 'SECAO',
   conclusaoContrato: 'CONCLUSAO CONTRATO',
-  marcadoAmarelo: 'MARCAÇÃO AMARELA'
+  marcadoAmarelo: 'MARCAÃ‡ÃƒO AMARELA'
 };
 
 const COMPRESSIBLE_TYPES = /^(text\/|application\/json|application\/javascript|application\/xml|image\/svg\+xml)/i;
@@ -241,15 +245,15 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
   };
 }
 
-if (betaReadOnly) {
+if (betaWorkspace) {
   server.on('upgrade', (_req, socket) => socket.destroy());
   app.use((req, res, next) => {
-    if (!betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
+    if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();
   });
   app.get(['/', '/index.html'], async (_req, res) => {
     const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
-    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source));
+    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable }));
   });
 }
 app.use(cors());
@@ -504,14 +508,14 @@ function slug(value) {
 }
 
 async function ensureDefaultOperacoes() {
-  if (betaReadOnly) return;
+  if (betaWorkspace) return;
   const total = await countDocs(TABLES.operacoes);
   if (total > 0) return;
   await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
 async function ensureDefaultConfigOptions() {
-  if (betaReadOnly) return;
+  if (betaWorkspace) return;
   const existing = await selectDocs(TABLES.configOptions);
 
   const docs = [];
@@ -956,7 +960,7 @@ async function workTypeDocs({ includeDeleted = false } = {}) {
 }
 
 async function ensureDefaultWorkTypes() {
-  if (betaReadOnly) return;
+  if (betaWorkspace) return;
   const existing = await workTypeDocs({ includeDeleted: true });
   if (existing.length) return existing.filter(doc => !doc.deletedAt);
   const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
@@ -1193,10 +1197,10 @@ function maxViagemDate() {
 function viagemDateValidationError(value) {
   const data = String(value || '').trim();
   if (!data) return '';
-  if (!isIsoDate(data)) return 'Informe uma data válida para a viagem.';
+  if (!isIsoDate(data)) return 'Informe uma data vÃ¡lida para a viagem.';
   const maxDate = maxViagemDate();
   if (data > maxDate) {
-    return `Não é permitido lançar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data máxima: ${formatDateBR(maxDate)}.`;
+    return `NÃ£o Ã© permitido lanÃ§ar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data mÃ¡xima: ${formatDateBR(maxDate)}.`;
   }
   return '';
 }
@@ -1431,7 +1435,7 @@ function publicProfile(profile = {}) {
 }
 
 function profileDisplayName(profile = {}) {
-  return String(profile.displayName || profile.nome || profile.email || 'Usuário').trim();
+  return String(profile.displayName || profile.nome || profile.email || 'UsuÃ¡rio').trim();
 }
 
 function normalizeAvatarUrl(value = '') {
@@ -1531,15 +1535,16 @@ function requireAuth(req, res, next) {
   Promise.resolve().then(async () => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token) return res.status(401).json({ error: 'Login necessário.' });
+    if (!token) return res.status(401).json({ error: 'Login necessÃ¡rio.' });
 
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
+    if (error || !data?.user) return res.status(401).json({ error: 'SessÃ£o invÃ¡lida.' });
 
-    if (betaReadOnly && data.user.id !== process.env.BETA_USER_ID) return res.status(403).json({ error: 'Acesso restrito a beta.' });
+    if (betaWorkspace && data.user.id !== process.env.BETA_USER_ID) return res.status(403).json({ error: 'Acesso restrito a beta.' });
     const profile = await profileForUser(data.user.id);
-    if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
+    if (!profile || !profile.ativo) return res.status(403).json({ error: 'UsuÃ¡rio sem acesso ativo.' });
 
+    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role)) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
     req.authUser = data.user;
     req.userProfile = profile;
     next();
@@ -1549,7 +1554,7 @@ function requireAuth(req, res, next) {
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.userProfile?.role)) {
-      return res.status(403).json({ error: 'Permissão insuficiente.' });
+      return res.status(403).json({ error: 'PermissÃ£o insuficiente.' });
     }
     next();
   };
@@ -1642,7 +1647,7 @@ app.get('/api/app-state', async (req, res) => {
   }
 });
 
-// ─── LEMBRETES API ────────────────────────────────────────────────────────────
+// â”€â”€â”€ LEMBRETES API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/lembretes', async (req, res) => {
   try {
@@ -1699,7 +1704,7 @@ app.post('/api/work-types', requireAdmin, async (req, res) => {
 app.put('/api/work-types/:id', requireAdmin, async (req, res) => {
   try {
     const current = await findOneById(TABLES.configOptions, req.params.id);
-    if (!current || current.field !== WORK_TYPE_FIELD) return res.status(404).json({ error: 'Tipo de trabalho não encontrado.' });
+    if (!current || current.field !== WORK_TYPE_FIELD) return res.status(404).json({ error: 'Tipo de trabalho nÃ£o encontrado.' });
     const patch = normalizeWorkType(req.body || {}, current);
     const updated = await updateDoc(TABLES.configOptions, req.params.id, patch);
     const workTypes = await workTypesWithUsage();
@@ -1713,7 +1718,7 @@ app.put('/api/work-types/:id', requireAdmin, async (req, res) => {
 app.delete('/api/work-types/:id', requireAdmin, async (req, res) => {
   try {
     const current = await findOneById(TABLES.configOptions, req.params.id);
-    if (!current || current.field !== WORK_TYPE_FIELD) return res.status(404).json({ error: 'Tipo de trabalho não encontrado.' });
+    if (!current || current.field !== WORK_TYPE_FIELD) return res.status(404).json({ error: 'Tipo de trabalho nÃ£o encontrado.' });
     await updateDoc(TABLES.configOptions, req.params.id, { deletedAt: new Date().toISOString(), isActive: false });
     const workTypes = await workTypesWithUsage();
     broadcast({ type: 'work_types_atualizados', payload: workTypes });
@@ -1744,7 +1749,7 @@ app.get('/api/viagens/:id/work-history', async (req, res) => {
 app.post('/api/viagens/:id/work-sessions', requireViagemEditor, async (req, res) => {
   try {
     const viagem = await findOneById(TABLES.viagens, req.params.id);
-    if (!viagem) return res.status(404).json({ error: 'Viagem não encontrada.' });
+    if (!viagem) return res.status(404).json({ error: 'Viagem nÃ£o encontrada.' });
     const workType = await findOneById(TABLES.configOptions, req.body?.workTypeId);
     if (!workType || workType.field !== WORK_TYPE_FIELD || workType.deletedAt || workType.isActive === false) {
       return res.status(400).json({ error: 'Selecione um tipo de trabalho ativo.' });
@@ -1766,9 +1771,9 @@ app.post('/api/viagens/:id/work-sessions', requireViagemEditor, async (req, res)
 app.put('/api/work-sessions/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.configOptions, req.params.id);
-    if (!current || current.field !== WORK_SESSION_FIELD) return res.status(404).json({ error: 'Trabalho não encontrado.' });
+    if (!current || current.field !== WORK_SESSION_FIELD) return res.status(404).json({ error: 'Trabalho nÃ£o encontrado.' });
     if (!canManageWorkSession(current, req.userProfile, req.authUser)) {
-      return res.status(403).json({ error: 'Você não pode alterar o trabalho de outro usuário.' });
+      return res.status(403).json({ error: 'VocÃª nÃ£o pode alterar o trabalho de outro usuÃ¡rio.' });
     }
 
     const action = String(req.body?.action || '').trim();
@@ -1797,7 +1802,7 @@ app.put('/api/work-sessions/:id', requireViagemEditor, async (req, res) => {
       patch.resumedAt = now;
       eventType = 'changed_type';
     } else {
-      return res.status(400).json({ error: 'Ação inválida.' });
+      return res.status(400).json({ error: 'AÃ§Ã£o invÃ¡lida.' });
     }
 
     const updated = await updateDoc(TABLES.configOptions, req.params.id, patch);
@@ -1810,7 +1815,7 @@ app.put('/api/work-sessions/:id', requireViagemEditor, async (req, res) => {
   }
 });
 
-// ─── LISTA DE ESPERA API ─────────────────────────────────────────────────────
+// â”€â”€â”€ LISTA DE ESPERA API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/lista-espera', async (req, res) => {
   try {
@@ -1847,7 +1852,7 @@ app.post('/api/lista-espera', requireViagemEditor, async (req, res) => {
 app.put('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.configOptions, req.params.id);
-    if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
+    if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item nÃ£o encontrado.' });
 
     const item = normalizeWaitlistItem({ ...current, ...req.body });
     if (!item.placa && !item.nome) {
@@ -1870,7 +1875,7 @@ app.put('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
 app.delete('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.configOptions, req.params.id);
-    if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
+    if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item nÃ£o encontrado.' });
     await deleteDoc(TABLES.configOptions, req.params.id);
     broadcast({ type: 'lista_espera_atualizada', payload: await waitlistDocs() });
     res.json({ ok: true });
@@ -1882,7 +1887,7 @@ app.delete('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
 app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, res) => {
   try {
     const item = await findOneById(TABLES.configOptions, req.params.id);
-    if (!item || item.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
+    if (!item || item.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item nÃ£o encontrado.' });
 
     const viagemData = String(req.body?.data || '').trim() || localDateStr();
     const dateError = viagemDateValidationError(viagemData);
@@ -1894,7 +1899,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       .eq('id', req.params.id)
       .select(SUPABASE_DOC_SELECT);
     if (removeError) throw removeError;
-    if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
+    if (!removedRows?.length) return res.status(409).json({ error: 'Este item jÃ¡ foi gerado ou removido.' });
     invalidateCache();
 
     const viagem = await insertDoc(TABLES.viagens, {
@@ -1944,7 +1949,7 @@ app.post('/api/users', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
     }
     if (!['admin', 'operador', 'visualizador'].includes(role)) {
-      return res.status(400).json({ error: 'Perfil inválido.' });
+      return res.status(400).json({ error: 'Perfil invÃ¡lido.' });
     }
 
     const created = await supabase.auth.admin.createUser({
@@ -1971,9 +1976,9 @@ app.post('/api/users', requireAdmin, async (req, res) => {
   } catch (e) {
     const message = String(e.message || '');
     if (message.toLowerCase().includes('already')) {
-      return res.status(409).json({ error: 'Já existe um usuário com este e-mail.' });
+      return res.status(409).json({ error: 'JÃ¡ existe um usuÃ¡rio com este e-mail.' });
     }
-    res.status(500).json({ error: message || 'Não foi possível criar usuário.' });
+    res.status(500).json({ error: message || 'NÃ£o foi possÃ­vel criar usuÃ¡rio.' });
   }
 });
 
@@ -1982,7 +1987,7 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
     const patch = {};
     if (req.body.role !== undefined) {
       if (!['admin', 'operador', 'visualizador'].includes(req.body.role)) {
-        return res.status(400).json({ error: 'Perfil inválido.' });
+        return res.status(400).json({ error: 'Perfil invÃ¡lido.' });
       }
       patch.role = req.body.role;
     }
@@ -2007,7 +2012,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => console.log('Cliente desconectado'));
 });
 
-// ─── VIAGENS API ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ VIAGENS API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/viagens', async (req, res) => {
   try {
@@ -2042,12 +2047,12 @@ app.get('/api/viagens/search', async (req, res) => {
     const dataFim = String(req.query.dataFim || '').trim();
     if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento && !dataInicio && !dataFim) return res.json([]);
     if ((dataInicio && !isIsoDate(dataInicio)) || (dataFim && !isIsoDate(dataFim))) {
-      return res.status(400).json({ error: 'Informe datas válidas para a busca.' });
+      return res.status(400).json({ error: 'Informe datas vÃ¡lidas para a busca.' });
     }
     if (dataInicio && dataFim) {
-      if (dataInicio > dataFim) return res.status(400).json({ error: 'A data inicial não pode ser maior que a data final.' });
+      if (dataInicio > dataFim) return res.status(400).json({ error: 'A data inicial nÃ£o pode ser maior que a data final.' });
       if (datesBetween(dataInicio, dataFim).length > 366) {
-        return res.status(400).json({ error: 'Selecione um período de até 366 dias.' });
+        return res.status(400).json({ error: 'Selecione um perÃ­odo de atÃ© 366 dias.' });
       }
     }
 
@@ -2173,15 +2178,15 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
     const fim = String(req.query.fim || req.query.end || '').trim();
 
     if (!isIsoDate(inicio) || !isIsoDate(fim)) {
-      return res.status(400).json({ error: 'Informe data inicial e data final válidas.' });
+      return res.status(400).json({ error: 'Informe data inicial e data final vÃ¡lidas.' });
     }
     if (inicio > fim) {
-      return res.status(400).json({ error: 'A data inicial não pode ser maior que a data final.' });
+      return res.status(400).json({ error: 'A data inicial nÃ£o pode ser maior que a data final.' });
     }
 
     const dates = datesBetween(inicio, fim);
     if (dates.length > 366) {
-      return res.status(400).json({ error: 'Selecione um período de até 366 dias.' });
+      return res.status(400).json({ error: 'Selecione um perÃ­odo de atÃ© 366 dias.' });
     }
 
     const docs = await selectDocsByJson(TABLES.viagens, {}, {
@@ -2204,7 +2209,7 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
 app.get('/api/viagens/:id', async (req, res) => {
   try {
     const viagem = await findOneById(TABLES.viagens, req.params.id);
-    if (!viagem) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (!viagem) return res.status(404).json({ error: 'Viagem nÃ£o encontrada' });
     res.json(viagem);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2222,6 +2227,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const payload = { ...req.body };
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     normalizeViagemDocumentNumbers(payload);
+    if (betaEditable) payload.secao = betaMode.persistedSection(payload);
     applyFrotaContratoRule(payload);
     const previousByPlaca = await latestViagemByPlaca(payload.placa);
     const nomeAlteradoDoHistorico = previousByPlaca &&
@@ -2259,7 +2265,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     const duplicate = await findDuplicateViagemFields(payload);
     if (duplicate) {
       return res.status(409).json({
-        error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
+        error: `${duplicate.label} jÃ¡ cadastrado: ${duplicate.value}`,
         field: duplicate.key
       });
     }
@@ -2276,9 +2282,10 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
 app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
-    if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (!current) return res.status(404).json({ error: 'Viagem nÃ£o encontrada' });
 
     const patch = { ...req.body };
+    if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (Object.hasOwn(patch, 'pedidoEnviadoDt') &&
         (Object.keys(patch).length !== 1 || !current.dt || patch.pedidoEnviadoDt !== String(current.dt).trim())) {
@@ -2317,7 +2324,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
           ? invalidFields.filter(field => !['conclusaoContrato', 'status', 'usuario'].includes(field))
           : invalidFields;
         if (blockedFields.length) {
-          return res.status(403).json({ error: 'Viagem concluída. Somente DESCARGA e marcação amarela podem ser editadas.' });
+          return res.status(403).json({ error: 'Viagem concluÃ­da. Somente DESCARGA e marcaÃ§Ã£o amarela podem ser editadas.' });
         }
         const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
         if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
@@ -2339,6 +2346,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
 
     const nextData = applyFrotaContratoRule({ ...current, ...patch });
+    if (betaEditable) {
+      patch.secao = betaMode.persistedSection(nextData);
+      nextData.secao = patch.secao;
+    }
     if (patch.programado === true && !current.programado &&
         calculateTripStatus({...nextData, programado:false}) === 'ENVIAR PEDIDO') {
       return res.status(409).json({ error: 'Envie o pedido pelo WhatsApp antes de programar.' });
@@ -2362,7 +2373,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     const duplicate = eventoOnly ? null : await findDuplicateViagemFields(nextData, req.params.id);
     if (duplicate) {
       return res.status(409).json({
-        error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
+        error: `${duplicate.label} jÃ¡ cadastrado: ${duplicate.value}`,
         field: duplicate.key
       });
     }
@@ -2382,12 +2393,12 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   }
 });
 
-app.delete('/api/viagens/:id', async (req, res) => {
+app.delete('/api/viagens/:id', (req, res, next) => betaEditable ? requireViagemEditor(req, res, next) : next(), async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
-    if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
+    if (!current) return res.status(404).json({ error: 'Viagem nÃ£o encontrada' });
     if (isViagemBloqueada(current) && req.userProfile?.role !== 'admin') {
-      return res.status(403).json({ error: 'Viagem concluída. Somente administrador pode excluir.' });
+      return res.status(403).json({ error: 'Viagem concluÃ­da. Somente administrador pode excluir.' });
     }
     await deleteDoc(TABLES.viagens, req.params.id);
     broadcast({ type: 'viagem_removida', payload: { _id: req.params.id, id: req.params.id } });
@@ -2397,7 +2408,7 @@ app.delete('/api/viagens/:id', async (req, res) => {
   }
 });
 
-// ─── METAS API ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ METAS API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/metas', async (req, res) => {
   try {
@@ -2435,7 +2446,7 @@ app.post('/api/metas', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── OPERACOES API ────────────────────────────────────────────────────────────
+// â”€â”€â”€ OPERACOES API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/operacoes', async (req, res) => {
   try {
@@ -2483,7 +2494,7 @@ app.put('/api/operacoes/:id', requireAdmin, async (req, res) => {
     if (req.body.resumoDestinos !== undefined) patch.resumoDestinos = Array.isArray(req.body.resumoDestinos) ? req.body.resumoDestinos : [];
     if (req.body.ordem !== undefined) patch.ordem = Number(req.body.ordem) || 0;
     const updated = await updateDoc(TABLES.operacoes, req.params.id, patch);
-    if (!updated) return res.status(404).json({ error: 'Operação não encontrada' });
+    if (!updated) return res.status(404).json({ error: 'OperaÃ§Ã£o nÃ£o encontrada' });
     broadcast({ type: 'operacao_atualizada', payload: updated });
     res.json(updated);
   } catch (e) {
@@ -2494,7 +2505,7 @@ app.put('/api/operacoes/:id', requireAdmin, async (req, res) => {
 app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
   try {
     const current = await findOneById(TABLES.operacoes, req.params.id);
-    if (!current) return res.status(404).json({ error: 'Operação não encontrada' });
+    if (!current) return res.status(404).json({ error: 'OperaÃ§Ã£o nÃ£o encontrada' });
 
     await deleteDoc(TABLES.operacoes, req.params.id);
 
@@ -2517,7 +2528,7 @@ app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── CONSULTA FRETE API ──────────────────────────────────────────────────────
+// â”€â”€â”€ CONSULTA FRETE API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/frete-consultas', async (req, res) => {
   try {
@@ -2538,7 +2549,7 @@ app.put('/api/frete-consultas', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── CONFIGURAÇÕES API ───────────────────────────────────────────────────────
+// â”€â”€â”€ CONFIGURAÃ‡Ã•ES API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/config-options', async (req, res) => {
   try {
@@ -2559,10 +2570,10 @@ app.get('/api/config-colors', async (req, res) => {
 app.put('/api/config-colors/:field/:value', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
-    if (!CONFIG_COLOR_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo sem cor configurável' });
+    if (!CONFIG_COLOR_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo sem cor configurÃ¡vel' });
 
     const color = String(req.body.color || '').trim();
-    if (!isHexColor(color)) return res.status(400).json({ error: 'Cor inválida' });
+    if (!isHexColor(color)) return res.status(400).json({ error: 'Cor invÃ¡lida' });
 
     const value = String(decodeURIComponent(req.params.value) || '').trim().toUpperCase();
     const normalized = normalizeUniqueValue(value);
@@ -2587,7 +2598,7 @@ app.put('/api/config-colors/:field/:value', requireAdmin, async (req, res) => {
 app.post('/api/config-options/:field', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
-    if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
+    if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo invÃ¡lido' });
 
     const value = String(req.body.value || '').trim().toUpperCase();
     if (!value) return res.status(400).json({ error: 'Informe um valor' });
@@ -2628,7 +2639,7 @@ app.post('/api/config-options/:field', requireAdmin, async (req, res) => {
 app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
-    if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
+    if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo invÃ¡lido' });
 
     const requested = Array.isArray(req.body.values) ? req.body.values : [];
     const docs = await selectDocsByJson(TABLES.configOptions, { field });
@@ -2672,7 +2683,7 @@ app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => 
 app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
-    if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
+    if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo invÃ¡lido' });
 
     const normalized = normalizeUniqueValue(decodeURIComponent(req.params.value));
     await deleteWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized);
@@ -2691,7 +2702,7 @@ app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) =
   }
 });
 
-// ─── DATAS DISPONÍVEIS ─────────────────────────────────────────────────────────
+// â”€â”€â”€ DATAS DISPONÃVEIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/datas', async (req, res) => {
   try {
@@ -2711,7 +2722,7 @@ server.listen(PORT, '0.0.0.0', () => {
   Object.values(nets).flat().filter(n => n.family === 'IPv4' && !n.internal).forEach(n => {
     console.log(`   Rede:    http://${n.address}:${PORT}`);
   });
-  console.log(`\nOutros computadores na rede acessam pelo endereço "Rede" acima\n`);
+  console.log(`\nOutros computadores na rede acessam pelo endereÃ§o "Rede" acima\n`);
 });
 
 

@@ -369,7 +369,7 @@ async function startApp() {
   state.configColors = mergeConfigColors({});
   if (document.body?.classList?.contains?.('workspace-beta')) {
     const badge = document.getElementById('ws-status');
-    badge.textContent = 'Beta | Somente leitura';
+    badge.textContent = isBetaReadOnly() ? 'Beta | Somente leitura' : 'Beta | Banco compartilhado';
     badge.title = 'Atualize a pagina para consultar dados recentes';
   } else {
     initWS();
@@ -844,7 +844,7 @@ function isAdmin() {
 }
 
 function canEditViagens() {
-  if (document.body?.classList?.contains?.('workspace-beta')) return false;
+  if (isBetaReadOnly()) return false;
   return ['admin', 'operador'].includes(state.userProfile?.role);
 }
 
@@ -853,19 +853,19 @@ function isViagemConcluida(viagem) {
 }
 
 function canEditViagem(viagem) {
-  if (document.body?.classList?.contains?.('workspace-beta')) return false;
+  if (isBetaReadOnly()) return false;
   return isAdmin() || (canEditViagens() && !isViagemConcluida(viagem));
 }
 
 function canEditViagemField(viagem, field) {
-  if (!canEditViagens()) return false;
+  if (!canEditViagens() || (isBetaTripWorkspace() && field === 'secao')) return false;
   if (isAdmin()) return true;
   if (!isViagemConcluida(viagem)) return true;
   return LOCKED_EDITABLE_FIELDS.includes(field);
 }
 
 function canDeleteViagem(viagem) {
-  if (document.body?.classList?.contains?.('workspace-beta')) return false;
+  if (isBetaReadOnly()) return false;
   return isAdmin() || !isViagemConcluida(viagem);
 }
 
@@ -877,6 +877,23 @@ function applyPermissions() {
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-settings').classList.remove('is-hidden');
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
+  if (isBetaTripWorkspace()) {
+    const canEdit = canEditViagens();
+    const button = document.getElementById('newTrip');
+    if (button) {
+      button.disabled = !canEdit;
+      button.title = canEdit ? 'Cadastrar viagem no banco compartilhado' : 'Beta somente leitura';
+    }
+    const label = canEdit ? 'Edicao ativa' : 'Somente leitura';
+    const userMode = document.querySelector('#beta-shell .connected')?.parentElement;
+    if (userMode) {
+      const indicator = userMode.querySelector('.connected');
+      userMode.replaceChildren(indicator, document.createTextNode(' ' + label));
+    }
+    const footer = document.querySelector('#beta-shell .operations-panel > .footer > span:last-child');
+    if (footer) footer.textContent = 'Beta · ' + label + (canEdit ? ' · Banco compartilhado' : '');
+    document.getElementById('f-secao').disabled = true;
+  }
 }
 
 function loggedUserDisplayName() {
@@ -2972,7 +2989,7 @@ function initDragAndDrop() {
       zone.classList.remove('drag-over');
       const id = e.dataTransfer.getData('text/plain');
       const secao = zone.dataset.dropSecao;
-      if (!id || !secao) return;
+      if (!id || !secao || isBetaTripWorkspace()) return;
 
       const viagem = state.viagens.find(v => v._id === id);
       if (!viagem || viagem.secao === secao) return;
@@ -3353,8 +3370,8 @@ function rowActionMenu(viagem) {
     isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
     hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/enviarpedido.png?v=20260717" alt=""></button>` : '',
     rowConversationAction(viagem),
-    viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
-    viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
+    !isBetaTripWorkspace() && viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
+    !isBetaTripWorkspace() && viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
     `<button type="button" onclick="copyViagem(event,'${id}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>`,
     canDeleteViagem(viagem) ? `<button type="button" class="danger" onclick="deleteViagem('${id}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''
   ].filter(Boolean).join('');
@@ -3518,7 +3535,7 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
   if (viagemStatusDisplay(viagem) !== 'ENVIAR PEDIDO' || !viagem.dt) return;
   const dt = String(viagem.dt).trim();
   closeRowActionMenus();
-  if (document.body.classList.contains('workspace-beta')) {
+  if (isBetaReadOnly()) {
     if (['admin', 'operador'].includes(state.userProfile?.role)) {
       betaPedidosEnviados.set(id, dt);
       renderAll();
@@ -4389,6 +4406,10 @@ function isBetaTripWorkspace() {
   return document.body?.classList.contains('workspace-beta') === true;
 }
 
+function isBetaReadOnly() {
+  return isBetaTripWorkspace() && document.body.dataset.betaMode !== 'editable';
+}
+
 function operationalTripSection(viagem) {
   return isBetaTripWorkspace() ? window.FrotasysBetaTripSections.classify(viagem) : viagem.secao;
 }
@@ -4444,7 +4465,7 @@ function renderCell(v, field) {
   if (field.key === 'telefone') display = firstPhone(raw);
 
   if (field.key === 'placa') {
-    const canPromote = v.secao === 'agenciando' && canEditViagem(v);
+    const canPromote = !isBetaTripWorkspace() && v.secao === 'agenciando' && canEditViagem(v);
     return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell">
       <span class="placa-content">
         <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'J\u00e1 est\u00e1 faturado'}">&#8593;</button>
@@ -6496,6 +6517,7 @@ async function updateInlineSelect(select) {
 
 async function promoteToFaturado(event, id) {
   event.stopPropagation();
+  if (isBetaTripWorkspace()) return;
   if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
@@ -6505,6 +6527,7 @@ async function promoteToFaturado(event, id) {
 
 async function demoteToAgenciado(event, id) {
   event.stopPropagation();
+  if (isBetaTripWorkspace()) return;
   if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
@@ -7100,6 +7123,7 @@ async function saveViagem() {
     obs: v('f-obs'),
     data: state.currentDate
   };
+  if (isBetaTripWorkspace()) delete data.secao;
   const eventoInput = document.getElementById('f-frete');
   if (eventoInput.value !== eventoInput.defaultValue) data.frete = eventoInput.value.trim();
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
