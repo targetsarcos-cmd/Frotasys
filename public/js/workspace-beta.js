@@ -288,12 +288,12 @@
     byId('coverage').textContent = pct(totals.total);
     byId('progressActual').style.width = actual+'%';
     byId('progressBooked').style.width = booked+'%';
-    byId('summaryHead').innerHTML = '<tr><th>Volume (kg)</th>'+[...dests.keys()].map(d=>'<th>'+escapeHtml(d)+'</th>').join('')+'<th>Total</th></tr>';
+    byId('summaryHead').innerHTML = '<tr><th scope="col" aria-label="Indicador"></th>'+[...dests.keys()].map(d=>'<th>'+escapeHtml(d)+'</th>').join('')+'<th>Total</th></tr>';
     matrixBody.innerHTML = series.map(([key,label]) => {
       const details = key === 'meta' || key === 'total' ? productBreakdown(cards,dests.keys(),key) : '';
       const heading = details ? '<button type="button" class="product-toggle" data-product-group="'+key+'" aria-expanded="'+openProductGroups.has(key)+'" aria-label="'+label+' por produto">'+label+'</button>' : label;
       const values = [...dests.values(),totals].map(d=>'<td>'+formatKg(d[key])+'</td>').join('');
-      return '<tr class="'+(key==='total'?'total-row':'')+'"><td>'+heading+'</td>'+values+'</tr>'+details;
+      return '<tr class="'+(key==='total'?'total-row':key==='meta'?'meta-row':'')+'"><td>'+heading+'</td>'+values+'</tr>'+details;
     }).join('');
   }
   for (const [sec,head] of sections) {

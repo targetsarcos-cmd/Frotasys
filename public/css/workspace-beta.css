@@ -394,3 +394,17 @@ body.workspace-beta { margin:0; background:#edf2f6; }
   .workspace-beta #travel-drawer .drawer-tabs button:nth-child(n+4) {grid-column:span 1}
   .workspace-beta #travel-drawer .beta-invoice-row {grid-template-columns:minmax(0,1fr) minmax(0,95px)}
 }
+
+/* Operational summary: highlight the two expandable aggregate rows in navigation navy. */
+#beta-shell .report-panel .matrix tbody tr:is(.meta-row,.total-row) > td {
+  background:var(--beta-navy);color:#fff;border-color:#30485e;
+}
+#beta-shell .report-panel .matrix tbody tr:is(.meta-row,.total-row) .product-toggle {
+  color:#fff;
+}
+#beta-shell .report-panel .matrix tbody tr:is(.meta-row,.total-row) .product-toggle::before {
+  color:#fff;
+}
+#beta-shell .report-panel .matrix tbody tr:is(.meta-row,.total-row) .product-toggle:focus-visible {
+  outline:2px solid #9bd6ff;outline-offset:2px;
+}
