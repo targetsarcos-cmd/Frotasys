@@ -5143,10 +5143,11 @@ async function moveConfigOption(field, index, direction) {
 
 const TRIP_FILTER_FIELDS = {
   origem: 'Origem', destino: 'Destino', placa: 'Placa', nome: 'Motorista',
-  status: 'Status', frete: 'Evento', evento: 'Presença de evento'
+  tipo: 'Tipo', status: 'Status', frete: 'Evento', evento: 'Presença de evento'
 };
 
 function tripFilterValue(viagem, field) {
+  if (field === 'tipo') return normalizeTipo(viagem.tipo);
   if (field === 'status') return viagemStatusDisplay(viagem);
   if (field === 'evento') return String(viagem.frete ?? '').trim() ? 'Com evento' : 'Sem evento';
   if (field === 'frete') return String(formatTableCellValue(field, viagem.frete) ?? '').trim();

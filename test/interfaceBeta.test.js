@@ -220,3 +220,9 @@ test('agendamento verde tem estilo na tabela beta e palete usa uma unica gravaca
   assert.match(css,/td\[data-field="agendamento"\]\.has-agendamento/);
   assert.match(js,/agendamento:isPalete\?'':'PALETE',agendamentoVerde:!isPalete/);
 });
+
+test('filtro tipo usa modalidade normalizada e combina com os demais filtros',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  assert.match(js,/tipo: 'Tipo', status: 'Status'/);
+  assert.match(js,/if \(field === 'tipo'\) return normalizeTipo\(viagem.tipo\)/);
+});
