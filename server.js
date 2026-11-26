@@ -751,6 +751,14 @@ function freteNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeRateRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(row => ({
+        eixos: Number(row.eixos || row.eixo || 0) || 0,
+        pj: freteNumber(row.pj ?? row.valorPj ?? row.valor_pj),
+        pf: freteNumber(row.pf ?? row.valorPf ?? row.valor_pf)
+      })).filter(row => row.eixos);
+}
+
 function normalizeFreteConsultas(saved = {}) {
   const source = Array.isArray(saved?.routes) ? saved.routes : [];
   const routes = source.map(route => {
@@ -760,13 +768,10 @@ function normalizeFreteConsultas(saved = {}) {
       rota: routeName,
       origem: normalizeUniqueValue(route.origem || parts.origem),
       destino: normalizeUniqueValue(route.destino || parts.destino),
-      rows: (Array.isArray(route.rows) ? route.rows : []).map(row => ({
-        eixos: Number(row.eixos || row.eixo || 0) || 0,
-        pj: freteNumber(row.pj ?? row.valorPj ?? row.valor_pj),
-        pf: freteNumber(row.pf ?? row.valorPf ?? row.valor_pf)
-      })).filter(row => row.eixos)
+      rows: normalizeRateRows(route.rows),
+      agregado: normalizeRateRows(route.agregado)
     };
-  }).filter(route => route.rota && route.rows.length);
+  }).filter(route => route.rota && (route.rows.length || route.agregado.length));
 
   return {
     updatedAt: String(saved?.updatedAt || '').trim(),
@@ -824,7 +829,11 @@ async function freteConsultasConfig() {
   return cachedValue('frete-consultas', async () => {
     const doc = await findOneByJson(TABLES.configOptions, { field: FRETE_CONSULT_FIELD });
     const saved = normalizeFreteConsultas(doc?.tables || doc?.freteConsultas || {});
-    if (saved.routes.length) return saved;
+    for (const route of saved.routes) {
+      if (doc?.agregadoPorRota && Object.hasOwn(doc.agregadoPorRota,route.rota))
+        route.agregado = normalizeRateRows(doc.agregadoPorRota[route.rota]);
+    }
+    if (saved.routes.length) return { ...saved, revision:doc.updatedAt };
     try {
       const workbookData = await readFreteWorkbook();
       if (workbookData.routes.length) return workbookData;
@@ -838,15 +847,21 @@ async function freteConsultasConfig() {
 async function saveFreteConsultasConfig(tables) {
   const normalized = normalizeFreteConsultas(tables);
   const existing = await findOneByJson(TABLES.configOptions, { field: FRETE_CONSULT_FIELD });
+  if (Object.hasOwn(tables,'revision') && (tables.revision || '') !== (existing?.updatedAt || '')) return null;
+  for (const route of normalized.routes) {
+    const input = tables.routes?.find(item => normalizeFreteRouteName(item.rota || item.route) === route.rota);
+    if (input && !Object.hasOwn(input,'agregado')) route.agregado = normalizeRateRows(existing?.agregadoPorRota?.[route.rota]);
+  }
   const payload = {
     field: FRETE_CONSULT_FIELD,
     value: 'Consulta frete',
     normalized: FRETE_CONSULT_FIELD,
     tables: normalized,
+    agregadoPorRota: Object.fromEntries(normalized.routes.map(route => [route.rota,route.agregado])),
     ordem: existing?.ordem || 1
   };
   let result;
-  if (existing) result = await updateDoc(TABLES.configOptions, existing._id, payload);
+  if (existing) result = await updateDoc(TABLES.configOptions, existing._id, payload, existing);
   else result = await insertDoc(TABLES.configOptions, payload);
   invalidateCache('frete-consultas');
   return result;
@@ -2622,7 +2637,8 @@ app.get('/api/frete-consultas', async (req, res) => {
 app.put('/api/frete-consultas', requireAdmin, async (req, res) => {
   try {
     const saved = await saveFreteConsultasConfig(req.body?.tables || req.body || {});
-    const payload = saved.tables || await freteConsultasConfig();
+    if (!saved) return res.status(409).json({error:'A tabela de fretes mudou. Confira os valores atualizados e tente novamente.'});
+    const payload = { ...saved.tables, revision:saved.updatedAt };
     broadcast({ type: 'frete_consultas_atualizada', payload });
     res.json(payload);
   } catch (e) {

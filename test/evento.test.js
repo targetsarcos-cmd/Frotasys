@@ -92,6 +92,24 @@ const item = collection + '/:id';
 const trip = { produto: 'CPV', data: '2026-01-05', secao: 'arcos', origem: 'ARCOS', pamcard: 'OK' };
 const eventText = '<em>Aguardar & conferir</em>';
 
+test('as tarifas de Agregado e Terceiros são independentes por rota e eixo', () => {
+  const { server } = setup();
+  const { ui, state } = browser();
+  ui.document.body = {classList:{contains:()=>true},dataset:{betaMode:'readonly'}};
+  const route = {rota:'ARCOS X OSASCO',rows:[{eixos:5,pj:3744,pf:3848}]};
+  const legacy = server.normalizeFreteConsultas({routes:[route]});
+  assert.equal(legacy.routes[0].agregado.length,0);
+  state.freteConsultas = ui.mergeFreteConsultas(legacy);
+  const trip = {origem:'ARCOS',destino:'OSASCO',eixos:5,tipo:'AGREGADO'};
+  assert.equal(ui.freteValuesForViagem(trip).pj,'-');
+  route.agregado = [{eixos:6,pj:2999,pf:3050}];
+  const normalized = server.normalizeFreteConsultas({routes:[route]});
+  state.freteConsultas = ui.mergeFreteConsultas(normalized);
+  assert.equal(ui.freteValuesForViagem(trip).pf,'-');
+  assert.match(ui.freteValuesForViagem({...trip,eixos:6}).pj,/2\.999,00/);
+  assert.match(ui.freteValuesForViagem({...trip,tipo:'CARRETEIRO'}).pf,/3\.848,00/);
+});
+
 test('pedido pelo WhatsApp avança o status da DT e mantém a viagem em Agenciado', async () => {
   const { request } = setup();
   const created = await request('post', collection, { ...trip, secao:'agenciando', dt:'123' });

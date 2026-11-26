@@ -474,7 +474,7 @@ function handleWsMessage(msg) {
     renderAllUnlessInlineEditing();
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
-    if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
+    if (document.getElementById('beta-fretes')?.hidden === false || !document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
   }
 }
 
@@ -508,7 +508,10 @@ async function loadAll() {
   if ('operationMessages' in data) state.operationMessages = normalizeOperationMessages(data.operationMessages);
   if ('workTypes' in data) state.workTypes = normalizeWorkTypes(data.workTypes);
   if ('workSessions' in data) state.workSessions = normalizeWorkSessions(data.workSessions);
-  if ('freteConsultas' in data) state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
+  if ('freteConsultas' in data) {
+    state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
+    if (document.getElementById('beta-fretes')?.hidden === false) renderFreteConsultas();
+  }
   state.staticDataLoaded = true;
   clearReminderStatus();
   renderAll();
@@ -1253,6 +1256,10 @@ function clearAdvancedSearch({ focus = true } = {}) {
 }
 
 async function openFreteConsultModal() {
+  if (isBetaTripWorkspace()) {
+    if (location.hash !== '#fretes') location.hash = 'fretes';
+    return;
+  }
   const saved = await apiFetch('/api/frete-consultas');
   state.freteConsultas = saved ? mergeFreteConsultas(saved) : loadFreteConsultas();
   renderFreteConsultas();
@@ -2362,8 +2369,9 @@ function loadFreteConsultas() {
 
 function mergeFreteConsultas(saved = {}) {
   if (Array.isArray(saved?.routes)) {
-    const routes = saved.routes.map(normalizeFreteRoute).filter(route => route.rota && route.rows.length);
+    const routes = saved.routes.map(normalizeFreteRoute).filter(route => route.rota && (route.rows.length || route.agregado.length));
     return {
+      revision: String(saved.revision || ''),
       updatedAt: String(saved.updatedAt || ''),
       source: String(saved.source || ''),
       routes: routes.length ? routes : DEFAULT_FRETE_ROUTES.map(normalizeFreteRoute)
@@ -2386,12 +2394,16 @@ function mergeFreteConsultas(saved = {}) {
 }
 
 async function saveFreteConsultas() {
-  localStorage.setItem(FRETE_CONSULT_KEY, JSON.stringify(state.freteConsultas));
   const saved = await apiFetch('/api/frete-consultas', {
     method: 'PUT',
     body: JSON.stringify({ tables: state.freteConsultas })
   });
-  if (saved) state.freteConsultas = mergeFreteConsultas(saved);
+  if (!saved) {
+    await refreshFreteConsultas();
+    return;
+  }
+  state.freteConsultas = mergeFreteConsultas(saved);
+  localStorage.setItem(FRETE_CONSULT_KEY, JSON.stringify(state.freteConsultas));
 }
 
 function renderFreteConsultas() {
@@ -2424,7 +2436,7 @@ function renderFreteTools(routeFilter = '') {
       <input type="search" id="frete-route-filter" value="${escapeAttr(routeFilter)}" placeholder="Digite origem ou destino" oninput="updateFreteRouteBoard()">
     </label>
     <button type="button" onclick="toggleFreteAlphabeticSort()" class="${state.freteSort?.alphabetic ? 'is-active' : ''}">A-Z</button>
-    ${isAdmin() ? '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
+    ${isAdmin() && !isBetaReadOnly() ? '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
   </section>`;
 }
 
@@ -2443,6 +2455,7 @@ function renderFreteQueryPanel() {
       </div>
     </div>
     <div class="frete-query-form">
+      ${isBetaTripWorkspace() ? '<label><span>Categoria</span><select id="frete-query-group" onchange="updateFreteQueryGroup()"><option value="rows">Terceiros</option><option value="agregado">Agregado</option></select></label>' : ''}
       <label>
         <span>ORIGEM</span>
         <select id="frete-query-origem" onchange="updateFreteQueryDestinations()">
@@ -2466,6 +2479,7 @@ function renderFreteQueryPanel() {
 }
 
 function renderFreteRouteBoard(routes) {
+  if (isBetaTripWorkspace()) return renderBetaFreteBoard(routes);
   const canEditFrete = isAdmin();
   const routeRows = routes.map((route, index) => {
     const routeIndex = freteRoutes().indexOf(route);
@@ -2535,7 +2549,13 @@ function normalizeFreteRoute(route = {}) {
     rota,
     origem: normalizeOption(route.origem || parts.origem),
     destino: normalizeOption(route.destino || parts.destino),
-    rows: (Array.isArray(route.rows) ? route.rows : []).map(row => {
+    rows: normalizeRateRows(route.rows),
+    agregado: normalizeRateRows(route.agregado)
+  };
+}
+
+function normalizeRateRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(row => {
       const pj = parseFreteCurrency(row.pj ?? row.valorPj ?? row.valor_pj);
       const pf = parseFreteCurrency(row.pf ?? row.valorPf ?? row.valor_pf);
       return {
@@ -2543,8 +2563,7 @@ function normalizeFreteRoute(route = {}) {
         pj: Number.isFinite(pj) ? pj : null,
         pf: Number.isFinite(pf) ? pf : null
       };
-    }).filter(row => row.eixos).sort((a, b) => a.eixos - b.eixos)
-  };
+    }).filter(row => row.eixos).sort((a, b) => a.eixos - b.eixos);
 }
 
 function normalizeFreteRouteName(value = '') {
@@ -2606,14 +2625,14 @@ async function addFreteRoute() {
   renderFreteConsultas();
 }
 
-async function addFreteEixo(routeIndex) {
+async function addFreteEixo(routeIndex, group = 'rows') {
   if (!isAdmin()) return;
   const route = freteRoutes()[routeIndex];
   if (!route) return;
-  const existing = new Set((route.rows || []).map(row => Number(row.eixos)));
+  const existing = new Set((route[group] || []).map(row => Number(row.eixos)));
   let next = 5;
   while (existing.has(next)) next += 1;
-  route.rows = [...(route.rows || []), { eixos: next, pj: null, pf: null }]
+  route[group] = [...(route[group] || []), { eixos: next, pj: null, pf: null }]
     .sort((a, b) => Number(a.eixos) - Number(b.eixos));
   await saveFreteConsultas();
   renderFreteConsultas();
@@ -2630,13 +2649,13 @@ async function deleteFreteRoute(routeIndex) {
   renderFreteConsultas();
 }
 
-async function deleteFreteEixo(routeIndex, rowIndex) {
+async function deleteFreteEixo(routeIndex, rowIndex, group = 'rows') {
   if (!isAdmin()) return;
   const route = freteRoutes()[routeIndex];
-  const row = route?.rows?.[rowIndex];
+  const row = route?.[group]?.[rowIndex];
   if (!route || !row) return;
   if (!confirm(`Excluir o eixo ${row.eixos} da rota ${route.rota}?`)) return;
-  route.rows.splice(rowIndex, 1);
+  route[group].splice(rowIndex, 1);
   await saveFreteConsultas();
   renderFreteConsultas();
 }
@@ -2662,11 +2681,12 @@ async function commitFreteBoardEdit(cell) {
     route.origem = parts.origem;
     route.destino = parts.destino;
   } else {
-    const row = route.rows?.[rowIndex];
+    const group = cell.dataset.rateGroup || 'rows';
+    const row = route[group]?.[rowIndex];
     if (!row) return;
     if (field === 'eixos') {
       const eixos = Number(String(raw).replace(/\D/g, ''));
-      if (!eixos) {
+      if (!eixos || route[group].some((other,i) => i !== rowIndex && other.eixos === eixos)) {
         cell.textContent = previous || row.eixos;
         return;
       }
@@ -2675,7 +2695,7 @@ async function commitFreteBoardEdit(cell) {
       const value = parseFreteCurrency(raw);
       row[field] = Number.isFinite(value) ? value : null;
     }
-    route.rows = (route.rows || []).sort((a, b) => Number(a.eixos) - Number(b.eixos));
+    route[group] = (route[group] || []).sort((a, b) => Number(a.eixos) - Number(b.eixos));
   }
 
   await saveFreteConsultas();
@@ -2742,8 +2762,18 @@ function freteDestinationOptions(origin = '') {
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
+function freteQueryGroup() {
+  return document.getElementById('frete-query-group')?.value === 'agregado' ? 'agregado' : 'rows';
+}
+
+function updateFreteQueryGroup() {
+  const select = document.getElementById('frete-query-eixo');
+  setSelectOptions(select, ['', ...freteEixosOptions().map(eixo => eixo+' EIXO')]);
+  document.getElementById('frete-query-result').textContent = '';
+}
+
 function freteEixosOptions() {
-  return [...new Set(freteRoutes().flatMap(route => (route.rows || []).map(row => row.eixos)).filter(Boolean))]
+  return [...new Set(freteRoutes().flatMap(route => (route[freteQueryGroup()] || []).map(row => row.eixos)).filter(Boolean))]
     .sort((a, b) => a - b);
 }
 
@@ -2771,7 +2801,7 @@ function consultarFreteValor() {
 
   const eixoNumber = Number(String(eixo).replace(/\D/g, ''));
   const route = freteRoutes().find(item => item.origem === normalizeOption(origem) && item.destino === normalizeOption(destino));
-  const row = route?.rows?.find(item => Number(item.eixos) === eixoNumber);
+  const row = route?.[freteQueryGroup()]?.find(item => Number(item.eixos) === eixoNumber);
 
   if (!row) {
     result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combina&ccedil;&atilde;o.</span>';
@@ -3233,7 +3263,8 @@ function freteValuesForViagem(viagem = {}) {
     fretePlaceMatches(item.origem, viagem.origem) &&
     fretePlaceMatches(item.destino, viagem.destino)
   );
-  const row = route?.rows?.find(item => Number(item.eixos) === eixo);
+  const group = isBetaTripWorkspace() && normalizeTipo(viagem.tipo) === 'AGREGADO' ? 'agregado' : 'rows';
+  const row = route?.[group]?.find(item => Number(item.eixos) === eixo);
   return {
     pj: row && Number.isFinite(row.pj) ? formatFreteAccounting(row.pj) : '-',
     pf: row && Number.isFinite(row.pf) ? formatFreteAccounting(row.pf) : '-'

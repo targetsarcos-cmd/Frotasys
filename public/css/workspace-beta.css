@@ -408,3 +408,31 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .report-panel .matrix tbody tr:is(.meta-row,.total-row) .product-toggle:focus-visible {
   outline:2px solid #9bd6ff;outline-offset:2px;
 }
+
+#beta-fretes .frete-consult-grid {display:block;width:100%}
+#beta-fretes .frete-board {display:grid;gap:16px;padding:0;background:transparent;border:0;box-shadow:none;color:#183c59}
+#beta-fretes .frete-board-head {align-items:center;margin:0}
+#beta-fretes h2 {margin:0;font:700 25px/1.2 'Segoe UI',sans-serif;color:#17354c}
+#beta-fretes .frete-board-head p {display:none}
+#beta-fretes .frete-query-card,#beta-fretes .frete-tools,#beta-fretes .rate-scroll {border:1px solid #cddde9;border-radius:7px;background:#fff;box-shadow:none}
+#beta-fretes .frete-query-card,#beta-fretes .frete-tools {padding:14px}
+#beta-fretes .frete-query-form {display:grid;grid-template-columns:repeat(4,minmax(85px,1fr)) auto;gap:10px;align-items:end}
+#beta-fretes :is(input,select) {border:1px solid #a8bfd4;border-radius:4px;color:#17354c;background:#fff;font:400 13px 'Segoe UI',sans-serif}
+#beta-fretes button {box-shadow:none;border-radius:4px}
+#beta-fretes .btn-primary {background:#135c92;color:white}
+#beta-fretes .frete-refresh-btn {width:36px;height:36px;color:#175b8c;border:1px solid #b3c9dc;background:white}
+#beta-fretes .frete-query-result:empty {display:none}
+#beta-fretes .rate-scroll {overflow:auto}
+#beta-fretes .rate-table {min-width:710px;width:100%;border-collapse:collapse;font:13px 'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#173950}
+#beta-fretes .rate-table :is(td,th) {padding:7px 12px;border:1px solid #d9e4ed;text-align:center}
+#beta-fretes .rate-table thead {color:#fff;background:#152e43}
+#beta-fretes .rate-table thead tr+tr {background:#e4edf4;color:#284a62}
+#beta-fretes .rate-table tbody:nth-child(odd) {background:#f5f8fb}
+#beta-fretes .rate-table th[scope=rowgroup] {text-align:left;width:25%}
+#beta-fretes .rate-table thead button {color:inherit;background:none;border:0;font:inherit}
+#beta-fretes .rate-table [contenteditable=true] {display:inline-block;min-width:3em;min-height:1.3em;vertical-align:middle;border-bottom:1px dashed #9db7c9}
+#beta-fretes .rate-table [contenteditable=true]:focus {outline:2px solid #3684be;background:white}
+#beta-fretes .rate-table td button,#beta-fretes .rate-remove {border:0;background:transparent;color:#185f92;font:600 12px 'Segoe UI',sans-serif}
+#beta-fretes .rate-table .rate-remove {margin-left:6px;color:#a74444}
+#beta-fretes .rate-empty {color:#728696}
+@media(max-width:850px){#beta-fretes .frete-query-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
