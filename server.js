@@ -113,6 +113,7 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'horas', header: 'HORAS', width: 10 }
 ];
 const VIAGEM_FIELD_LABELS = {
+  pedidoEnviadoDt: 'PEDIDO ENVIADO (DT)',
   frete: 'EVENTO',
   placa: 'PLACA',
   nome: 'NOME',
@@ -299,6 +300,7 @@ app.get('/login', (req, res) => {
 
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
+  if (doc.status === 'PROGRAMAR' && doc.dt) doc.status = calculateTripStatus(doc);
   if (isViagemBloqueada(doc)) {
     doc.status = 'CONCLUIDO';
     doc.usuario = '';
@@ -2234,6 +2236,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     if (!normalizeUniqueValue(payload.produto)) {
       return res.status(400).json({ error: 'Selecione PRODUTO para salvar a viagem.', field: 'produto' });
     }
+    delete payload.pedidoEnviadoDt;
     delete payload.usuario;
     const rawCadastroStatus = normalizeUniqueValue(payload.status);
     const cadastroStatus = ['SEM CADASTRO', 'CONFERIR CADASTRO'].includes(rawCadastroStatus) ? 'SEM CADASTRO' : '';
@@ -2277,6 +2280,11 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
     const patch = { ...req.body };
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
+    if (Object.hasOwn(patch, 'pedidoEnviadoDt') &&
+        (Object.keys(patch).length !== 1 || !current.dt || patch.pedidoEnviadoDt !== String(current.dt).trim())) {
+      return res.status(409).json({ error: 'Confira a DT atual antes de enviar o pedido.' });
+    }
+    if (Object.hasOwn(patch, 'dt') && String(patch.dt || '').trim() !== String(current.dt || '').trim()) patch.pedidoEnviadoDt = '';
     delete patch.__manualStatus;
     delete patch.status;
     normalizeViagemDocumentNumbers(patch);
@@ -2331,6 +2339,10 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
 
     const nextData = applyFrotaContratoRule({ ...current, ...patch });
+    if (patch.programado === true && !current.programado &&
+        calculateTripStatus({...nextData, programado:false}) === 'ENVIAR PEDIDO') {
+      return res.status(409).json({ error: 'Envie o pedido pelo WhatsApp antes de programar.' });
+    }
     if (normalizeTipo(nextData.tipo) === 'FROTA') patch.contrato = nextData.contrato;
     patch.status = calculateTripStatus(nextData);
     nextData.status = patch.status;

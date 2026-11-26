@@ -73,7 +73,7 @@ function calculateTripStatus(trip = {}) {
 
   if (hasInvoiceAndToll(trip)) return 'EMITIR CTE';
   if (hasDt && isScheduled) return 'AGUARDANDO CARREGAMENTO';
-  if (hasDt && !isScheduled) return 'PROGRAMAR';
+  if (hasDt && !isScheduled) return String(trip.pedidoEnviadoDt || '').trim() === String(trip.dt).trim() ? 'PROGRAMAR' : 'ENVIAR PEDIDO';
   if (!hasDt && isScheduled) return 'CRIAR DT';
   return 'CRIAR DT / PROGRAMAR';
 }

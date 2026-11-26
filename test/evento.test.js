@@ -92,6 +92,22 @@ const item = collection + '/:id';
 const trip = { produto: 'CPV', data: '2026-01-05', secao: 'arcos', origem: 'ARCOS', pamcard: 'OK' };
 const eventText = '<em>Aguardar & conferir</em>';
 
+test('pedido pelo WhatsApp avança o status da DT e mantém a viagem em Agenciado', async () => {
+  const { request } = setup();
+  const created = await request('post', collection, { ...trip, secao:'agenciando', dt:'123' });
+  assert.equal(created.data.status, 'ENVIAR PEDIDO');
+  const id = created.data._id;
+  const edit = (body, role = 'operador') => request('put', item, body, role, id);
+  assert.equal((await edit({ programado:true })).code, 409);
+  assert.equal((await edit({ pedidoEnviadoDt:'124' })).code, 409);
+  assert.equal((await edit({ pedidoEnviadoDt:'123' }, 'visualizador')).code, 403);
+  const sent = await edit({ pedidoEnviadoDt:'123' });
+  assert.equal(sent.data.status, 'PROGRAMAR');
+  assert.equal(sent.data.secao, 'agenciando');
+  assert.equal((await request('get', item, {}, 'visualizador', id)).data.status, 'PROGRAMAR');
+  assert.equal((await edit({ dt:'124' })).data.status, 'ENVIAR PEDIDO');
+});
+
 test('editar Evento em viagem com DT historica repetida preserva os documentos', async () => {
   const { records, request } = setup();
   for (const id of ['a', 'b']) {

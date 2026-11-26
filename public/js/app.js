@@ -113,7 +113,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
+const STATUS = ['ENVIAR PEDIDO', 'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -3082,7 +3082,9 @@ function selectedViagem() {
     null;
 }
 
+const betaPedidosEnviados = new Map();
 function viagemStatusDisplay(viagem) {
+  if (viagem?.status === 'ENVIAR PEDIDO' && viagem.dt && betaPedidosEnviados.get(viagem._id) === String(viagem.dt).trim()) return 'PROGRAMAR';
   return String(viagem?.status || '').trim();
 }
 
@@ -3496,6 +3498,10 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
   if (!viagem) return;
 
   const pendingWindow = window.open('about:blank', '_blank');
+  if (!pendingWindow) {
+    alert('Permita a abertura do WhatsApp e tente novamente.');
+    return;
+  }
   let message = copyViagemText(viagem);
   const extra = await apiFetch(`/api/viagens/${encodeURIComponent(id)}/whatsapp-extra-message`);
   const extraMessage = String(extra?.message || '').trim();
@@ -3506,16 +3512,19 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
     pendingWindow?.close?.();
     return;
   }
-  if (pendingWindow) {
-    pendingWindow.opener = null;
-    pendingWindow.location.href = href;
-  } else {
-    window.open(href, '_blank', 'noopener');
-  }
-
-  if (viagem.secao === 'agenciando' && canEditViagem(viagem)) {
-    closeRowActionMenus();
-    await updateViagemField(id, 'secao', 'arcos');
+  if (pendingWindow.closed) return;
+  pendingWindow.opener = null;
+  pendingWindow.location.href = href;
+  if (viagemStatusDisplay(viagem) !== 'ENVIAR PEDIDO' || !viagem.dt) return;
+  const dt = String(viagem.dt).trim();
+  closeRowActionMenus();
+  if (document.body.classList.contains('workspace-beta')) {
+    if (['admin', 'operador'].includes(state.userProfile?.role)) {
+      betaPedidosEnviados.set(id, dt);
+      renderAll();
+    }
+  } else if (canEditViagem(viagem)) {
+    await updateViagemField(id, 'pedidoEnviadoDt', dt, {skipUndo:true});
   }
 }
 

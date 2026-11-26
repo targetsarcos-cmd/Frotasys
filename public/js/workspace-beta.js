@@ -51,7 +51,8 @@
   globalSearch.setAttribute('form', 'header-search-form');
   const advanced = byId('btn-advanced-search');
   advanced.setAttribute('aria-label','Busca avançada');
-  globalSearch.after(advanced);
+  advanced.replaceChildren(globalSearch.parentElement.querySelector('svg'));
+  globalSearch.before(advanced);
   const op = adopt('operation','operation-filter');
   shell.querySelector('label[for=operation]').htmlFor = op.id;
   const date = adopt('date','date-picker');
@@ -102,11 +103,12 @@
   function paintRows() {
     const scope = state.viagens.filter(tripInFilterScope);
     const index = new Map(scope.map(trip => [String(trip._id),trip]));
-    const groups = {all:scope.length,wait:0,adv:0,dis:0,planned:0};
+    const counts = new Map([['all',scope.length]]);
     for (const trip of scope) {
-      const key = group(viagemStatusDisplay(trip));
-      if (key) groups[key]++;
+      const key = viagemStatusDisplay(trip);
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
     }
+    if (!counts.has(tab)) tab = 'all';
     const term = normalize(byId('tableSearch').value.trim());
     const labels = new Set();
     let visible = 0;
@@ -116,7 +118,7 @@
       for (const row of body.querySelectorAll('tr[data-id]')) {
         const trip = index.get(row.dataset.id);
         decorate(row);
-        const show = trip && (tab === 'all' || group(viagemStatusDisplay(trip)) === tab) &&
+        const show = trip && (tab === 'all' || viagemStatusDisplay(trip) === tab) &&
           (!term || normalize(row.textContent + ' ' + (trip.frete || '') + ' ' + (trip.cte || '') + ' ' + (trip.nota || '')).includes(term));
         row.hidden = !show;
         if (show) {
@@ -148,11 +150,24 @@
     }));
     syncStatusWidth();
     byId('footCount').textContent = 'Exibindo '+visible+' de '+scope.length+' viagens';
-    for (const button of byId('tabs').querySelectorAll('[data-tab]')) {
-      const active = tab === button.dataset.tab;
+    const tabs = byId('tabs');
+    const buttons = new Map([...tabs.children].map(button => [button.dataset.tab,button]));
+    for (const [key,button] of buttons) if (!counts.has(key)) button.remove();
+    for (const [key,count] of counts) {
+      let button = buttons.get(key);
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tab';
+        button.dataset.tab = key;
+        button.textContent = key === 'all' ? 'Todas' : key;
+        button.append(document.createElement('small'));
+        tabs.append(button);
+      }
+      const active = tab === key;
       button.classList.toggle('active',active);
       button.setAttribute('aria-pressed',String(active));
-      button.querySelector('small').textContent = groups[button.dataset.tab];
+      button.querySelector('small').textContent = count;
     }
     byId('filterCount').textContent = Object.keys(state.tripFilters).length || '';
     const active = byId('activeFilters');
@@ -256,7 +271,10 @@
     empty.className = 'beta-empty empty'; empty.hidden=true;
     empty.textContent = 'Nenhuma viagem para os critérios selecionados.';
     table.after(empty);
-    new MutationObserver(paintRows).observe(byId('tbody-'+sec),{childList:true});
+    const body = byId('tbody-'+sec);
+    new MutationObserver(records => {
+      if (records.some(record => record.target === body)) paintRows();
+    }).observe(body,{childList:true});
   }
   byId('tableSearch').oninput = paintRows;
   byId('tabs').onclick = event => {

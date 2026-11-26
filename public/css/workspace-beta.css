@@ -48,7 +48,14 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .matrix .product-detail td:first-child {padding-inline-start:38px!important}
 #beta-shell #beta-breakdown {padding:12px 24px;color:#456078}
 #beta-shell #beta-breakdown summary {cursor:pointer}
-#beta-shell #reminder-note {position:fixed;left:var(--rail);top:90px;right:auto;z-index:70}
+#beta-shell #reminder-note {position:fixed;left:50%;top:50%;right:auto;transform:translate(-50%,-50%);max-height:calc(100dvh - 24px);z-index:520}
+#beta-shell .top .search {padding:0 8px;gap:4px;overflow:hidden}
+#beta-shell #btn-advanced-search {position:static;inset:auto;display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;box-shadow:none;transform:none}
+#beta-shell #btn-advanced-search:hover,#beta-shell #btn-advanced-search:focus-visible {background:#ffffff20}
+#beta-shell #btn-advanced-search svg {width:16px;height:16px}
+#beta-shell .top .search input {flex:1;min-width:0;padding-inline:3px}
+#beta-shell .tablewrap :is(th,td) {padding-inline:9px}
+#beta-shell .tablewrap :is(.driver-cell,.route-cell) {justify-items:start;justify-content:start;text-align:left}
 #beta-shell #filterCount:empty {display:none}
 .workspace-beta .travel-drawer.is-open {background:#edf2f6;border-left:1px solid #c4d4e1;box-shadow:-6px 0 22px #12324c24}
 .workspace-beta #travel-drawer .drawer-head {background:#f6f9fc;color:#193d5a}

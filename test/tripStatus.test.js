@@ -9,7 +9,9 @@ const base = {
 
 test('DT e programacao avancam e regridem', () => {
   assert.equal(calculateTripStatus({ ...base }), 'CRIAR DT / PROGRAMAR');
-  assert.equal(calculateTripStatus({ ...base, dt: '123' }), 'PROGRAMAR');
+  assert.equal(calculateTripStatus({ ...base, dt: '123' }), 'ENVIAR PEDIDO');
+  assert.equal(calculateTripStatus({ ...base, dt: '123', pedidoEnviadoDt:'123' }), 'PROGRAMAR');
+  assert.equal(calculateTripStatus({ ...base, dt: '124', pedidoEnviadoDt:'123' }), 'ENVIAR PEDIDO');
   assert.equal(calculateTripStatus({ ...base, dt: '123', programado: true }), 'AGUARDANDO CARREGAMENTO');
   assert.equal(calculateTripStatus({ ...base, programado: true }), 'CRIAR DT');
   assert.equal(calculateTripStatus({ ...base, programado: false }), 'CRIAR DT / PROGRAMAR');
