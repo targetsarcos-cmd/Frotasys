@@ -80,3 +80,37 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .operations-panel > .trip-section > .tablewrap {
   height:auto;min-height:0;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto;
 }
+
+/* Comments appear in a viewport-level panel, outside the table's overflow. */
+#beta-shell .tablewrap .beta-comment-plate {display:inline-flex;align-items:center;max-width:100%;padding:0;border:0;background:transparent;font:700 12px 'Segoe UI',Arial,sans-serif;letter-spacing:.4px;color:#075b9e;cursor:pointer}
+#beta-shell .tablewrap .beta-comment-plate.beta-plate-attention {color:#c81e2c}
+#beta-shell .beta-comment-plate:hover {text-decoration:underline}
+#beta-shell .beta-comment-plate:focus-visible {outline:2px solid #2678bd;outline-offset:3px;border-radius:2px}
+.workspace-beta .beta-comment-panel[hidden] {display:none!important}
+.workspace-beta .beta-comment-panel {position:fixed;z-index:10000;width:min(370px,calc(100vw - 16px));max-height:min(570px,calc(100dvh - 16px));display:flex;flex-direction:column;background:#fff;color:#18384f;border:1px solid #bdcddd;border-radius:7px;box-shadow:0 8px 28px #12324c30;font:12px/1.45 'Segoe UI',Arial,sans-serif;text-align:left;overflow:hidden}
+.beta-comment-header {display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f3f7fb;padding:10px 13px;border-bottom:1px solid #d9e4ed}
+.beta-comment-header strong {display:block;font-size:14px;color:#153b58;letter-spacing:.3px}
+.beta-comment-header small {display:block;color:#627a8b;font-size:11px}
+.beta-comment-close {border:0;background:transparent;color:#58758b;font-size:22px;line-height:1;cursor:pointer;padding:4px}
+.beta-comment-content {overflow:auto;min-height:0;padding:12px;display:grid;gap:10px}
+.beta-comment-observation {padding:9px 10px;background:#f7f9fc;border:1px solid #dbe5ee;border-radius:4px}
+.beta-comment-observation p,.beta-comment-message p {white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 0;color:inherit}
+.beta-comment-thread {border:1px solid #d8e4ef;border-radius:5px;padding:10px;display:grid;gap:10px}
+.beta-comment-message {display:flex;align-items:flex-start;gap:8px}
+.beta-comment-avatar {display:grid;place-items:center;width:27px;height:27px;flex:none;border-radius:50%;background:#126bb3;color:#fff;font-size:10px;font-weight:700}
+.beta-comment-message-main {min-width:0;flex:1}
+.beta-comment-meta strong,.beta-comment-meta small {display:block}
+.beta-comment-meta small {font-size:10px;color:#6b7e8c}
+.beta-comment-form {display:flex;flex-direction:column;align-items:flex-end;gap:5px;margin:0}
+.beta-comment-form textarea {width:100%;min-height:52px;resize:vertical;box-sizing:border-box;padding:7px 8px;border:1px solid #b9cddd;border-radius:4px;background:white;color:#18384f;font:inherit}
+.beta-comment-form textarea:focus {outline:2px solid #b4d6f3;border-color:#2678bd}
+.beta-comment-primary,.beta-comment-resolve,.beta-comment-link {cursor:pointer;border:1px solid #a9c3da;border-radius:4px;padding:5px 8px;background:white;color:#075b9e;font:600 11px 'Segoe UI',Arial,sans-serif}
+.beta-comment-primary {background:#096ac1;color:#fff;border-color:#096ac1}
+.beta-comment-primary:disabled {opacity:.55;cursor:wait}
+.beta-comment-resolve {justify-self:end;color:#17684a;border-color:#b6d5c6}
+.beta-comment-link {padding:2px 0;border:none;margin-top:4px}
+.beta-comment-thread.is-resolved {background:#f0f2f4;color:#65727d;border-color:#dce2e6}
+.beta-comment-thread.is-resolved .beta-comment-avatar {background:#87939d}
+.beta-comment-resolved {font-size:10px;color:#687681;font-weight:600;border-bottom:1px solid #d8dfe5;padding-bottom:6px}
+.beta-comment-compose {display:grid;gap:6px;border-top:1px solid #e0e7ef;padding-top:10px}
+.beta-comment-empty {color:#6b7f91;margin:0}

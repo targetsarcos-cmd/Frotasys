@@ -2215,6 +2215,27 @@ app.get('/api/viagens/:id', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// Comments are stored in the existing trip JSON; no database schema change is required.
+if (betaEditable) {
+  const { applyCommentAction, CommentError } = require('./beta/trip-comments');
+  app.post('/api/viagens/:id/comentarios', requireViagemEditor, async (req, res) => {
+    try {
+      const current = await findOneById(TABLES.viagens, req.params.id);
+      if (!current) return res.status(404).json({ error: 'Viagem nao encontrada.' });
+      const comentariosBeta = applyCommentAction(current.comentariosBeta, req.body, {
+        id:req.authUser.id, name:profileDisplayName(req.userProfile), role:req.userProfile.role
+      });
+      const updated = await updateDoc(TABLES.viagens, req.params.id, { comentariosBeta }, current);
+      if (!updated) return res.status(409).json({ error: 'A viagem mudou. Atualize a pagina e tente novamente.' });
+      return res.json(updated);
+    } catch (error) {
+      if (error instanceof CommentError) return res.status(error.status).json({error:error.message});
+      console.error('Falha ao salvar comentario da beta:', error.message);
+      return res.status(500).json({error:'Nao foi possivel salvar o comentario.'});
+    }
+  });
+}
+
 function sendSavedViagem(res, previous, patch, saved) {
   if (patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
     res.set('X-Viagem-Evento', '1');
@@ -2225,6 +2246,7 @@ function sendSavedViagem(res, previous, patch, saved) {
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
+    if (betaEditable && Object.hasOwn(payload, 'comentariosBeta')) return res.status(400).json({error:'Use a funcionalidade de comentarios.'});
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     normalizeViagemDocumentNumbers(payload);
     if (betaEditable) payload.secao = betaMode.persistedSection(payload);
@@ -2285,6 +2307,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
+    if (betaEditable && Object.hasOwn(patch, 'comentariosBeta')) return res.status(400).json({error:'Use a funcionalidade de comentarios.'});
     if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (Object.hasOwn(patch, 'pedidoEnviadoDt') &&

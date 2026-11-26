@@ -123,3 +123,26 @@ test('modo de escrita exige opt-in e credencial privada do projeto correto', () 
   assert.match(workspace(page), /data-beta-mode="readonly"/);
   assert.match(workspace(page,{editable:true}), /data-beta-mode="editable"/);
 });
+
+test('comentarios registram autoria no servidor e conservam respostas e resolucao imutavel', () => {
+  const { applyCommentAction } = require('../beta/trip-comments');
+  let counter = 0;
+  const opts = {uuid:()=>String(++counter),now:()=> '2026-11-26T12:00:00.000Z'};
+  const a = {id:'a',name:'Operador A',role:'operador'};
+  const b = {id:'b',name:'Operador B',role:'admin'};
+  let items = applyCommentAction([], {action:'create',text:' Agendar ',authorName:'Falso'},a,opts);
+  const threadId = items[0].id, messageId = items[0].messages[0].id;
+  assert.equal(items[0].messages[0].text,'Agendar');
+  assert.equal(items[0].messages[0].authorName,'Operador A');
+  assert.throws(()=>applyCommentAction(items,{action:'edit',threadId,messageId,text:'alterado'},b,opts),{status:403});
+  const edited = applyCommentAction(items,{action:'edit',threadId,messageId,text:'Agendar descarga'},a,opts);
+  assert.equal(items[0].messages[0].text,'Agendar');
+  items = applyCommentAction(edited,{action:'reply',threadId,text:'Agendado'},b,opts);
+  assert.equal(items[0].messages.length,2);
+  items = applyCommentAction(items,{action:'resolve',threadId},b,opts);
+  assert.equal(items[0].resolvedBy.id,'b');
+  for (const action of ['edit','reply','resolve']) assert.throws(()=>applyCommentAction(items,{action,threadId,messageId,text:'x'},a,opts),{status:409});
+  assert.throws(()=>applyCommentAction(items,{action:'create',text:' '},a,opts),{status:400});
+  assert.throws(()=>applyCommentAction(items,{action:'create',text:'x'},{...a,role:'visualizador'},opts),{status:403});
+  assert.equal(applyCommentAction(items,{action:'create',text:'Nova pendencia'},a,opts).length,2);
+});
