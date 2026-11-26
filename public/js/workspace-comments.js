@@ -228,7 +228,10 @@
     close();
     const rect = plate.getBoundingClientRect();
     showCtxMenu({preventDefault(){},clientX:rect.left,clientY:rect.bottom+4},plate.dataset.tripId,'placa');
-  });
+  }, true);
+  shell.addEventListener('dblclick', event => {
+    if (event.target.closest('.beta-comment-plate')) { event.preventDefault(); event.stopPropagation(); }
+  }, true);
   panel.addEventListener('pointerenter', () => clearTimeout(timer));
   panel.addEventListener('pointerleave', delayClose);
   panel.addEventListener('focusin', pin);
@@ -240,7 +243,7 @@
   });
   window.addEventListener('resize', () => { if (!panel.hidden) position(); });
   window.addEventListener('scroll', event => {
-    if (panel.hidden || panel.contains(event.target)) return;
+    if (panel.hidden || (event.target instanceof Node && panel.contains(event.target))) return;
     if (pinned) position(); else close();
   }, true);
   window.FrotasysBetaComments = { decorate, configureMenu };
