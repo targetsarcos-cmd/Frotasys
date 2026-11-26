@@ -279,3 +279,85 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 
 .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing {grid-template-columns:minmax(0,1fr);gap:3px}
 .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing > input {min-height:30px}
+
+
+/* Consolidated summary: accessible operational hierarchy, scoped to the beta report. */
+#beta-shell .report-panel {container-type:inline-size; border-color:#cbd9e4; background:#fff; box-shadow:none}
+#beta-shell .report-panel .report-header {padding:16px 24px!important}
+#beta-shell .report-panel .report-header h2 {font-weight:700;letter-spacing:-.3px}
+#beta-shell .report-panel .report-header p,
+#beta-shell .report-panel .report-context {color:#e2edf6;font-size:13px!important}
+#beta-shell .report-panel .metric-band {
+  padding:20px 24px 16px!important;gap:0!important;align-items:stretch;
+}
+#beta-shell .report-panel .metric {
+  display:flex;flex-direction:column;justify-content:center;min-height:90px;
+  padding:8px 18px!important;border:0;border-right:1px solid #dbe5ed;
+}
+#beta-shell .report-panel .metric:first-child {padding-left:0!important}
+#beta-shell .report-panel .metric:last-child {border-right:0}
+#beta-shell .report-panel .metric.total {background:#eaf4f5;border-radius:6px;border-right:0}
+#beta-shell .report-panel .metric-label {font-size:14px!important;font-weight:650;color:#405b70}
+#beta-shell .report-panel .metric-value {
+  font-size:clamp(21px,2.15cqi,34px)!important;line-height:1.15!important;
+  font-weight:700;letter-spacing:-.55px;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#beta-shell .report-panel .metric-desc {font-size:12px!important;color:#4e6577;line-height:1.4}
+#beta-shell .report-panel .metric.surplus .metric-value {color:#216a4e}
+#beta-shell .report-panel .metric.short .metric-value {color:#9b392c}
+#beta-shell .report-panel .progress-area {padding:0 24px 18px!important}
+#beta-shell .report-panel .progress-meta {font-size:13px!important;font-weight:600;color:#405b70}
+#beta-shell .report-panel .progress-meta strong {font-size:20px!important;color:#0a5368;font-variant-numeric:tabular-nums}
+#beta-shell .report-panel .progress-track {
+  position:relative;height:14px!important;border-radius:4px!important;background:#e5edf3;
+}
+#beta-shell .report-panel .progress-track span {flex:none}
+#beta-shell .report-panel .progress-track.has-goal::after {
+  content:"";position:absolute;z-index:1;inset-block:0;left:clamp(0px,var(--goal-position),calc(100% - 3px));
+  width:3px;background:#183b57;box-shadow:0 0 0 1px #fff;pointer-events:none;
+}
+#beta-shell .report-panel .progress-actual,
+#beta-shell .report-panel .progress-legend .actual {background:#08747b}
+#beta-shell .report-panel .progress-booked,
+#beta-shell .report-panel .progress-legend .booked {background:#94b9d0}
+#beta-shell .report-panel .progress-legend {color:#435d70;font-size:12px!important}
+#beta-shell .report-panel .progress-legend i.goal-marker {background:#183b57;width:3px!important;border-radius:0}
+#beta-shell .report-panel .progress-track:not(.has-goal) + .progress-legend span:last-child {display:none}
+#beta-shell .report-panel .matrix {width:100%;min-width:760px;table-layout:auto}
+#beta-shell .report-panel .matrix thead th {
+  color:#294b64;background:#e7eff5;font-size:12px!important;font-weight:700;
+  padding:13px 15px!important;border-bottom:1px solid #cfdeea;
+}
+#beta-shell .report-panel .matrix tbody td {
+  font-size:15px!important;height:44px!important;padding:10px 15px!important;
+  color:#183b57;font-weight:500;border-bottom:1px solid #e4ecf2;
+}
+#beta-shell .report-panel .matrix tbody td:first-child {font-weight:650;color:#294b64}
+#beta-shell .report-panel .matrix thead th:first-child,
+#beta-shell .report-panel .matrix tbody td:first-child {min-width:158px;padding-left:24px!important}
+#beta-shell .report-panel .matrix thead th:last-child,
+#beta-shell .report-panel .matrix tbody td:last-child {
+  background:#e9f0f5;color:#153b57;font-weight:750;border-left:1px solid #cfdde8;
+}
+#beta-shell .report-panel .matrix tbody tr.total-row td {background:#e3f0f1;font-weight:750;color:#0e4d5b}
+#beta-shell .report-panel .matrix tbody td.matrix-zero {color:#63798b;font-weight:400}
+#beta-shell .report-panel .matrix tbody td.matrix-deficit {color:#9b392c;font-weight:650}
+#beta-shell .report-panel .matrix tbody td.matrix-surplus {color:#216a4e;font-weight:650}
+#beta-shell .report-panel .matrix tbody tr.product-detail td {font-size:13px!important;background:#f5f8fb}
+#beta-shell .report-panel .matrix tbody tr.product-detail td:first-child {padding-left:42px!important;font-weight:500}
+#beta-shell .report-panel .product-toggle {font:inherit;color:inherit;text-align:left}
+#beta-shell .report-panel .product-toggle:focus-visible {outline:2px solid #0b71b8;outline-offset:2px;border-radius:3px}
+#beta-shell .report-panel #beta-breakdown > summary {padding:12px 24px;font-size:13px;font-weight:650;color:#294b64}
+@container (max-width:1000px) {
+  #beta-shell .report-panel .metric-band {grid-template-columns:repeat(3,minmax(0,1fr));gap:8px!important}
+  #beta-shell .report-panel .metric {border:0;padding:8px 12px!important;min-height:82px}
+  #beta-shell .report-panel .metric:first-child {padding-left:12px!important}
+  #beta-shell .report-panel .metric-value {font-size:26px!important}
+}
+@container (max-width:570px) {
+  #beta-shell .report-panel .metric-band {grid-template-columns:repeat(2,minmax(0,1fr));padding:14px!important}
+  #beta-shell .report-panel .metric-value {font-size:22px!important}
+  #beta-shell .report-panel .metric-label {font-size:13px!important}
+  #beta-shell .report-panel .progress-area {padding-inline:14px!important}
+  #beta-shell .report-panel .report-header {padding:14px!important}
+}

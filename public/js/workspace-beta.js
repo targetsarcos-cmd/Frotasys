@@ -280,12 +280,24 @@
     const pct = value => totals.meta ? (100*value/totals.meta).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%' : '—';
     byId('reportContext').textContent = (state.originFilter ? operationName(state.originFilter) : 'Todos')+' · '+formatDateBR(state.currentDate);
     byId('summaryMetrics').innerHTML = series.map(([key,label]) => {
-      const desc = key==='meta' ? 'Volume de referência' : key==='falta' ? 'Saldo da meta' : totals.meta ? pct(totals[key])+' da meta' : 'Sem meta no período';
-      const style = key==='total' ? 'total' : key==='falta' && totals.falta>0 ? 'short' : '';
-      return '<div class="metric '+style+'"><span class="metric-label">'+label+'</span><strong class="metric-value">'+formatKg(totals[key])+'</strong><span class="metric-desc">'+desc+'</span></div>';
+      const isBalance = key === 'falta';
+      const surplus = isBalance && totals.falta < 0;
+      const metricLabel = surplus ? 'Excedente da meta' : isBalance && totals.falta === 0 ? 'Saldo da meta' : label;
+      const desc = key==='meta' ? 'Volume de referência · kg' : isBalance ? (surplus ? 'Volume acima da meta' : totals.falta > 0 ? 'Volume restante · kg' : 'Meta sem saldo restante') : totals.meta ? pct(totals[key])+' da meta' : 'Sem meta no período';
+      const style = key==='total' ? 'total' : surplus ? 'surplus' : isBalance && totals.falta>0 ? 'short' : '';
+      return '<div class="metric '+style+'"><span class="metric-label">'+metricLabel+'</span><strong class="metric-value">'+formatKg(surplus ? Math.abs(totals[key]) : totals[key])+'</strong><span class="metric-desc">'+desc+'</span></div>';
     }).join('');
-    const actual = totals.meta>0 ? Math.min(100,100*totals.fat/totals.meta) : 0;
-    const booked = totals.meta>0 ? Math.min(100-actual,100*totals.agenc/totals.meta) : 0;
+    const actualVolume = Math.max(0, totals.fat);
+    const bookedVolume = Math.max(0, totals.agenc);
+    const scale = Math.max(0, totals.meta, actualVolume + bookedVolume);
+    const actual = scale ? 100 * actualVolume / scale : 0;
+    const booked = scale ? 100 * bookedVolume / scale : 0;
+    const track = byId('progressTrack');
+    const hasGoal = totals.meta > 0;
+    const goalPosition = hasGoal ? Math.min(100, 100 * totals.meta / scale) : 0;
+    track.classList.toggle('has-goal', hasGoal);
+    track.style.setProperty('--goal-position', goalPosition+'%');
+    track.setAttribute('aria-label', 'Atendimento da meta: '+pct(totals.total)+'. Faturado: '+formatKg(totals.fat)+' kg. Agenciado: '+formatKg(totals.agenc)+' kg. Meta: '+formatKg(totals.meta)+' kg.');
     byId('coverage').textContent = pct(totals.total);
     byId('progressActual').style.width = actual+'%';
     byId('progressBooked').style.width = booked+'%';
@@ -293,8 +305,13 @@
     matrixBody.innerHTML = series.map(([key,label]) => {
       const details = key === 'meta' || key === 'total' ? productBreakdown(cards,dests.keys(),key) : '';
       const heading = details ? '<button type="button" class="product-toggle" data-product-group="'+key+'" aria-expanded="'+openProductGroups.has(key)+'" aria-label="'+label+' por produto">'+label+'</button>' : label;
-      const values = [...dests.values(),totals].map(d=>'<td>'+formatKg(d[key])+'</td>').join('');
-      return '<tr class="'+(key==='total'?'total-row':'')+'"><td>'+heading+'</td>'+values+'</tr>'+details;
+      const values = [...dests.values(),totals].map(d=>{
+        const value = d[key];
+        const tone = value === 0 ? 'matrix-zero' : key === 'falta' ? (value > 0 ? 'matrix-deficit' : 'matrix-surplus') : '';
+        return '<td class="'+tone+'">'+formatKg(value)+'</td>';
+      }).join('');
+      const rowClass = key === 'total' ? 'total-row' : key === 'falta' ? 'balance-row' : '';
+      return '<tr class="'+rowClass+'"><td>'+ (key === 'falta' ? 'Saldo da meta' : heading) +'</td>'+values+'</tr>'+details;
     }).join('');
   }
   for (const [sec,head] of sections) {
