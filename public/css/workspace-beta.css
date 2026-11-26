@@ -175,3 +175,39 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 .workspace-beta #travel-drawer .beta-invoice-add button {width:25px;height:25px;display:grid;place-items:center;border:1px solid #a9c3da;border-radius:4px;background:#fff;color:#075b9e;font:600 19px/1 'Segoe UI',Arial,sans-serif;cursor:pointer}
 .workspace-beta #travel-drawer .beta-invoice-add button:hover:not(:disabled) {background:#e5f0fa;border-color:#2580c4}
 .workspace-beta #travel-drawer .beta-invoice-add button:disabled {opacity:.45;cursor:not-allowed}
+
+/* Operational density: larger text, fewer redundant gutters and reserved control widths. */
+#beta-shell {--beta-status-column:calc(var(--beta-status-width) + 12px)}
+#beta-shell .tablewrap :is(th,td) {box-sizing:border-box;padding-inline:6px}
+#beta-shell .tablewrap thead th {font-size:11px;height:34px;padding-block:7px;letter-spacing:.15px}
+#beta-shell .tablewrap tbody td {font-size:13px;height:35px;padding-block:3px}
+#beta-shell .tablewrap :is(.driver,.route-cell strong,td[data-field=peso] strong) {font-size:13px;font-weight:500}
+#beta-shell .tablewrap .beta-comment-plate {font-size:13px;letter-spacing:.2px}
+#beta-shell .tablewrap .pill[class*="type-"] {font-size:11px;box-sizing:border-box;width:96px;max-width:100%;padding-inline:3px}
+#beta-shell .beta-status-gauge > span,#beta-shell .tablewrap .beta-status-bar {font-size:11px;padding-inline:5px}
+#beta-shell .tablewrap .sched {font-size:12px;gap:4px}
+#beta-shell .tablewrap .work-cell {padding-inline:4px;text-overflow:clip;white-space:nowrap;overflow:hidden}
+#beta-shell .tablewrap .work-start-btn {box-sizing:border-box;width:100%!important;max-width:128px;min-width:0;font-size:10px!important;height:26px!important;gap:4px!important;padding:3px 5px;white-space:nowrap;border-radius:5px!important;font-weight:650}
+#beta-shell .tablewrap .work-session-card {width:100%!important;max-width:128px;min-width:0;box-sizing:border-box}
+#beta-shell .tablewrap .work-avatar-stack {box-sizing:border-box;min-width:0!important;width:100%;max-width:134px!important;padding-inline:4px!important}
+#beta-shell .tablewrap .master-actions {padding-inline:4px;text-overflow:clip;overflow:visible}
+#beta-shell .tablewrap .row-action-wrap {display:flex;gap:4px;align-items:center;justify-content:center;max-width:100%;white-space:nowrap}
+#beta-shell .tablewrap .row-action-wrap > button,#beta-shell .tablewrap .row-action-menu summary {
+  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;
+  width:28px;height:26px;padding:0;margin:0;border:1px solid #c4d5e3;border-radius:5px;background:#fff;color:#245a80;
+}
+#beta-shell .tablewrap .row-action-menu {flex:none}
+#beta-shell .tablewrap .row-action-menu summary::marker {content:''}
+#beta-shell .tablewrap .row-action-wrap > button:hover,#beta-shell .tablewrap .row-action-menu summary:hover,#beta-shell .tablewrap .row-action-menu[open] summary {background:#eaf3fb;border-color:#77a7cb;color:#075b9e}
+#beta-shell .tablewrap .beta-action-icon {width:17px;height:17px;display:block;flex:none}
+#beta-shell .tablewrap .row-action-popover {box-sizing:border-box;gap:4px;padding:5px;background:#fff;border:1px solid #c7d7e4;border-radius:7px;box-shadow:0 5px 16px #173a5426;z-index:1100}
+#beta-shell .tablewrap .row-action-popover button {box-sizing:border-box;width:31px;height:30px;flex:0 0 31px;display:grid;place-items:center;border:1px solid transparent;border-radius:5px;color:#315a76;background:transparent;padding:0}
+#beta-shell .tablewrap .row-action-popover button:hover {background:#eaf3fb;border-color:#c8ddeb;color:#075b9e}
+#beta-shell .tablewrap .row-action-popover :is(.request-arrow-action,.conversation-action) {color:#16805a;background:transparent}
+#beta-shell .tablewrap .row-action-popover :is(.request-arrow-action,.conversation-action):hover {background:#e8f6ee;border-color:#b5dac6;color:#116b49}
+#beta-shell .tablewrap .row-action-popover .danger {color:#bf3944}
+#beta-shell .tablewrap .row-action-popover .danger:hover {background:#fff0f1;border-color:#f0c5cb}
+#beta-shell .tablewrap :is(.row-action-wrap > button,.row-action-menu summary,.row-action-popover button):focus-visible {outline:2px solid #2479bd;outline-offset:2px}
+@media(min-width:1251px){
+  .workspace-beta.travel-drawer-open #beta-shell .workspace {padding-inline:14px}
+}

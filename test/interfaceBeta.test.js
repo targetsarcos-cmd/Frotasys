@@ -226,3 +226,24 @@ test('filtro tipo usa modalidade normalizada e combina com os demais filtros',()
   assert.match(js,/tipo: 'Tipo', status: 'Status'/);
   assert.match(js,/if \(field === 'tipo'\) return normalizeTipo\(viagem.tipo\)/);
 });
+
+test('layout beta reserva largura de trabalho, acoes e tipo e ajusta largura minima',()=>{
+  const {layout}=require('../public/js/workspace-table-layout');
+  const normal=layout(['placa','nome','tipo','origem','destino','peso','agendamento','status','trabalho','actions']);
+  assert.equal(normal.columns.length,10);
+  assert.equal(normal.columns[8],'144px');
+  assert.equal(normal.columns[9],'76px');
+  assert.equal(normal.columns[2],'108px');
+  assert.equal(normal.columns[7],'var(--beta-status-column)');
+  assert.equal(normal.minWidth,'calc(945px + var(--beta-status-column))');
+  const extra=layout(['placa','nome','tipo','origem','destino','peso','agendamento','nota','status','trabalho','actions']);
+  assert.equal(extra.minWidth,'calc(1045px + var(--beta-status-column))');
+  assert.equal(layout(['placa','actions']).minWidth,'calc(167px)');
+});
+test('acoes beta preservam controles e substituem apenas seu conteudo visual',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(js,/control\.innerHTML=.*beta-action-icon/);
+  assert.match(js,/decorateActions\(row\)/);
+  assert.match(css,/\.work-cell \{[^}]*text-overflow:clip/);
+});
