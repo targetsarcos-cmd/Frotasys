@@ -74,3 +74,9 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .completed-toggle:hover {background:#eaf3fa}
 #beta-shell .completed-toggle svg {width:15px;height:15px;transition:transform .15s ease}
 #beta-shell .completed-toggle[aria-expanded=true] svg {transform:rotate(180deg)}
+
+/* Let operational tables grow with their records; only the page scrolls vertically. */
+#beta-shell .operations-panel > .trip-section {flex-shrink:0;max-height:none}
+#beta-shell .operations-panel > .trip-section > .tablewrap {
+  height:auto;min-height:0;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto;
+}
