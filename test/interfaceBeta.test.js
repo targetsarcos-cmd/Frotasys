@@ -327,3 +327,27 @@ test('resumo operacional destaca meta e total sem rotulo de volume',()=>{
   assert.doesNotMatch(js,/<th>Volume \(kg\)<\/th>/);
   assert.match(css,/tr:is\(\.meta-row,\.total-row\) > td\s*\{\s*background:var\(--beta-navy\);color:#fff/);
 });
+
+
+test('pagina de relatorios beta e servida como HTML inline antes dos arquivos estaticos', async () => {
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const bridge=fs.readFileSync(path.join(__dirname,'../public/js/beta-reports-bridge.js'),'utf8');
+  const start=server.indexOf("  app.get(['/beta/relatorios', '/beta-reports.html']");
+  assert.ok(start>=0 && start<server.indexOf('app.use(staticGzipMiddleware('));
+  assert.match(server,/res\.type\(ext\);/);
+  assert.doesNotMatch(server,/res\.type\(filePath\);/);
+  assert.match(bridge,/frame\.src='\/beta\/relatorios'/);
+  const block=server.slice(start,server.indexOf('\n  });',start)+6);
+  let handler,routes;
+  const app={get:(paths,fn)=>{routes=paths;handler=fn;}};
+  const html='<!DOCTYPE html><html><body>Relatorios</body></html>';
+  new Function('app','fs','path','__dirname',block)(app,{readFile:async()=>html},path,path.join(__dirname,'..'));
+  const headers={};
+  const res={type(v){headers.type=v;return this;},set(k,v){headers[k]=v;return this;},send(v){headers.body=v;return this;}};
+  await handler({},res);
+  assert.deepEqual(routes,['/beta/relatorios','/beta-reports.html']);
+  assert.equal(headers.type,'html');
+  assert.equal(headers['Content-Disposition'],'inline');
+  assert.equal(headers['Cache-Control'],'no-store');
+  assert.equal(headers.body,html);
+});
