@@ -153,6 +153,40 @@
     shell.querySelector('[data-nav="Usuários"]').hidden = !isAdmin();
   }
 
+  const openProductGroups = new Set();
+  const matrixBody = byId('summaryBody');
+  matrixBody.addEventListener('click', event => {
+    const button = event.target.closest('button[data-product-group]');
+    if (!button) return;
+    const group = button.dataset.productGroup;
+    const expanded = !openProductGroups.has(group);
+    if (expanded) openProductGroups.add(group);
+    else openProductGroups.delete(group);
+    button.setAttribute('aria-expanded', String(expanded));
+    for (const row of matrixBody.querySelectorAll('[data-product-detail="'+group+'"]')) row.hidden = !expanded;
+  });
+
+  function productBreakdown(cards, destinations, group) {
+    const products = new Map();
+    const orderedDestinations = [...destinations];
+    for (const card of cards) {
+      const rows = group === 'meta' ? card.metaProductRows : card.totalProductRows;
+      for (const row of rows) {
+        const key = normalizeOption(row.produto);
+        if (!products.has(key)) products.set(key, {label:row.produto, values:new Map(), total:0});
+        const product = products.get(key);
+        product.total += row.total;
+        card.columns.forEach(({destino}, index) => {
+          product.values.set(destino,(product.values.get(destino) || 0) + row.values[index]);
+        });
+      }
+    }
+    return [...products.values()].map(product => {
+      const cells = orderedDestinations.map(dest => '<td>'+formatKg(product.values.get(dest) || 0)+'</td>').join('');
+      return '<tr class="product-detail" data-product-detail="'+group+'"'+(openProductGroups.has(group) ? '' : ' hidden')+'><td>'+escapeHtml(product.label)+'</td>'+cells+'<td>'+formatKg(product.total)+'</td></tr>';
+    }).join('');
+  }
+
   function paintSummary() {
     const cards = buildReportSummaryCards(state.viagens.filter(v => v.data === state.currentDate),
       state.metas,[state.currentDate],reportOperations(state.originFilter));
@@ -179,7 +213,12 @@
     byId('progressActual').style.width = actual+'%';
     byId('progressBooked').style.width = booked+'%';
     byId('summaryHead').innerHTML = '<tr><th>Volume (kg)</th>'+[...dests.keys()].map(d=>'<th>'+escapeHtml(d)+'</th>').join('')+'<th>Total</th></tr>';
-    byId('summaryBody').innerHTML = series.map(([key,label])=>'<tr class="'+(key==='total'?'total-row':'')+'"><td>'+label+'</td>'+[...dests.values(),totals].map(d=>'<td>'+formatKg(d[key])+'</td>').join('')+'</tr>').join('');
+    matrixBody.innerHTML = series.map(([key,label]) => {
+      const details = key === 'meta' || key === 'total' ? productBreakdown(cards,dests.keys(),key) : '';
+      const heading = details ? '<button type="button" class="product-toggle" data-product-group="'+key+'" aria-expanded="'+openProductGroups.has(key)+'" aria-label="'+label+' por produto">'+label+'</button>' : label;
+      const values = [...dests.values(),totals].map(d=>'<td>'+formatKg(d[key])+'</td>').join('');
+      return '<tr class="'+(key==='total'?'total-row':'')+'"><td>'+heading+'</td>'+values+'</tr>'+details;
+    }).join('');
   }
   for (const [sec,head] of sections) {
     const placeholder = byId(head).closest('table');
