@@ -2,7 +2,7 @@
 (() => {
   const shell = document.getElementById('beta-shell');
   const byId = id => document.getElementById(id);
-  const sections = [['arcos','thead','countBilled'], ['agenciando','theadBooked','countBooked']];
+  const sections = [['agenciando','theadBooked','countBooked'], ['arcos','thead','countBilled'], ['concluidos',null,'countCompleted']];
   const widths = {placa:8,nome:13,tipo:10,origem:8,destino:9,peso:7,agendamento:9,frete:6,status:17,trabalho:10};
   const typeStyles = {CARRETEIRO:'car','CARRETEIRO J':'carj',AGREGADO:'ag',FROTA:'frota',DEDICADO:'ded'};
   const statusGauge = document.createElement('div');
@@ -15,6 +15,17 @@
   }
   if (typeof ResizeObserver === 'function') new ResizeObserver(syncStatusWidth).observe(statusGauge);
   let tab = 'all';
+  let completedExpanded = false;
+  function setCompletedExpanded(expanded) {
+    completedExpanded = expanded;
+    byId('completedContent').hidden = !expanded;
+    byId('toggleCompleted').setAttribute('aria-expanded', String(expanded));
+    byId('completedToggleLabel').textContent = expanded ? 'Recolher' : 'Expandir';
+  }
+  byId('toggleCompleted').onclick = () => {
+    setCompletedExpanded(!completedExpanded);
+    paintRows();
+  };
 
   function adopt(targetId, sourceId, useMarkup = false) {
     const target = byId(targetId), source = byId(sourceId);
@@ -111,7 +122,7 @@
     if (!counts.has(tab)) tab = 'all';
     const term = normalize(byId('tableSearch').value.trim());
     const labels = new Set();
-    let visible = 0;
+    let visible = 0, collapsedCompleted = 0;
     for (const [sec,,countId] of sections) {
       const table = byId('table-'+sec), body = byId('tbody-'+sec);
       let n = 0;
@@ -132,7 +143,8 @@
       const empty = table.parentElement.querySelector('.beta-empty');
       empty.hidden = n > 0 || !body.querySelector('tr[data-id]');
       byId(countId).textContent = n + (n === 1 ? ' registro' : ' registros');
-      visible += n;
+      if (sec === 'concluidos' && !completedExpanded) collapsedCompleted = n;
+      else visible += n;
       const cols = visibleTableFields();
       const fields = [...cols,{key:'actions'}];
       const weight = fields.reduce((sum,f)=>sum+(f.key==='status' ? 0 : widths[f.key] || 7),0);
@@ -149,7 +161,7 @@
       return sample;
     }));
     syncStatusWidth();
-    byId('footCount').textContent = 'Exibindo '+visible+' de '+scope.length+' viagens';
+    byId('footCount').textContent = 'Exibindo '+visible+' de '+scope.length+' viagens'+(collapsedCompleted ? ' · '+collapsedCompleted+' concluído(s) recolhido(s)' : '');
     const tabs = byId('tabs');
     const buttons = new Map([...tabs.children].map(button => [button.dataset.tab,button]));
     for (const [key,button] of buttons) if (!counts.has(key)) button.remove();
@@ -262,11 +274,10 @@
     }).join('');
   }
   for (const [sec,head] of sections) {
-    const placeholder = byId(head).closest('table');
     const table = byId('table-'+sec);
     table.classList.remove('data-table');
     table.prepend(document.createElement('colgroup'));
-    placeholder.replaceWith(table);
+    if (head) byId(head).closest('table').replaceWith(table);
     const empty = document.createElement('p');
     empty.className = 'beta-empty empty'; empty.hidden=true;
     empty.textContent = 'Nenhuma viagem para os critérios selecionados.';
@@ -279,7 +290,11 @@
   byId('tableSearch').oninput = paintRows;
   byId('tabs').onclick = event => {
     const btn = event.target.closest('[data-tab]');
-    if (btn) { tab = btn.dataset.tab; paintRows(); }
+    if (btn) {
+      tab = btn.dataset.tab;
+      if (normalizeOption(tab) === 'CONCLUIDO') setCompletedExpanded(true);
+      paintRows();
+    }
   };
   new MutationObserver(paintSummary).observe(byId('summary-cards'),{childList:true});
   paintRows();

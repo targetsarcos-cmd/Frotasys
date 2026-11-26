@@ -44,7 +44,7 @@ test('a composição da beta conserva os controles da interface original', () =>
   assert.ok(result.includes('class="workspace-beta"'));
   const ids = [...result.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(ids.length, new Set(ids).size, 'cada controle deve ter um único id');
-  for (const id of ['collapseNav', 'tableSearch', 'tabs', 'summaryMetrics', 'progressTrack', 'summaryBody']) {
+  for (const id of ['collapseNav', 'tableSearch', 'tabs', 'summaryMetrics', 'progressTrack', 'summaryBody', 'toggleCompleted', 'completedContent', 'table-concluidos', 'tbody-concluidos', 'countCompleted']) {
     assert.ok(ids.includes(id), id);
   }
   assert.doesNotMatch(result, /demoTargets|Modo demo|Dados demonstrativos/);
@@ -77,4 +77,29 @@ test('somente leituras das tabelas permitidas chegam ao transporte', async () =>
   assert.equal(calls.length, 1);
   assert.equal(calls[0].opts.headers.get('authorization'), 'Bearer read');
   assert.equal(calls[0].opts.redirect, 'error');
+});
+
+test('a beta classifica viagens pela nota e conclusão sem depender da seção legada', () => {
+  const { classify, hasInvoice } = require('../public/js/workspace-trip-sections');
+  const pending = { secao:'arcos', status:'AGUARDANDO CARREGAMENTO', nota:'  ' };
+  assert.equal(classify(pending), 'agenciando');
+  assert.equal(classify({ ...pending, secao:'agenciando', nota:'12345' }), 'arcos');
+  assert.equal(classify({ ...pending, status:'CONCLUÍDO', nota:'12345' }), 'concluidos');
+  assert.equal(classify({ ...pending, status:'CONCLUIDO' }), 'concluidos');
+  assert.equal(classify({ ...pending, status:'PROGRAMAR', nota:'12345' }), 'arcos');
+  assert.equal(classify({ ...pending, nota:null }), 'agenciando');
+  assert.equal(classify({ ...pending, nota:12345 }), 'arcos');
+  assert.equal(hasInvoice({ nota:'  ' }), false);
+  assert.equal(hasInvoice({ nota:'00123' }), true);
+});
+
+test('a tabela de concluídos inicia recolhida e preserva a estrutura original', () => {
+  const page = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  const result = workspace(page);
+  assert.match(result, /id="toggleCompleted" aria-expanded="false" aria-controls="completedContent"/);
+  assert.match(result, /id="completedContent" hidden/);
+  assert.ok(result.indexOf('countBooked') < result.indexOf('countBilled'));
+  assert.ok(result.indexOf('countBilled') < result.indexOf('countCompleted'));
+  assert.ok(result.indexOf('/js/workspace-trip-sections.js') < result.indexOf('/js/workspace-beta.js'));
+  assert.doesNotMatch(page, /table-concluidos/);
 });
