@@ -351,3 +351,22 @@ test('pagina de relatorios beta e servida como HTML inline antes dos arquivos es
   assert.equal(headers['Cache-Control'],'no-store');
   assert.equal(headers.body,html);
 });
+
+test('beta ordena abas pelo fluxo operacional sem filtro de concluidos', () => {
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const start=js.indexOf('  const statusTabOrder = [');
+  const end=js.indexOf('  function paintRows()',start);
+  assert.ok(start>=0 && end>start);
+  const normalize=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  const build=new Function('normalizeOption','viagemStatusDisplay',js.slice(start,end)+'return buildStatusTabCounts;')(normalize,trip=>trip.status);
+  const trips=statuses=>statuses.map(status=>({status}));
+  assert.deepEqual([...build(trips(['CONCLUIDO','ADIANTAMENTO / DESCARGA',...Array(5).fill('AGUARDANDO CARREGAMENTO')]))],
+    [['all',7],['AGUARDANDO CARREGAMENTO',5],['ADIANTAMENTO / DESCARGA',1]]);
+  const order=['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA','CRIAR DT / PROGRAMAR','CRIAR DT','ENVIAR PEDIDO','PROGRAMAR','AGUARDANDO CARREGAMENTO','EMITIR CTE','ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA'];
+  assert.deepEqual([...build(trips(['CUSTOM','CONCLUÍDO',...order.slice().reverse()])).keys()],['all',...order,'CUSTOM']);
+  assert.deepEqual([...build(trips(['CONCLUÍDO']))],[['all',1]]);
+  assert.deepEqual([...build([])],[['all',0]]);
+  assert.match(js,/if \(!counts\.has\(tab\)\) tab = 'all';/);
+  assert.match(js,/tabs\.insertBefore\(button, tabs\.children\[tabPosition\] \|\| null\)/);
+  assert.match(js,/setCompletedExpanded\(!completedExpanded\)/);
+});
