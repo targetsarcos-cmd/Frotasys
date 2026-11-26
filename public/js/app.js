@@ -1578,8 +1578,8 @@ function buildReportsData(viagens, metas, filters) {
   const operations = reportOperations(filters.operation);
   const dates = dateRangeList(filters.start, filters.end);
   const rows = filterReportRows(viagens, operations);
-  const fatRows = rows.filter(v => v.secao === 'arcos' && hasNotaPreenchida(v));
-  const agencRows = rows.filter(v => v.secao === 'agenciando' || (v.secao === 'arcos' && !hasNotaPreenchida(v)));
+  const fatRows = rows.filter(isFaturadoForSummary);
+  const agencRows = rows.filter(isAgenciadoForSummary);
   const loadedTotal = sumPeso(rows);
   const fatTotal = sumPeso(fatRows);
   const agencTotal = sumPeso(agencRows);
@@ -1669,8 +1669,8 @@ function buildReportSummaryCards(rows, metas, dates, operations) {
     const destinos = summaryDestinationsForOperation(operation);
     const productSet = new Set(produtos.map(normalizeOption));
     const operationRows = rows.filter(row => row.origem === origem && productSet.has(normalizeOption(row.produto)));
-    const faturadoRows = operationRows.filter(row => row.secao === 'arcos' && hasNotaPreenchida(row));
-    const agenciadoRows = operationRows.filter(row => row.secao === 'agenciando' || (row.secao === 'arcos' && !hasNotaPreenchida(row)));
+    const faturadoRows = operationRows.filter(isFaturadoForSummary);
+    const agenciadoRows = operationRows.filter(isAgenciadoForSummary);
     const totals = { meta: 0, fat: 0, agenc: 0, total: 0, falta: 0 };
 
     const columns = destinos.map(destino => {
@@ -3804,6 +3804,8 @@ const EXTRA_FIELDS = [
 const FIELDS = BASE_FIELDS;
 
 function renderTable(secao) {
+  // Every existing refresh of the booked table also refreshes the beta's completed table.
+  if (secao === 'agenciando' && isBetaTripWorkspace()) renderTable('concluidos');
   renderTableHeader(secao);
   const tbody = document.getElementById(`tbody-${secao}`);
   const rows = filteredRows(secao);
@@ -4381,6 +4383,25 @@ function hasAdiantamentoLiberado(viagem) {
 
 function hasNotaPreenchida(viagem) {
   return String(viagem?.nota || '').trim() !== '';
+}
+
+function isBetaTripWorkspace() {
+  return document.body?.classList.contains('workspace-beta') === true;
+}
+
+function operationalTripSection(viagem) {
+  return isBetaTripWorkspace() ? window.FrotasysBetaTripSections.classify(viagem) : viagem.secao;
+}
+
+// Completed trips remain in the financial totals; only their operational table changes.
+function isFaturadoForSummary(viagem) {
+  if (isBetaTripWorkspace()) return window.FrotasysBetaTripSections.hasInvoice(viagem);
+  return viagem.secao === 'arcos' && hasNotaPreenchida(viagem);
+}
+
+function isAgenciadoForSummary(viagem) {
+  if (isBetaTripWorkspace()) return !window.FrotasysBetaTripSections.hasInvoice(viagem);
+  return viagem.secao === 'agenciando' || (viagem.secao === 'arcos' && !hasNotaPreenchida(viagem));
 }
 
 function hasPamcardOk(pamcard = '') {
@@ -5088,7 +5109,7 @@ function tripFilterValue(viagem, field) {
 
 function tripInFilterScope(v) {
   return v.data === state.currentDate && (!state.originFilter || v.origem === state.originFilter ||
-    (v.secao === 'agenciando' && !v.origem));
+    (operationalTripSection(v) === 'agenciando' && !v.origem));
 }
 
 function renderTripFilterFields() {
@@ -5192,7 +5213,7 @@ function matchesTripFilters(viagem, filters) {
 
 function filteredRows(secao) {
   return sortRows(state.viagens
-    .filter(v => v.secao === secao)
+    .filter(v => operationalTripSection(v) === secao)
     .filter(tripInFilterScope)
     .filter(v => matchesTripFilters(v, state.tripFilters)));
 }
@@ -5970,8 +5991,8 @@ function renderOriginSummaryCard(operacao) {
   const destinos = summaryDestinationsForOperation(operacao);
   const productSet = new Set(produtos.map(normalizeOption));
   const summaryRows = state.viagens.filter(v => v.data === state.currentDate && v.origem === origem && productSet.has(normalizeOption(v.produto)));
-  const faturadoRows = summaryRows.filter(v => v.secao === 'arcos' && hasNotaPreenchida(v));
-  const agenciadoRows = summaryRows.filter(v => v.secao === 'agenciando' || (v.secao === 'arcos' && !hasNotaPreenchida(v)));
+  const faturadoRows = summaryRows.filter(isFaturadoForSummary);
+  const agenciadoRows = summaryRows.filter(isAgenciadoForSummary);
   const totals = { meta: 0, fat: 0, agenc: 0, total: 0, falta: 0 };
 
   const metaCells = [];
@@ -6167,7 +6188,7 @@ function renderProductSummary(rows) {
 
 function toggleProductSummary() {
   state.productSummaryOpen = !state.productSummaryOpen;
-  renderProductSummary([...filteredRows('arcos'), ...filteredRows('agenciando')]);
+  renderProductSummary([...filteredRows('arcos'), ...filteredRows('agenciando'), ...(isBetaTripWorkspace() ? filteredRows('concluidos') : [])]);
 }
 
 function setSummaryCell(row, dest, value) {

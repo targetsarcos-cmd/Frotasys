@@ -67,3 +67,10 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 .workspace-beta #travel-drawer .drawer-tabs {background:#fff;border-bottom:1px solid #d6e0e9}
 .workspace-beta #travel-drawer .drawer-tabs .active {color:#075b9e;border-bottom:2px solid #096ac1}
 @media(min-width:1251px){.workspace-beta.travel-drawer-open #beta-shell .workspace {margin-right:min(535px,38vw)}}
+
+#beta-shell .completed-section .section-label h3:before {background:#18845f}
+#beta-shell .completed-section:has(#completedContent[hidden]) .section-label {border-bottom:0}
+#beta-shell .completed-toggle {margin-left:auto;display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid #b7cbdc;border-radius:4px;color:#075b9e;background:#fff;font:600 11px 'Segoe UI',Arial,sans-serif}
+#beta-shell .completed-toggle:hover {background:#eaf3fa}
+#beta-shell .completed-toggle svg {width:15px;height:15px;transition:transform .15s ease}
+#beta-shell .completed-toggle[aria-expanded=true] svg {transform:rotate(180deg)}
