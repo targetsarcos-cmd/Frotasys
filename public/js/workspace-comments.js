@@ -236,15 +236,37 @@
     } finally { pending = false; }
   }
 
-  const detailsItem = el('div','ctx-item','Abrir detalhes');
-  const obsItem = el('div','ctx-item','Observacoes');
-  const viewItem = el('div','ctx-item','Ver comentarios');
-  const addItem = el('div','ctx-item','Adicionar comentario');
+  const menuIcons = {
+    copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+    details:'<path d="M13 3h8v8M21 3l-9 9"/><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>',
+    observation:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    view:'<path d="M13 3H5a2 2 0 0 0-2 2v7l3-3h7a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/><path d="M16 10h3a2 2 0 0 1 2 2v7l-3-3h-6a2 2 0 0 1-2-2v-2"/>',
+    add:'<path d="M20 11a8 8 0 0 1-8 8H5l2-4a8 8 0 1 1 13-4Z"/><path d="M12 8v6M9 11h6"/>',
+    clear:'<path d="m5 16 8-11a2 2 0 0 1 3-.4l4 4a2 2 0 0 1 0 3L12 20H8l-3-3a1 1 0 0 1 0-1Z"/><path d="m9 11 7 7M12 20h9"/>'
+  };
+  function menuLabel(node, icon, label) {
+    node.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+menuIcons[icon]+'</svg>';
+    node.append(el('span','beta-menu-label',label));
+    node.classList.add('beta-menu-entry');
+    if (node.tagName !== 'BUTTON') {
+      node.setAttribute('role','button');
+      node.tabIndex=0;
+      node.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); node.click(); }
+      });
+    }
+    return node;
+  }
+  const copyItem = menuLabel(document.getElementById('ctx-copy'),'copy','Copiar placa');
+  const detailsItem = menuLabel(el('div','ctx-item'),'details','Abrir detalhes');
+  const obsItem = menuLabel(el('div','ctx-item'),'observation','Observações');
+  const viewItem = menuLabel(el('div','ctx-item'),'view','Ver comentários');
+  const addItem = menuLabel(el('div','ctx-item'),'add','Adicionar comentário');
   const colorItem = el('div','beta-row-color-menu');
   colorItem.append(el('div','beta-row-color-title','Cor da linha'));
   const swatches = el('div','beta-row-swatches');
   for (const [id,name,hex] of colors) {
-    const swatch = button('', () => menuAction(tripId => setRowColor(tripId,id)), 'beta-row-swatch');
+    const swatch = button('', () => writeMenuAction(tripId => setRowColor(tripId,id)), 'beta-row-swatch');
     swatch.dataset.color = id;
     swatch.style.setProperty('--swatch',hex);
     swatch.title = name;
@@ -252,7 +274,10 @@
     swatch.setAttribute('aria-pressed','false');
     swatches.append(swatch);
   }
-  colorItem.append(swatches,button('Remover cor', () => menuAction(tripId => setRowColor(tripId,'')), 'beta-row-clear'));
+  const clearItem = menuLabel(button('', () => writeMenuAction(tripId => setRowColor(tripId,'')), 'beta-row-clear'),'clear','Remover cor');
+  const readOnlyNote = el('div','beta-menu-readonly');
+  readOnlyNote.setAttribute('role','status');
+  colorItem.append(swatches,clearItem,readOnlyNote);
   for (const node of [detailsItem,obsItem,viewItem,addItem,colorItem]) {
     node.style.display = 'none';
     menu.append(node);
@@ -262,10 +287,17 @@
     hideCtxMenu();
     if (id) action(id);
   }
+  function writeMenuAction(action) {
+    if (!canWrite()) {
+      readOnlyNote.textContent = isBetaReadOnly() ? 'Edição desativada no servidor beta. Ative BETA_ENABLE_WRITES no Render.' : 'Seu perfil não possui permissão de edição.';
+      return;
+    }
+    menuAction(action);
+  }
   detailsItem.onclick = () => menuAction(id => selectViagem(id));
   obsItem.onclick = () => menuAction(id => selectViagem(id,'observacoes'));
   viewItem.onclick = () => menuAction(id => show(id,true));
-  addItem.onclick = () => menuAction(id => show(id,true,true));
+  addItem.onclick = () => writeMenuAction(id => show(id,true,true));
   const pendingColors = new Set();
   async function setRowColor(id,color) {
     if (!canWrite() || pendingColors.has(id)) return;
@@ -278,11 +310,15 @@
   function configureMenu(mode, trip) {
     close();
     const visible = mode === 'placa' && !!trip;
-    detailsItem.style.display = visible ? '' : 'none';
-    obsItem.style.display = visible ? '' : 'none';
-    viewItem.style.display = visible && hasHistory(trip) ? '' : 'none';
-    addItem.style.display = visible && canWrite() ? '' : 'none';
-    colorItem.style.display = visible && canWrite() ? '' : 'none';
+    menu.classList.toggle('beta-plate-context',visible);
+    for (const item of [detailsItem,obsItem,viewItem,addItem,colorItem]) item.style.display = visible ? '' : 'none';
+    const writable = visible && canWrite();
+    for (const item of [addItem,clearItem,...swatches.children]) {
+      item.setAttribute('aria-disabled',String(!writable));
+      item.title = writable ? (item.dataset.color ? colors.find(c=>c[0]===item.dataset.color)[1] : '') : 'Edição indisponível';
+    }
+    readOnlyNote.hidden = !visible || writable;
+    readOnlyNote.textContent = !writable ? (isBetaReadOnly() ? 'Beta em modo somente leitura. Ative a edição no Render.' : 'Seu perfil não permite editar.') : '';
     for (const swatch of swatches.children) swatch.setAttribute('aria-pressed',String(swatch.dataset.color === colorOf(trip)));
   }
   function decorate(row, trip) {
