@@ -423,11 +423,18 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .frete-refresh-btn {width:36px;height:36px;color:#175b8c;border:1px solid #b3c9dc;background:white}
 #beta-fretes .frete-query-result:empty {display:none}
 #beta-fretes .rate-scroll {overflow:auto;background:transparent;border:0;border-radius:0}
-#beta-fretes .rate-table {min-width:710px;width:100%;border-collapse:separate;border-spacing:0;font:13px 'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#173950;background:transparent}
+#beta-fretes .rate-table {min-width:724px;width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font:13px 'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#173950;background:transparent}
 #beta-fretes .rate-table :is(td,th) {padding:7px 12px;border:0;border-right:1px solid #d9e4ed;border-bottom:1px solid #d9e4ed;text-align:center}
 #beta-fretes .rate-table thead {color:#fff;background:#152e43}
 #beta-fretes .rate-table thead tr+tr {background:#e4edf4;color:#284a62}
-#beta-fretes .rate-table thead th {background:inherit}
+#beta-fretes .rate-table thead th {position:static;background:inherit;color:inherit}
+#beta-fretes .rate-table .rate-route-col {width:25%}
+#beta-fretes .rate-table .rate-axis-col {width:9%}
+#beta-fretes .rate-table .rate-gap-col {width:14px}
+#beta-fretes .rate-table thead .rate-category-title {font-size:12px;font-weight:700}
+#beta-fretes .rate-table thead .rate-agregado-title {background:#f8e8b0;color:#6b4c08;border-top-left-radius:0;border-top-right-radius:7px}
+#beta-fretes .rate-table thead .rate-terceiros-title {background:#f6d3d4;color:#842d36;border-top-left-radius:7px}
+#beta-fretes .rate-table thead .rate-route-title {background:#152e43;color:#fff;font-size:14px;font-weight:700}
 #beta-fretes .rate-table thead tr:first-child th {border-top:1px solid #c4d4e2}
 #beta-fretes .rate-table thead tr:first-child th:first-child {border-left:1px solid #c4d4e2;border-radius:7px 0 0 7px}
 #beta-fretes .rate-table thead tr:first-child th:last-child {border-top-right-radius:7px}
@@ -436,7 +443,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table .rate-route td {background:#fff}
 #beta-fretes .rate-table .rate-route tr:nth-child(even) td {background:#f6f9fc}
 #beta-fretes .rate-table .rate-route tr:first-child > * {border-top:1px solid #c4d4e2}
-#beta-fretes .rate-table .rate-route th[scope=rowgroup] {text-align:center;width:25%;background:#eaf1f7;border:1px solid #c4d4e2;border-radius:7px 0 0 7px;color:#173950;font-weight:700}
+#beta-fretes .rate-table .rate-route th[scope=rowgroup] {text-align:center;width:25%;background:#152e43;border:1px solid #152e43;border-radius:7px 0 0 7px;color:#fff;font-size:14px;font-weight:700;overflow-wrap:anywhere}
 #beta-fretes .rate-table .rate-route td:last-child {border-right-color:#c4d4e2}
 #beta-fretes .rate-table .rate-route tr:first-child td:last-child {border-top-right-radius:7px}
 #beta-fretes .rate-table .rate-route tr:last-child td {border-bottom-color:#c4d4e2}
@@ -444,6 +451,15 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table .rate-gap td {height:12px;padding:0;border:0;background:transparent;line-height:0;font-size:0}
 #beta-fretes .rate-table .rate-route:first-of-type tr:first-child > * {border-top:1px solid #c4d4e2}
 #beta-fretes .rate-table thead button {color:inherit;background:none;border:0;font:inherit}
+#beta-fretes .rate-table .rate-route-title button {color:#fff;font-size:14px;font-weight:700}
+#beta-fretes .rate-table :is(thead, .rate-route) .rate-category-gap {width:14px;min-width:14px;max-width:14px;padding:0;border:0;border-radius:0;background:#edf2f6;box-shadow:none;cursor:default}
+#beta-fretes .rate-table .rate-route td[data-group=agregado]:has(+ .rate-category-gap) {border-right-color:#c4d4e2}
+#beta-fretes .rate-table .rate-route td[data-group=rows]:first-of-type,#beta-fretes .rate-table .rate-route .rate-category-gap + td {border-left:1px solid #c4d4e2}
+#beta-fretes .rate-table .rate-route tr:first-child .rate-category-gap + td {border-top-left-radius:7px}
+#beta-fretes .rate-table .rate-route tr:last-child .rate-category-gap + td {border-bottom-left-radius:7px}
+#beta-fretes .rate-table .rate-route tr:first-child td:has(+ .rate-category-gap) {border-top-right-radius:7px}
+#beta-fretes .rate-table .rate-route tr:last-child td:has(+ .rate-category-gap) {border-bottom-right-radius:7px}
+#beta-fretes .rate-table .rate-route th[scope=rowgroup] [contenteditable=true]:focus {color:#173950}
 #beta-fretes .rate-table [contenteditable=true] {display:inline-block;min-width:3em;min-height:1.3em;vertical-align:middle;border-bottom:1px dashed #9db7c9}
 #beta-fretes .rate-table [contenteditable=true]:focus {outline:2px solid #3684be;background:white}
 #beta-fretes #frete-actions {position:fixed;z-index:90;display:grid;min-width:165px;padding:4px;background:white;border:1px solid #cbdce9;border-radius:6px;box-shadow:0 5px 18px #17395026}
