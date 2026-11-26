@@ -170,7 +170,7 @@
       if (separator) separator.hidden = tab !== 'all' || !!term;
       const empty = table.parentElement.querySelector('.beta-empty');
       empty.hidden = n > 0 || !body.querySelector('tr[data-id]');
-      byId(countId).textContent = n + (n === 1 ? ' registro' : ' registros');
+      byId(countId).textContent = String(n);
       if (sec === 'concluidos' && !completedExpanded) collapsedCompleted = n;
       else visible += n;
       const cols = visibleTableFields();

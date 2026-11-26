@@ -247,3 +247,35 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .report-panel .report-header p,
 #beta-shell .report-panel .report-header .report-context,
 #beta-shell .report-panel .report-heading > svg {color:#fff}
+
+/* Each NF has a dedicated hour field; avoid wrapping the time or compressing the NF editor. */
+.workspace-beta #travel-drawer .beta-invoice-row {
+  display:grid;grid-template-columns:minmax(0,1fr) 142px;gap:10px;align-items:stretch;
+  border-bottom:1px solid #e5ecf2;
+}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field {
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;
+  min-width:0;width:100%;box-sizing:border-box;border-bottom:0;
+}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field > span {white-space:nowrap}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field > strong {
+  justify-content:flex-end;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child > strong {
+  overflow:visible;overflow-wrap:normal;white-space:nowrap;
+}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field > input {
+  width:100%;min-width:0;box-sizing:border-box;padding:6px 4px;font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:first-child > input {text-align:right}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child > input {padding-inline:2px}
+@media(max-width:420px){
+  .workspace-beta #travel-drawer .beta-invoice-row {grid-template-columns:minmax(0,1fr) 104px}
+  .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field {grid-template-columns:minmax(0,1fr);gap:3px}
+  .workspace-beta #travel-drawer .beta-invoice-row > .drawer-field > strong {justify-content:flex-start}
+}
+
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing {grid-template-columns:minmax(0,1fr);gap:3px}
+.workspace-beta #travel-drawer .beta-invoice-row > .drawer-field:last-child.is-editing > input {min-height:30px}
