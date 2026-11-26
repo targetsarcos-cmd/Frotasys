@@ -233,7 +233,7 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
         staticGzipCache.set(cacheKey, compressed);
       }
 
-      res.type(filePath);
+      res.type(ext);
       STATIC_CACHE_OPTIONS.setHeaders(res, filePath);
       res.setHeader('Content-Encoding', 'gzip');
       res.setHeader('Vary', 'Accept-Encoding');
@@ -255,6 +255,11 @@ if (betaWorkspace) {
   app.get(['/', '/index.html'], async (_req, res) => {
     const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
     res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable }));
+  });
+  // Serve the reference report as a browser document, never as an attachment.
+  app.get(['/beta/relatorios', '/beta-reports.html'], async (_req, res) => {
+    const source = await fs.readFile(path.join(__dirname, 'public', 'beta-reports.html'), 'utf8');
+    res.type('html').set('Content-Disposition', 'inline').set('Cache-Control', 'no-store').send(source);
   });
 }
 app.use(cors());

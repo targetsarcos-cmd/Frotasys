@@ -10,7 +10,7 @@
     frame=document.createElement('iframe');
     frame.id='beta-reports-page';
     frame.title='Relatórios operacionais';
-    frame.src='/beta-reports.html';
+    frame.src='/beta/relatorios';
     document.body.classList.add('beta-report-reference-active');
     document.body.append(frame);
     const shell=document.getElementById('beta-shell');
