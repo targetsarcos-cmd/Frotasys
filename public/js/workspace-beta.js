@@ -139,14 +139,29 @@
     const sched = row.querySelector('.schedule-chip');
     if (sched) sched.className = 'sched';
   }
+  // Match the operational progression in tripStatus.js; completed trips keep their own section.
+  const statusTabOrder = [
+    'CONFERIR MOTORISTA', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA',
+    'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'ENVIAR PEDIDO', 'PROGRAMAR',
+    'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA',
+    'ADIANTAMENTO', 'AGENDAR DESCARGA'
+  ];
+  function buildStatusTabCounts(scope) {
+    const counts = new Map();
+    for (const trip of scope) {
+      const key = viagemStatusDisplay(trip);
+      if (key && normalizeOption(key) !== 'CONCLUIDO') counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const rank = key => {
+      const i = statusTabOrder.indexOf(normalizeOption(key));
+      return i === -1 ? statusTabOrder.length : i;
+    };
+    return new Map([['all', scope.length], ...[...counts].sort((a,b) => rank(a[0]) - rank(b[0]))]);
+  }
   function paintRows() {
     const scope = state.viagens.filter(tripInFilterScope);
     const index = new Map(scope.map(trip => [String(trip._id),trip]));
-    const counts = new Map([['all',scope.length]]);
-    for (const trip of scope) {
-      const key = viagemStatusDisplay(trip);
-      if (key) counts.set(key, (counts.get(key) || 0) + 1);
-    }
+    const counts = buildStatusTabCounts(scope);
     if (!counts.has(tab)) tab = 'all';
     const term = normalize(byId('tableSearch').value.trim());
     const labels = new Set();
@@ -188,6 +203,7 @@
     const tabs = byId('tabs');
     const buttons = new Map([...tabs.children].map(button => [button.dataset.tab,button]));
     for (const [key,button] of buttons) if (!counts.has(key)) button.remove();
+    let tabPosition = 0;
     for (const [key,count] of counts) {
       let button = buttons.get(key);
       if (!button) {
@@ -197,8 +213,9 @@
         button.dataset.tab = key;
         button.textContent = key === 'all' ? 'Todas' : key;
         button.append(document.createElement('small'));
-        tabs.append(button);
       }
+      if (tabs.children[tabPosition] !== button) tabs.insertBefore(button, tabs.children[tabPosition] || null);
+      tabPosition++;
       const active = tab === key;
       button.classList.toggle('active',active);
       button.setAttribute('aria-pressed',String(active));
@@ -315,7 +332,6 @@
     const btn = event.target.closest('[data-tab]');
     if (btn) {
       tab = btn.dataset.tab;
-      if (normalizeOption(tab) === 'CONCLUIDO') setCompletedExpanded(true);
       paintRows();
     }
   };
