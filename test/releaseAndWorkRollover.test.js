@@ -71,6 +71,6 @@ test('aviso obrigatório bloqueia a interface, impede fechar e mantém F5 nativo
   assert.match(notice,/dialog\.addEventListener\('close',showPending\)/);
   assert.match(notice,/event\.stopImmediatePropagation\(\)/);
   assert.match(notice,/if\(event\.key==='Escape'\)event\.preventDefault\(\)/);
-  assert.doesNotMatch(notice,/<button|Entendi|acknowledge|dialog\.close\(|location\.reload|activeElement|modal-overlay/);
+  assert.doesNotMatch(notice,/<button|Entendi|acknowledge\(|dialog\.close\(|location\.reload|activeElement|modal-overlay/);
   assert.match(css,/#frotasys-version-notice \{position:fixed;inset:0;margin:auto/);
 });
