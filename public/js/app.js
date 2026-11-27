@@ -997,9 +997,19 @@ function loggedUserDisplayName() {
   return String(state.userProfile?.displayName || state.userProfile?.nome || state.userProfile?.email || '').trim();
 }
 
+function safeProfilePhoto(value) {
+  return typeof value==='string'&&value.length<=44000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value)?value:'';
+}
+
+function profileAvatarContent(name,value) {
+  const photo=safeProfilePhoto(value);
+  const initials=escapeHtml(initialsFromName(name));
+  return photo?'<span class="profile-avatar-fallback">'+initials+'</span><img class="profile-avatar-image" src="'+escapeAttr(photo)+'" alt="" decoding="async" onerror="this.remove()">':initials;
+}
+
 function loggedUserBadgeHtml() {
   const name = loggedUserDisplayName();
-  return `<span class="logged-user-avatar"><span>${escapeHtml(initialsFromName(name))}</span></span><strong>${escapeHtml(name)}</strong>`;
+  return `<span class="logged-user-avatar">${profileAvatarContent(name,state.userProfile?.avatarUrl)}</span><strong>${escapeHtml(name)}</strong>`;
 }
 
 function normalizeLembrete(lembrete = {}) {
@@ -1047,7 +1057,7 @@ function normalizeWorkSessions(payload = []) {
     workTypeId: String(item.workTypeId || ''),
     userId: String(item.userId || ''),
     userNameSnapshot: String(item.userNameSnapshot || ''),
-    userAvatarSnapshot: '',
+    userAvatarSnapshot: safeProfilePhoto(item.userAvatarSnapshot),
     status: String(item.status || ''),
     startedAt: String(item.startedAt || ''),
     pausedAt: String(item.pausedAt || ''),
@@ -4595,7 +4605,7 @@ function renderWorkCell(viagem) {
   const paused = session.status === 'paused';
   const manageable = canManageWorkCell(session);
   const title = workCellTitle(viagem, session, type);
-  const avatar = escapeHtml(initialsFromName(session.userNameSnapshot));
+  const avatar = profileAvatarContent(session.userNameSnapshot,session.userAvatarSnapshot);
   return `<button type="button" class="work-session-card ${paused ? 'is-paused' : ''} ${manageable ? 'is-manageable' : ''}" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}')" style="--work-color:${escapeAttr(color)};${escapeAttr(colorPreviewStyle(color))}" title="${escapeAttr(title)}">
     <span class="work-avatar">${avatar}</span>
     <span class="work-info">
@@ -4610,7 +4620,7 @@ function renderWorkAvatarButton(viagem, session) {
   const type = session.workType || workTypeById(session.workTypeId) || {};
   const color = isHexColor(type.color) ? type.color : '#2563eb';
   const title = workCellTitle(viagem, session, type);
-  const avatar = escapeHtml(initialsFromName(session.userNameSnapshot));
+  const avatar = profileAvatarContent(session.userNameSnapshot,session.userAvatarSnapshot);
   return `<button type="button" class="work-avatar-mini ${canManageWorkCell(session) ? 'is-manageable' : ''}" onclick="openWorkPopover(event,'${escapeAttr(viagem._id)}','${escapeAttr(session._id)}')" style="--work-color:${escapeAttr(color)}" title="${escapeAttr(title)}">${avatar}</button>`;
 }
 
@@ -5454,6 +5464,15 @@ function renderSettingsModal() {
   }
 }
 
+let profilePhotoDraft;
+let profilePhotoBusy=false;
+let profilePhotoRequest=0;
+let profileSaveBusy=false;
+
+function selectedProfilePhoto() {
+  return profilePhotoDraft===undefined?safeProfilePhoto(state.userProfile?.avatarUrl):profilePhotoDraft;
+}
+
 function renderProfileSettingsSection() {
   return `<section class="settings-section settings-profile-section">
     <div class="settings-section-head">
@@ -5461,29 +5480,108 @@ function renderProfileSettingsSection() {
       <span>Coluna trabalho</span>
     </div>
     <div class="settings-profile-preview">
-      <span class="settings-profile-avatar">${escapeHtml(initialsFromName(loggedUserDisplayName()))}</span>
-      <strong>${escapeHtml(loggedUserDisplayName())}</strong>
+      <span class="settings-profile-avatar" id="profile-photo-preview">${profileAvatarContent(loggedUserDisplayName(),selectedProfilePhoto())}</span>
+      <div class="profile-photo-actions">
+        <strong>${escapeHtml(loggedUserDisplayName())}</strong>
+        <div class="profile-photo-buttons">
+          <input id="profile-photo-file" type="file" accept="image/jpeg,image/png,image/webp" hidden onchange="selectProfilePhoto(this)">
+          <button type="button" id="profile-photo-select" onclick="document.getElementById('profile-photo-file').click()" ${profilePhotoBusy||profileSaveBusy?'disabled':''}>Alterar foto</button>
+          <button type="button" id="profile-photo-remove" onclick="removeProfilePhoto()" ${!selectedProfilePhoto()||profileSaveBusy?'disabled':''}>Remover</button>
+        </div>
+        <small id="profile-photo-status" role="status">${profilePhotoBusy?'Preparando foto...':profilePhotoDraft!==undefined?'Clique em Salvar para confirmar.':'JPG, PNG ou WebP · até 10 MB'}</small>
+      </div>
     </div>
     <label class="settings-profile-field">
       <span>Nome</span>
       <input type="text" id="profile-display-name" value="${escapeAttr(loggedUserDisplayName())}" placeholder="Nome para exibir">
     </label>
-    <button type="button" class="settings-profile-save" onclick="saveUserProfileSettings()">Salvar</button>
+    <button type="button" class="settings-profile-save" onclick="saveUserProfileSettings()" ${profilePhotoBusy||profileSaveBusy?'disabled':''}>Salvar</button>
   </section>`;
 }
 
+function refreshProfilePhotoPreview(message) {
+  const preview=document.getElementById('profile-photo-preview');
+  if(preview)preview.innerHTML=profileAvatarContent(loggedUserDisplayName(),selectedProfilePhoto());
+  const status=document.getElementById('profile-photo-status');
+  if(status)status.textContent=message;
+  const select=document.getElementById('profile-photo-select');
+  if(select)select.disabled=profilePhotoBusy||profileSaveBusy||isBetaReadOnly();
+  const remove=document.getElementById('profile-photo-remove');
+  if(remove)remove.disabled=!selectedProfilePhoto()||profileSaveBusy||isBetaReadOnly();
+  const save=document.querySelector('.settings-profile-save');
+  if(save)save.disabled=profilePhotoBusy||profileSaveBusy||isBetaReadOnly();
+}
+
+async function createProfileThumbnail(file) {
+  if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024)
+    throw Error('Selecione JPG, PNG ou WebP de até 10 MB.');
+  const url=URL.createObjectURL(file);
+  try{
+    const img=new Image();
+    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('Não foi possível abrir a imagem.'));img.src=url;});
+    const w=img.naturalWidth,h=img.naturalHeight;
+    if(!w||!h||w*h>40000000)throw Error('Imagem muito grande ou inválida.');
+    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
+    const ctx=canvas.getContext('2d');
+    if(!ctx)throw Error('Não foi possível preparar a foto.');
+    const side=Math.min(w,h);
+    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,128,128);
+    ctx.drawImage(img,(w-side)/2,(h-side)/2,side,side,0,0,128,128);
+    for(const quality of [0.84,0.65,0.45]){
+      const data=canvas.toDataURL('image/jpeg',quality);
+      if(safeProfilePhoto(data)&&data.length<=43700)return data;
+    }
+    throw Error('Não foi possível reduzir a foto.');
+  }finally{URL.revokeObjectURL(url);}
+}
+
+async function selectProfilePhoto(input) {
+  const file=input.files?.[0];input.value='';
+  if(!file||isBetaReadOnly()||profileSaveBusy)return;
+  const request=++profilePhotoRequest;
+  profilePhotoBusy=true;refreshProfilePhotoPreview('Preparando foto...');
+  let message='Clique em Salvar para confirmar.';
+  try{
+    const data=await createProfileThumbnail(file);
+    if(request!==profilePhotoRequest)return;
+    profilePhotoDraft=data;
+  }catch(error){message=error.message;}
+  finally{
+    if(request===profilePhotoRequest){profilePhotoBusy=false;refreshProfilePhotoPreview(message);}
+  }
+}
+
+function removeProfilePhoto() {
+  if(isBetaReadOnly()||profileSaveBusy)return;
+  profilePhotoRequest++;profilePhotoBusy=false;profilePhotoDraft='';
+  refreshProfilePhotoPreview('Clique em Salvar para remover a foto.');
+}
+
 async function saveUserProfileSettings() {
+  if(isBetaReadOnly()||profilePhotoBusy||profileSaveBusy)return;
   const displayName = String(document.getElementById('profile-display-name')?.value || '').trim();
-  const saved = await apiFetch('/api/auth/profile', {
-    method: 'PUT',
-    body: JSON.stringify({ displayName })
-  });
-  if (!saved) return;
-  state.userProfile = { ...state.userProfile, ...saved };
-  applyPermissions();
-  renderSettingsModal();
-  renderAllUnlessInlineEditing();
-  showSummaryToast('Perfil salvo');
+  const payload={displayName};
+  if(profilePhotoDraft!==undefined)payload.avatarUrl=profilePhotoDraft;
+  profileSaveBusy=true;
+  refreshProfilePhotoPreview('Salvando...');
+  try{
+    const saved = await apiFetch('/api/auth/profile', {method:'PUT',body:JSON.stringify(payload)});
+    if (!saved){refreshProfilePhotoPreview('Não foi possível salvar. Tente novamente.');return;}
+    state.userProfile = { ...state.userProfile, ...saved };
+    profilePhotoDraft=undefined;
+    // Update existing sessions locally as well as receiving the authenticated broadcast.
+    const userId=String(state.userProfile.user_id||state.userProfile.id||'');
+    for(const session of state.workSessions||[]){
+      if(userId&&session.userId===userId){session.userAvatarSnapshot=safeProfilePhoto(saved.avatarUrl);session.userNameSnapshot=loggedUserDisplayName();}
+    }
+    applyPermissions();
+    renderAllUnlessInlineEditing();
+    showSummaryToast('Perfil salvo');
+  }finally{
+    profileSaveBusy=false;
+    if(profilePhotoDraft===undefined)renderSettingsModal();
+    else refreshProfilePhotoPreview('Alteração não confirmada. Clique em Salvar para tentar novamente.');
+  }
 }
 
 function renderWorkSettingsSection() {
