@@ -704,3 +704,55 @@ test('beta nao informa sucesso quando exclusao falha ou cadastro permanece',asyn
   confirmed=true;response={origem:['ARCOS']};await remove('origem','SPOT');
   assert.deepEqual(state.configOptions.origem,['ARCOS']);assert.deepEqual(state.operacoes,[{origem:'ARCOS'}]);assert.equal(renders,2);assert.match(messages.at(-1).msg,/Opção excluída: SPOT/);
 });
+
+test('gestao beta de usuarios protege conta administrativa e usa Supabase Auth',async()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const start=server.indexOf('const USER_ADMIN_COLUMNS'),end=server.indexOf("app.put('/api/users/:id', requireAdmin",start);
+  assert.ok(start>=0&&end>start);
+  const profiles=[{id:'me',user_id:'auth-me',nome:'Admin',email:'me@example.test',role:'admin',ativo:true},{id:'op',user_id:'auth-op',nome:'Operador',email:'op@example.test',role:'operador',ativo:true}];
+  const calls=[],routes={};let authError=false,profileError=false,actorActive=true;
+  const app={put:(route,guard,handler)=>{assert.equal(guard,'admin');routes['PUT '+route]=handler;},delete:(route,guard,handler)=>{assert.equal(guard,'admin');routes['DELETE '+route]=handler;}};
+  const supabase={auth:{admin:{updateUserById:async(id,patch)=>{calls.push(['updateAuth',id,patch]);return {error:authError?{}:null};},deleteUser:async(id,soft)=>{calls.push(['deleteAuth',id,soft]);return {error:authError?{}:null};}}},from:()=>{
+    let mode='select',patch={},filters={};const rows=()=>profiles.filter(p=>Object.entries(filters).every(([k,v])=>p[k]===v));
+    const q={select(){return q},eq(k,v){filters[k]=v;return q},maybeSingle:async()=>({data:rows()[0]||null,error:null}),single:async()=>{if(profileError)return {error:{}};const row=rows()[0];if(row)Object.assign(row,patch);return {data:row,error:null};},update(v){mode='update';patch=v;return q},delete(){mode='delete';return q},then(resolve){if(mode==='delete'){calls.push(['deleteProfile',filters.user_id]);if(profileError)return resolve({error:{}});for(const row of rows())profiles.splice(profiles.indexOf(row),1);}return resolve({count:rows().length,error:null});}};return q;
+  }};
+  const update=new Function('app','requireAdmin','supabase','profileForUser','publicProfile','betaEditable','process',server.slice(start,end)+'return updateBetaUser;')(app,'admin',supabase,async()=>({role:'admin',ativo:actorActive}),x=>x,true,{env:{BETA_USER_ID:'auth-me'}});
+  async function req(handler,id,body){let status=200,data;const res={status(n){status=n;return this},json(v){data=v;return this}};await handler({authUser:{id:'auth-me'},params:{id},body},res);return {status,data};}
+  const password=routes['PUT /api/users/:id/password'],remove=routes['DELETE /api/users/:id'];
+  assert.equal((await req(update,'me',{role:'operador'})).status,409);
+  assert.equal((await req(update,'me',{ativo:false})).status,409);
+  assert.equal((await req(remove,'me',{confirmEmail:'me@example.test'})).status,409);
+  assert.equal((await req(remove,'op',{confirmEmail:'wrong'})).status,400);
+  assert.equal((await req(password,'op',{password:'short'})).status,400);
+  assert.equal(calls.length,0);
+  assert.equal((await req(update,'op',{role:'invalid'})).status,400);
+  assert.equal((await req(update,'op',{nome:'Novo',email:'new@example.test',ativo:false})).status,200);
+  assert.deepEqual(calls[0],['updateAuth','auth-op',{email:'new@example.test',email_confirm:true}]);
+  assert.equal(profiles[1].nome,'Novo');
+  assert.equal((await req(password,'op',{password:'Example123!'})).status,200);
+  assert.deepEqual(calls[1],['updateAuth','auth-op',{password:'Example123!'}]);
+  actorActive=false;assert.equal((await req(remove,'op',{confirmEmail:'new@example.test'})).status,403);actorActive=true;
+  authError=true;assert.equal((await req(remove,'op',{confirmEmail:'new@example.test'})).status,409);authError=false;
+  assert.equal(profiles.length,2);
+  assert.equal((await req(remove,'op',{confirmEmail:'new@example.test'})).status,200);
+  assert.deepEqual(calls.slice(-2),[['deleteAuth','auth-op',false],['deleteProfile','auth-op']]);
+  assert.equal(profiles.length,1);
+  assert.equal((await req(remove,'op',{confirmEmail:'new@example.test'})).status,404);
+});
+test('pagina beta usuarios tem filtros, editor e confirmacao de exclusao',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const nav=fs.readFileSync(path.join(__dirname,'../public/js/workspace-fretes.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(html,/<main class="workspace" id="beta-users"[^>]*hidden>/);
+  assert.match(nav,/const usersActive = location.hash === '#usuarios'/);
+  assert.match(nav,/\[usersNav,usersActive\]/);
+  assert.match(app,/el\('beta-users-create'\)\.append\(create\)/);
+  assert.match(app,/autocomplete='new-password'/);
+  assert.match(html,/id="beta-user-password-confirm" type="password" autocomplete="new-password"/);
+  assert.match(app,/if\(confirmEmail!==user.email\)/);
+  assert.match(app,/if\(!user\|\|betaUserProtected\(user\)\)return/);
+  assert.match(app,/if\(betaUsersBusy\|\|!isAdmin\(\)\|\|isBetaReadOnly\(\)\)return/);
+  assert.match(app,/escapeHtml\(user.email/);
+  assert.match(css,/\.beta-users-overview \{display:grid;grid-template-columns:repeat\(4,/);
+});
