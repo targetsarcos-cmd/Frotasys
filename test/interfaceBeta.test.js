@@ -669,3 +669,38 @@ test('beta renomeia somente cadastros livres, mantendo id e cor e bloqueando vin
   assert.equal(patch.snapshot.color,'#123456');
   assert.equal(patch.snapshot.ordem,2);
 });
+
+test('exclusao de origem busca somente o cadastro e confirma remocao persistida',async()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const start=server.indexOf('async function deleteConfigOptionRecords(');
+  const end=server.indexOf("app.delete('/api/config-options/:field/:value'",start);
+  assert.ok(start>=0&&end>start);
+  const docs=[...Array.from({length:1200},(_,i)=>({_id:'log'+i,field:'__work_event'})),{_id:'spot',field:'origem',value:'SPOT',normalized:'SPOT'},{_id:'legacy',field:'origem',value:'SPOT'},{_id:'arcos',field:'origem',value:'ARCOS',normalized:'ARCOS'},{_id:'other',field:'destino',value:'SPOT',normalized:'SPOT'}];
+  const select=async(table,filter)=>{assert.equal(table,'config');assert.equal(filter.field,'origem');return docs.filter(d=>Object.entries(filter).every(([k,v])=>d[k]===v)).slice(0,1000);};
+  let blocked=false,invalidated=0;
+  const del=async(table,id)=>{assert.equal(table,'config');if(!blocked){const i=docs.findIndex(d=>d._id===id);if(i>=0)docs.splice(i,1);}};
+  const count=async(table,predicate,filter)=>(await select(table,filter)).length;
+  const remove=new Function('TABLES','normalizeUniqueValue','selectDocsByJson','deleteDoc','countDocs','invalidateCache','sortDocs',server.slice(start,end)+'return deleteConfigOptionRecords;')({configOptions:'config'},v=>String(v||'').trim().toUpperCase(),select,del,count,()=>invalidated++,v=>v);
+  const remaining=await remove('origem','SPOT');
+  assert.deepEqual(remaining.map(d=>d._id),['arcos']);
+  assert.equal(docs.length,1202);
+  assert.ok(docs.some(d=>d._id==='other'));
+  assert.equal(invalidated,1);
+  assert.deepEqual((await remove('origem','SPOT')).map(d=>d._id),['arcos']);
+  docs.push({_id:'spot2',field:'origem',value:'SPOT',normalized:'SPOT'});
+  blocked=true;
+  await assert.rejects(()=>remove('origem','SPOT'),/ainda consta no banco/);
+});
+test('beta nao informa sucesso quando exclusao falha ou cadastro permanece',async()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const start=app.indexOf('async function deleteConfigOption('),end=app.indexOf('async function deleteOperation(',start);
+  let response=null,confirmed=true,renders=0;const messages=[],calls=[];
+  const state={configOptions:{origem:['ARCOS','SPOT']},operacoes:[{origem:'ARCOS'},{origem:'SPOT'}]};
+  const remove=new Function('isBetaTripWorkspace','isAdmin','isBetaReadOnly','operationsList','normalizeOption','confirm','apiFetch','showSummaryToast','state','normalizeConfigOptions','normalizeOperacoes','renderSettingsModal','renderAll',app.slice(start,end)+'return deleteConfigOption;')(()=>true,()=>true,()=>false,()=>state.operacoes,String,()=>confirmed,async(url,opts)=>{calls.push(url);return url==='/api/operacoes'?[{origem:'ARCOS'}]:response;},(msg,type)=>messages.push({msg,type}),state,x=>x,x=>x,()=>renders++,()=>renders++);
+  await remove('origem','SPOT');
+  assert.equal(messages.at(-1).type,'error');assert.equal(renders,0);
+  response={origem:['ARCOS','SPOT']};await remove('origem','SPOT');assert.equal(messages.at(-1).type,'error');assert.equal(renders,0);
+  confirmed=false;const before=calls.length;await remove('origem','SPOT');assert.equal(calls.length,before);
+  confirmed=true;response={origem:['ARCOS']};await remove('origem','SPOT');
+  assert.deepEqual(state.configOptions.origem,['ARCOS']);assert.deepEqual(state.operacoes,[{origem:'ARCOS'}]);assert.equal(renders,2);assert.match(messages.at(-1).msg,/Opção excluída: SPOT/);
+});
