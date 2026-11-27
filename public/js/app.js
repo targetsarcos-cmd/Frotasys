@@ -364,6 +364,7 @@ async function startApp() {
   state.userProfile = auth.profile;
   applyWhiteTheme();
   loadTableColumnsPreference();
+  if(isBetaTripWorkspace()) await loadBetaColumnPreference();
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
@@ -375,6 +376,7 @@ async function startApp() {
     initWS();
   }
   initUI();
+  if(isBetaTripWorkspace()) initBetaColumnLayout();
   applyPermissions();
   if(isBetaTripWorkspace() && location.hash==='#usuarios'){if(isAdmin())loadUsers();else location.hash='';}
   loadAll();
@@ -823,6 +825,7 @@ function initUI() {
     }
 
     if (e.key === 'Escape') {
+      if(isBetaTripWorkspace() && closeBetaColumnLayout()){e.preventDefault();document.getElementById('beta-column-layout-btn')?.focus();return;}
       const closeBetaDrawer = shouldCloseBetaDrawerOnEscape(e);
       closeModal();
       closeSearchModal();
@@ -4224,6 +4227,7 @@ function renderTable(secao) {
     separator,
     ...pendingRows.map(renderTableRow)
   ].join('');
+  if(isBetaTripWorkspace()) applyBetaColumnAlignment(tbody);
   updateTableScrollControls(secao);
 }
 
@@ -4258,12 +4262,8 @@ function visibleTableFields() {
   const selected = new Set((state.additionalColumns || []).map(String));
   const extras = optionalTableFields().filter(field => selected.has(field.key));
   const agendamentoIndex = base.findIndex(field => field.key === 'agendamento');
-  if (agendamentoIndex === -1) return [...base, ...extras];
-  return [
-    ...base.slice(0, agendamentoIndex + 1),
-    ...extras,
-    ...base.slice(agendamentoIndex + 1)
-  ];
+  const fields = agendamentoIndex === -1 ? [...base,...extras] : [...base.slice(0,agendamentoIndex+1),...extras,...base.slice(agendamentoIndex+1)];
+  return isBetaTripWorkspace() ? window.FrotasysBetaTableLayout.orderFields(fields,state.betaColumnPreference) : fields;
 }
 
 function allSortableTableFields() {
@@ -4759,6 +4759,7 @@ function renderTableHeader(secao) {
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(field.label)}${arrow}${escapeHtml(order)}</th>`;
   }).join('')}<th class="col-actions">A&Ccedil;&Otilde;ES</th>`;
 
+  if(isBetaTripWorkspace()) applyBetaColumnAlignment(headRow);
   headRow.querySelectorAll('th[data-field]:not([data-field="trabalho"])').forEach(th => {
     th.onclick = () => sortTableBy(th.dataset.field);
   });
@@ -5898,6 +5899,154 @@ function saveTableColumnsPreference() {
   }
 }
 
+
+const BETA_COLUMN_PREF_KEY='beta-column-layout-v1';
+let betaColumnSaveQueue=Promise.resolve(),betaColumnSaveVersion=0,betaColumnSaveMessage='',betaColumnDragKey='';
+function betaColumnPref(){
+  return window.FrotasysBetaTableLayout.normalizePreference(state.betaColumnPreference);
+}
+async function loadBetaColumnPreference(){
+  let local=null;
+  try{local=JSON.parse(localStorage.getItem(userPreferenceStorageKey(BETA_COLUMN_PREF_KEY))||'null');}catch(e){}
+  state.betaColumnPreference=window.FrotasysBetaTableLayout.normalizePreference(local);
+  const saved=await apiFetch('/api/auth/table-preferences');
+  if(saved?.preference && !(isBetaReadOnly()&&local))state.betaColumnPreference=window.FrotasysBetaTableLayout.normalizePreference(saved.preference);
+  if(Array.isArray(state.betaColumnPreference.extra))state.additionalColumns=normalizeAdditionalColumns(state.betaColumnPreference.extra);
+  betaColumnSaveMessage=isBetaReadOnly()?'Preferências salvas neste navegador.':saved?'Preferências da sua conta.':'Sincronização indisponível; usando preferências locais.';
+}
+function setBetaColumnMessage(message){
+  betaColumnSaveMessage=message;
+  const el=document.getElementById('beta-column-save-status');
+  if(el)el.textContent=message;
+}
+function saveBetaColumnPreference(){
+  const preference=window.FrotasysBetaTableLayout.normalizePreference({...betaColumnPref(),extra:state.additionalColumns});
+  state.betaColumnPreference=preference;
+  let stored=false;
+  try{localStorage.setItem(userPreferenceStorageKey(BETA_COLUMN_PREF_KEY),JSON.stringify(preference));stored=true;}catch(e){}
+  if(isBetaReadOnly()){setBetaColumnMessage(stored?'Salvo neste navegador (modo somente leitura).':'Não foi possível salvar localmente.');return;}
+  const version=++betaColumnSaveVersion;
+  setBetaColumnMessage('Salvando preferências...');
+  const run=async()=>{
+    if(version!==betaColumnSaveVersion)return;
+    const saved=await apiFetch('/api/auth/table-preferences',{method:'PUT',body:JSON.stringify(preference)});
+    if(version!==betaColumnSaveVersion)return;
+    setBetaColumnMessage(saved?.preference?'Salvo na sua conta.':stored?'Salvo neste navegador; sincronização falhou.':'Não foi possível salvar as preferências.');
+  };
+  betaColumnSaveQueue=betaColumnSaveQueue.then(run,run);
+}
+function applyBetaColumnAlignment(root){
+  const alignment=betaColumnPref().alignment;
+  for(const cell of root.querySelectorAll('th[data-field],td[data-field],td.work-cell')){
+    const key=cell.dataset.field||'trabalho';
+    if(alignment[key])cell.dataset.betaAlign=alignment[key];
+    else delete cell.dataset.betaAlign;
+  }
+}
+function betaAlignIcon(mode){
+  const paths={default:'M4 5h16M4 10h10M4 15h16M4 20h12',left:'M4 5h16M4 10h10M4 15h16M4 20h10',center:'M4 5h16M7 10h10M4 15h16M7 20h10',right:'M4 5h16M10 10h10M4 15h16M10 20h10'};
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="'+paths[mode]+'"/></svg>';
+}
+function renderBetaColumnLayout(){
+  const menu=document.getElementById('beta-column-layout');
+  if(!menu)return;
+  const fields=visibleTableFields(),pref=betaColumnPref();
+  const choices=[['default','Padrão'],['left','Esquerda'],['center','Centro'],['right','Direita']];
+  const scroll=menu.querySelector('.beta-layout-list')?.scrollTop||0;
+  menu.innerHTML='<div class="beta-layout-head"><div><strong>Layout das colunas</strong><small>Personalize a sua visualização</small></div><button type="button" data-layout-close aria-label="Fechar">×</button></div><div class="beta-layout-help">Arraste ou use as setas para mover. Selecione o alinhamento de cada coluna.</div><div class="beta-layout-list">'+fields.map((field,index)=>{
+    const selected=pref.alignment[field.key]||'default';
+    return '<div class="beta-layout-row" data-layout-key="'+field.key+'"><span class="beta-layout-grip" draggable="true" title="Arrastar para reordenar" aria-hidden="true">⠿</span><span class="beta-layout-label">'+escapeHtml(field.label)+'</span><div class="beta-layout-align" role="group" aria-label="Alinhamento de '+escapeAttr(field.label)+'">'+choices.map(([mode,label])=>'<button type="button" data-layout-align="'+mode+'" title="'+label+'" aria-label="'+label+'" aria-pressed="'+(selected===mode)+'">'+(mode==='default'?'<span>Auto</span>':betaAlignIcon(mode))+'</button>').join('')+'</div><div class="beta-layout-move"><button type="button" data-layout-move="-1" aria-label="Mover '+escapeAttr(field.label)+' para cima" title="Mover para cima" '+(index===0?'disabled':'')+'>↑</button><button type="button" data-layout-move="1" aria-label="Mover '+escapeAttr(field.label)+' para baixo" title="Mover para baixo" '+(index===fields.length-1?'disabled':'')+'>↓</button></div></div>';
+  }).join('')+'</div><div class="beta-layout-footer"><span id="beta-column-save-status" role="status" aria-live="polite">'+escapeHtml(betaColumnSaveMessage)+'</span><button type="button" data-layout-reset>Restaurar padrão</button></div>';
+  menu.querySelector('.beta-layout-list').scrollTop=scroll;
+}
+function closeBetaColumnLayout(){
+  const menu=document.getElementById('beta-column-layout');
+  if(!menu||menu.classList.contains('hidden'))return false;
+  menu.classList.add('hidden');document.getElementById('beta-column-layout-btn')?.setAttribute('aria-expanded','false');
+  betaColumnDragKey='';return true;
+}
+function betaColumnRects(){
+  const map=new Map();
+  for(const el of document.querySelectorAll('#beta-column-layout [data-layout-key],#beta-shell .trip-section thead th[data-field]')){
+    const key=el.dataset.layoutKey?'menu:'+el.dataset.layoutKey:el.closest('table').id+':'+el.dataset.field;
+    map.set(key,el.getBoundingClientRect());
+  }
+  return map;
+}
+function refreshBetaColumnLayout(before){
+  if(activeInlineEdit?.input?.isConnected){setBetaColumnMessage('Conclua a edição do campo antes de reordenar.');return false;}
+  renderTable('arcos');renderTable('agenciando');
+  renderBetaColumnLayout();
+  requestAnimationFrame(()=>{
+    updateAllTableScrollControls();
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    for(const el of document.querySelectorAll('#beta-column-layout [data-layout-key],#beta-shell .trip-section thead th[data-field]')){
+      const key=el.dataset.layoutKey?'menu:'+el.dataset.layoutKey:el.closest('table').id+':'+el.dataset.field;
+      const old=before.get(key),now=el.getBoundingClientRect();
+      if(old&&now.width&&now.height&&(old.left!==now.left||old.top!==now.top)&&typeof el.animate==='function')el.animate([{transform:'translate('+(old.left-now.left)+'px,'+(old.top-now.top)+'px)'},{transform:'translate(0,0)'}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
+    }
+  });
+  return true;
+}
+function changeBetaColumnOrder(key,target){
+  if(activeInlineEdit?.input?.isConnected){setBetaColumnMessage('Conclua a edição do campo antes de reordenar.');return;}
+  const before=betaColumnRects(),pref=betaColumnPref(),visible=visibleTableFields().map(f=>f.key);
+  const order=window.FrotasysBetaTableLayout.moveField(visible,key,target);
+  if(order.join()===visible.join())return;
+  state.betaColumnPreference={...pref,order:[...order,...pref.order.filter(k=>!visible.includes(k))]};
+  if(refreshBetaColumnLayout(before))saveBetaColumnPreference();
+}
+function initBetaColumnLayout(){
+  const menu=document.getElementById('beta-column-layout'),button=document.getElementById('beta-column-layout-btn');
+  if(!menu||!button)return;
+  button.addEventListener('click',()=>{
+    if(closeBetaColumnLayout())return;
+    document.getElementById('column-picker-menu')?.classList.add('hidden');
+    renderBetaColumnLayout();menu.classList.remove('hidden');button.setAttribute('aria-expanded','true');
+  });
+  menu.addEventListener('click',event=>{
+    const control=event.target.closest('button');if(!control)return;
+    const row=control.closest('[data-layout-key]'),key=row?.dataset.layoutKey;
+    if(control.hasAttribute('data-layout-close')){closeBetaColumnLayout();button.focus();return;}
+    if(control.hasAttribute('data-layout-reset')){
+      if(activeInlineEdit?.input?.isConnected){setBetaColumnMessage('Conclua a edição do campo antes de restaurar.');return;}
+      const before=betaColumnRects();state.betaColumnPreference={order:[],alignment:{},extra:state.additionalColumns};
+      if(refreshBetaColumnLayout(before))saveBetaColumnPreference();return;
+    }
+    if(!key)return;
+    if(control.hasAttribute('data-layout-align')){
+      const pref=betaColumnPref(),mode=control.dataset.layoutAlign;
+      if(mode==='default')delete pref.alignment[key];else pref.alignment[key]=mode;
+      state.betaColumnPreference=pref;
+      for(const b of row.querySelectorAll('[data-layout-align]'))b.setAttribute('aria-pressed',String(b===control));
+      applyBetaColumnAlignment(document.getElementById('beta-shell'));
+      saveBetaColumnPreference();return;
+    }
+    if(control.hasAttribute('data-layout-move')){
+      const fields=visibleTableFields(),i=fields.findIndex(f=>f.key===key),target=fields[i+Number(control.dataset.layoutMove)]?.key;
+      if(target){const direction=control.dataset.layoutMove;changeBetaColumnOrder(key,target);menu.querySelector('[data-layout-key="'+key+'"] [data-layout-move="'+direction+'"]:not(:disabled)')?.focus({preventScroll:true});}
+    }
+  });
+  menu.addEventListener('dragstart',event=>{
+    const grip=event.target.closest('.beta-layout-grip');if(!grip)return;
+    betaColumnDragKey=grip.closest('[data-layout-key]').dataset.layoutKey;
+    event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',betaColumnDragKey);
+    grip.closest('[data-layout-key]').classList.add('is-dragging');
+  });
+  menu.addEventListener('dragover',event=>{
+    const row=event.target.closest('[data-layout-key]');if(!row||!betaColumnDragKey)return;
+    event.preventDefault();event.dataTransfer.dropEffect='move';
+    for(const item of menu.querySelectorAll('.is-drop-target'))item.classList.remove('is-drop-target');
+    if(row.dataset.layoutKey!==betaColumnDragKey)row.classList.add('is-drop-target');
+  });
+  const clearDrag=()=>{betaColumnDragKey='';for(const row of menu.querySelectorAll('.is-dragging,.is-drop-target'))row.classList.remove('is-dragging','is-drop-target');};
+  menu.addEventListener('drop',event=>{
+    const row=event.target.closest('[data-layout-key]');if(!row||!betaColumnDragKey)return;
+    event.preventDefault();const key=betaColumnDragKey,target=row.dataset.layoutKey;clearDrag();changeBetaColumnOrder(key,target);
+  });
+  menu.addEventListener('dragend',clearDrag);
+}
+
 function renderColumnPicker() {
   const menu = document.getElementById('column-picker-menu');
   if (!menu) return;
@@ -5916,12 +6065,14 @@ function toggleColumnPicker(event) {
   event?.stopPropagation?.();
   const menu = document.getElementById('column-picker-menu');
   if (!menu) return;
+  if(isBetaTripWorkspace())closeBetaColumnLayout();
   renderColumnPicker();
   menu.classList.toggle('hidden');
 }
 
 function closeColumnPicker() {
   document.getElementById('column-picker-menu')?.classList.add('hidden');
+  if(isBetaTripWorkspace())closeBetaColumnLayout();
 }
 
 function toggleAdditionalColumn(key, enabled) {
@@ -5931,6 +6082,7 @@ function toggleAdditionalColumn(key, enabled) {
   state.additionalColumns = normalizeAdditionalColumns([...current]);
   applyAdditionalColumnState();
   saveTableColumnsPreference();
+  if(isBetaTripWorkspace())saveBetaColumnPreference();
   renderTable('arcos');
   renderTable('agenciando');
   requestAnimationFrame(updateAllTableScrollControls);
