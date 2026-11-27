@@ -8266,7 +8266,10 @@ async function toggleAgendamentoVerde() {
   const field = state.agendamentoTargetField === 'descarga' ? 'descargaVerde' : 'agendamentoVerde';
   hideAgendamentoMenu();
   if (!viagem) return;
-  await updateViagemField(id, field, !viagem[field]);
+  const updated = await updateViagemField(id, field, !viagem[field]);
+  if (updated && isBetaTripWorkspace() && field === 'descargaVerde') {
+    document.dispatchEvent(new Event('beta-discharge-changed'));
+  }
 }
 
 async function marcarAgendamentoPalete() {
