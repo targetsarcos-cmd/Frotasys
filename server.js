@@ -131,6 +131,7 @@ const VIAGEM_FIELD_LABELS = {
   usuario: 'USUARIO',
   agendamento: 'AGENDAMENTO',
   descarga: 'DESCARGA',
+  descargaVerde: 'CONFIRMAÇÃO DA DESCARGA',
   telefone: 'TELEFONE',
   telefone2: 'TELEFONE 2',
   produto: 'PRODUTO',
@@ -2535,6 +2536,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     payload.status = cadastroStatus;
     if (payload.marcadoAmarelo !== undefined) payload.marcadoAmarelo = Boolean(payload.marcadoAmarelo);
     if (payload.agendamentoVerde !== undefined) payload.agendamentoVerde = Boolean(payload.agendamentoVerde);
+    if (betaEditable && payload.descargaVerde !== undefined) payload.descargaVerde = payload.descargaVerde === true;
     if (payload.programado !== undefined) payload.programado = Boolean(payload.programado);
     if (payload.adiantamentoOk !== undefined) payload.adiantamentoOk = Boolean(payload.adiantamentoOk);
     if (payload.conclusaoContrato !== undefined) {
@@ -2595,6 +2597,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     delete patch.historico;
     if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
     if (patch.agendamentoVerde !== undefined) patch.agendamentoVerde = Boolean(patch.agendamentoVerde);
+    if (betaEditable && patch.descargaVerde !== undefined) patch.descargaVerde = patch.descargaVerde === true;
     if (patch.trocaMotoristaConcluida !== undefined) patch.trocaMotoristaConcluida = Boolean(patch.trocaMotoristaConcluida);
     if (patch.programado !== undefined) patch.programado = Boolean(patch.programado);
     if (patch.adiantamentoOk !== undefined) patch.adiantamentoOk = Boolean(patch.adiantamentoOk);
@@ -2610,7 +2613,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         patch.usuario = '';
       }
       if (!isAdminUser) {
-        const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
+        const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field) && !(betaEditable && field === 'descargaVerde'));
         const blockedFields = isAdminUndoContrato
           ? invalidFields.filter(field => !['conclusaoContrato', 'status', 'usuario'].includes(field))
           : invalidFields;

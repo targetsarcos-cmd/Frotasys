@@ -891,3 +891,66 @@ test('balao beta mostra placa e motorista sem titulos redundantes',()=>{
   assert.match(css,/\.beta-comment-observation-group \{display:grid;gap:12px;min-width:0\}/);
   assert.match(css,/\.beta-comment-observation-group > \.beta-comment-actions \{margin:0;padding:0 2px;gap:15px\}/);
 });
+
+test('descarga beta sempre segue agendamento, inclusive com preferencias antigas e arraste',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const api=require('../public/js/workspace-table-layout');
+  const base=app.slice(app.indexOf('const BASE_FIELDS ='),app.indexOf('const FIELDS = BASE_FIELDS;'));
+  const helpers=app.slice(app.indexOf('function optionalTableFields()'),app.indexOf('function allSortableTableFields()'));
+  const get=(state,beta)=>new Function('state','isBetaTripWorkspace','window',base+helpers+';return {visibleTableFields,optionalTableFields};')(state,()=>beta,{FrotasysBetaTableLayout:api});
+  const keysOf=(state,beta)=>get(state,beta).visibleTableFields().map(f=>f.key);
+  const state={additionalColumns:['descarga','frete'],betaColumnPreference:{order:['descarga','nome','agendamento','placa']}};
+  for(const input of [{additionalColumns:[]},state]){
+    const keys=keysOf(input,true);
+    assert.equal(keys.indexOf('descarga'),keys.indexOf('agendamento')+1);
+    assert.equal(keys.filter(k=>k==='descarga').length,1);
+    assert.ok(!get(input,true).optionalTableFields().some(f=>f.key==='descarga'));
+  }
+  assert.ok(!keysOf({additionalColumns:[]},false).includes('descarga'));
+  assert.ok(keysOf({additionalColumns:['descarga']},false).includes('descarga'));
+  assert.deepEqual(api.normalizePreference({extra:['descarga','nota']}).extra,['nota']);
+  const order=['placa','agendamento','descarga','status','trabalho'];
+  assert.deepEqual(api.moveField(order,'descarga','placa'),order);
+  assert.deepEqual(api.moveField(order,'agendamento','trabalho'),['placa','status','trabalho','agendamento','descarga']);
+  assert.deepEqual(api.moveField(order,'placa','descarga'),['agendamento','descarga','placa','status','trabalho']);
+  assert.deepEqual(api.moveField(order,'status','descarga'),['placa','status','agendamento','descarga','trabalho']);
+  assert.match(app,/th\.dataset\.field==='descarga'\)\{\s*th\.draggable = false/);
+  assert.match(app,/visibleTableFields\(\)\.filter\(f=>f\.key!=='descarga'\)/);
+  assert.ok(api.layout(order).minWidth.includes('465px'));
+});
+test('descarga tem menu proprio sem palete e confirmacao independente de carga',async()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const beta=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const extract=(a,b)=>app.slice(app.indexOf(a),app.indexOf(b,app.indexOf(a)));
+  const trip={_id:'1',agendamento:'12:00',descarga:'09:00 28/11/2026',agendamentoVerde:true,descargaVerde:false};
+  const state={viagens:[trip],agendamentoTargetId:null};
+  const elements={};for(const id of ['agendamento-mark','agendamento-palete','agendamento-edit','agendamento-menu'])elements[id]={style:{},classList:{add(){},remove(){}}};
+  const calls=[];
+  const api=new Function('state','document','window','isBetaTripWorkspace','normalizeOption','updateViagemField',extract('function showAgendamentoMenu(','function showContratoMenu(')+extract('async function toggleAgendamentoVerde()','async function marcarAgendamentoPalete()')+'return {showAgendamentoMenu,toggleAgendamentoVerde};')(state,{getElementById:id=>elements[id]},{innerWidth:1000,innerHeight:800},()=>true,String,async(id,field,value)=>{calls.push([id,field,value]);trip[field]=value;});
+  const open=field=>api.showAgendamentoMenu({preventDefault(){},clientX:10,clientY:10},{dataset:{id:'1',field}});
+  open('descarga');assert.equal(elements['agendamento-palete'].hidden,true);
+  assert.equal(elements['agendamento-mark'].textContent,'Agendado');
+  await api.toggleAgendamentoVerde();
+  assert.deepEqual(calls[0],['1','descargaVerde',true]);assert.equal(trip.agendamentoVerde,true);
+  open('descarga');assert.equal(elements['agendamento-mark'].textContent,'Remover agendamento');
+  await api.toggleAgendamentoVerde();
+  assert.deepEqual(calls[1],['1','descargaVerde',false]);
+  open('agendamento');assert.equal(elements['agendamento-palete'].hidden,false);
+  assert.equal(elements['agendamento-mark'].textContent,'Remover agendamento');
+  await api.toggleAgendamentoVerde();assert.deepEqual(calls[2],['1','agendamentoVerde',false]);
+  const render=new Function('isBetaTripWorkspace','escapeAttr','escapeHtml','formatDescargaDateTime','formatAgendamentoDisplay',extract('function renderTableCell(','function renderStatusButton(')+'return renderTableCell;')(()=>true,String,String,String,String);
+  const field={key:'descarga',quick:true};
+  assert.match(render({...trip,descargaVerde:true},field),/class="quick-edit has-agendamento"/);
+  assert.match(render(trip,field),/09:00 28\/11\/2026/);
+  assert.doesNotMatch(render({...trip,agendamentoVerde:true},field),/has-agendamento/);
+  assert.match(app,/if \(state\.agendamentoTargetField === 'descarga'\) return;/);
+  assert.match(app,/field === 'agendamentoVerde' \|\| field === 'descargaVerde'/);
+  assert.match(app,/isBetaTripWorkspace\(\) && field === 'descargaVerde'/);
+  assert.match(server,/betaEditable && patch\.descargaVerde !== undefined/);
+  assert.match(server,/betaEditable && field === 'descargaVerde'/);
+  assert.match(beta,/querySelectorAll\('\.schedule-chip'\)/);
+  assert.match(css,/td\[data-field="descarga"\]\.has-agendamento \.sched/);
+  assert.match(css,/#agendamento-palete\[hidden\] \{display:none!important\}/);
+});

@@ -50,6 +50,7 @@ const state = {
   editingOperationId: null,
   ctxTargetId: null,
   agendamentoTargetId: null,
+  agendamentoTargetField: 'agendamento',
   contratoTargetId: null,
   contratoTargetField: '',
   contratoTargetCopyValue: '',
@@ -767,7 +768,7 @@ function initUI() {
       return;
     }
 
-    const td = e.target.closest('td[data-field="agendamento"]:not(.cell-select)');
+    const td = e.target.closest(isBetaTripWorkspace() ? 'td[data-field="agendamento"]:not(.cell-select), td[data-field="descarga"]:not(.cell-select)' : 'td[data-field="agendamento"]:not(.cell-select)');
     if (!td) return;
     e.stopPropagation();
     showAgendamentoMenu(e, td);
@@ -787,9 +788,10 @@ function initUI() {
   initTripFilters();
   document.getElementById('agendamento-edit').addEventListener('click', () => {
     const id = state.agendamentoTargetId;
+    const field = state.agendamentoTargetField;
     hideAgendamentoMenu();
     if (!id) return;
-    const cell = document.querySelector(`td[data-field="agendamento"][data-id="${CSS.escape(id)}"]`);
+    const cell = document.querySelector(`td[data-field="${field}"][data-id="${CSS.escape(id)}"]`);
     if (cell) startInlineEdit(cell);
   });
   document.getElementById('contrato-copy').addEventListener('click', event => copyContratoMenuValue(event));
@@ -882,7 +884,7 @@ function canEditViagemField(viagem, field) {
   if (!canEditViagens() || (isBetaTripWorkspace() && field === 'secao')) return false;
   if (isAdmin()) return true;
   if (!isViagemConcluida(viagem)) return true;
-  return LOCKED_EDITABLE_FIELDS.includes(field);
+  return LOCKED_EDITABLE_FIELDS.includes(field) || (isBetaTripWorkspace() && field === 'descargaVerde');
 }
 
 function canDeleteViagem(viagem) {
@@ -4254,12 +4256,14 @@ function renderTableRow(v) {
 }
 
 function optionalTableFields() {
-  return isBetaTripWorkspace() ? EXTRA_FIELDS.filter(field => field.key !== 'produto') : EXTRA_FIELDS;
+  return isBetaTripWorkspace() ? EXTRA_FIELDS.filter(field => !['produto','descarga'].includes(field.key)) : EXTRA_FIELDS;
 }
 
 function visibleTableFields() {
-  const base = isBetaTripWorkspace() ? BASE_FIELDS.flatMap(field => field.key === 'destino'
-    ? [field, EXTRA_FIELDS.find(item => item.key === 'produto')] : [field]) : BASE_FIELDS;
+  const base = isBetaTripWorkspace() ? BASE_FIELDS.flatMap(field => {
+    const fixedAfter = {destino:'produto',agendamento:'descarga'}[field.key];
+    return fixedAfter ? [field, EXTRA_FIELDS.find(item => item.key === fixedAfter)] : [field];
+  }) : BASE_FIELDS;
   const selected = new Set((state.additionalColumns || []).map(String));
   const extras = optionalTableFields().filter(field => selected.has(field.key));
   const agendamentoIndex = base.findIndex(field => field.key === 'agendamento');
@@ -4300,9 +4304,12 @@ function renderTableCell(v, field, context = {}) {
       <strong>${escapeHtml(formatPeso(v.peso || '') || '-')}</strong>
     </td>`;
   }
-  if (field.key === 'agendamento') {
-    return `<td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
-      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(formatAgendamentoDisplay(v.agendamento || '') || '-')}</span></span>
+  if (field.key === 'agendamento' || (isBetaTripWorkspace() && field.key === 'descarga')) {
+    const descarga = field.key === 'descarga';
+    const confirmed = descarga ? v.descargaVerde === true : v.agendamentoVerde;
+    const display = descarga ? formatDescargaDateTime(raw) : formatAgendamentoDisplay(raw);
+    return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(raw)}" class="quick-edit ${confirmed ? 'has-agendamento' : ''}">
+      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(display || '-')}</span></span>
     </td>`;
   }
   if (field.key === 'status') {
@@ -4765,7 +4772,10 @@ function renderTableHeader(secao) {
     for(const th of headRow.querySelectorAll('th[data-field]')) {
       th.draggable = true;
       th.tabIndex = 0;
-      th.title += (th.title ? ' · ' : '')+'Arraste para mover a coluna; Alt + setas para reordenar';
+      if(th.dataset.field==='descarga'){
+        th.draggable = false;
+        th.title += ' · Fixa após Agendamento';
+      }else th.title += (th.title ? ' · ' : '')+'Arraste para mover a coluna; Alt + setas para reordenar';
     }
   }
   headRow.querySelectorAll('th[data-field]:not([data-field="trabalho"])').forEach(th => {
@@ -6038,6 +6048,7 @@ function initBetaColumnLayout(){
   shell.addEventListener('dragstart',event=>{
     const th=header(event);
     if(!th)return;
+    if(th.dataset.field==='descarga'){event.preventDefault();return;}
     if(activeInlineEdit?.input?.isConnected){event.preventDefault();setBetaColumnMessage('Conclua a edição do campo antes de reordenar.');return;}
     clearBetaColumnDrag();
     betaColumnDragKey=th.dataset.field;
@@ -6073,7 +6084,9 @@ function initBetaColumnLayout(){
     if(!th)return;
     if(event.altKey&&['ArrowLeft','ArrowRight'].includes(event.key)){
       event.preventDefault();
-      const fields=visibleTableFields(),key=th.dataset.field,index=fields.findIndex(f=>f.key===key),target=fields[index+(event.key==='ArrowLeft'?-1:1)]?.key;
+      const key=th.dataset.field;
+      if(key==='descarga')return;
+      const fields=visibleTableFields().filter(f=>f.key!=='descarga'),index=fields.findIndex(f=>f.key===key),target=fields[index+(event.key==='ArrowLeft'?-1:1)]?.key;
       const tableId=th.closest('table').id;
       if(target){changeBetaColumnOrder(key,target);document.getElementById(tableId)?.querySelector('th[data-field="'+key+'"]')?.focus({preventScroll:true});}
     }else if(!event.altKey&&['Enter',' '].includes(event.key)&&th.dataset.field!=='trabalho'){
@@ -7518,7 +7531,7 @@ function cancelInlineEdit() {
 
 function normalizeFieldValue(field, value) {
   if (field === 'marcadoAmarelo') return Boolean(value);
-  if (field === 'agendamentoVerde') return Boolean(value);
+  if (field === 'agendamentoVerde' || field === 'descargaVerde') return Boolean(value);
   if (field === 'trocaMotoristaConcluida') return Boolean(value);
   if (field === 'programado') return Boolean(value);
   if (field === 'adiantamentoOk') return Boolean(value);
@@ -8085,10 +8098,14 @@ async function copyPlacaMenuValue(event, id) {
 function showAgendamentoMenu(e, cell) {
   e.preventDefault();
   state.agendamentoTargetId = cell.dataset.id;
+  state.agendamentoTargetField = isBetaTripWorkspace() && cell.dataset.field === 'descarga' ? 'descarga' : 'agendamento';
   const viagem = state.viagens.find(item => item._id === state.agendamentoTargetId);
+  const descarga = state.agendamentoTargetField === 'descarga';
   const mark = document.getElementById('agendamento-mark');
-  mark.textContent = viagem?.agendamentoVerde ? 'Remover agendamento' : 'Agendado';
-  document.getElementById('agendamento-palete').textContent = normalizeOption(viagem?.agendamento) === 'PALETE' ? 'Remover Palete' : 'Palete';
+  mark.textContent = (descarga ? viagem?.descargaVerde === true : viagem?.agendamentoVerde) ? 'Remover agendamento' : 'Agendado';
+  const palete = document.getElementById('agendamento-palete');
+  palete.hidden = descarga;
+  palete.textContent = normalizeOption(viagem?.agendamento) === 'PALETE' ? 'Remover Palete' : 'Palete';
   document.getElementById('agendamento-edit').textContent = 'Editar';
 
   const menu = document.getElementById('agendamento-menu');
@@ -8100,6 +8117,7 @@ function showAgendamentoMenu(e, cell) {
 function hideAgendamentoMenu() {
   document.getElementById('agendamento-menu').classList.add('hidden');
   state.agendamentoTargetId = null;
+  state.agendamentoTargetField = 'agendamento';
 }
 
 function showContratoMenu(e, cell) {
@@ -8204,11 +8222,14 @@ async function toggleAgendamentoVerde() {
   const id = state.agendamentoTargetId;
   if (!id) return;
   const viagem = state.viagens.find(item => item._id === id);
+  const field = state.agendamentoTargetField === 'descarga' ? 'descargaVerde' : 'agendamentoVerde';
   hideAgendamentoMenu();
-  await updateViagemField(id, 'agendamentoVerde', !viagem?.agendamentoVerde);
+  if (!viagem) return;
+  await updateViagemField(id, field, !viagem[field]);
 }
 
 async function marcarAgendamentoPalete() {
+  if (state.agendamentoTargetField === 'descarga') return;
   const id = state.agendamentoTargetId;
   if (!id) return;
   const viagem = state.viagens.find(item => item._id === id);

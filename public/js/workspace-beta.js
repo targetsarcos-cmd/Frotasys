@@ -179,8 +179,7 @@
       }
       status.classList.add('beta-status-bar');
     }
-    const sched = row.querySelector('.schedule-chip');
-    if (sched) sched.className = 'sched';
+    row.querySelectorAll('.schedule-chip').forEach(sched => { sched.className = 'sched'; });
   }
   // Match the operational progression in tripStatus.js; completed trips keep their own section.
   const statusTabOrder = [
