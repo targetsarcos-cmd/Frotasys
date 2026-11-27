@@ -2725,6 +2725,90 @@ function renderFreteConsultas() {
   if (filter) filter.value = routeFilter;
 }
 
+
+function agregadoImportPlace(value) {
+  const key=String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[.]/g,'').replace(/\s+/g,' ').trim();
+  const aliases={'PEDRO L':'PEDRO LEOPOLDO','SJRP':'SAO JOSE DO RIO PRETO','SAO JOSE RIO PRETO':'SAO JOSE DO RIO PRETO','RIBEIRAO P':'RIBEIRAO PRETO','PINDA':'PINDAMONHANGABA','MOGI':'MOGI DAS CRUZES','SJC':'SAO JOSE DOS CAMPOS','SAO J DOS CAMPOS':'SAO JOSE DOS CAMPOS','SAO JOSE CAMPOS':'SAO JOSE DOS CAMPOS'};
+  return aliases[key]||key;
+}
+function parseAgregadoCsv(raw) {
+  const lines=String(raw).replace(/^\uFEFF/,'').trim().split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2||lines.length>1001||lines[0].trim().toUpperCase()!=='ORIGEM;DESTINO;7 EIXOS;9 EIXOS')throw Error('Formato esperado: ORIGEM;DESTINO;7 EIXOS;9 EIXOS.');
+  const keys=new Set();
+  return lines.slice(1).map((line,index)=>{
+    const cells=line.split(';').map(v=>v.trim());
+    if(cells.length!==4||!cells[0]||!cells[1])throw Error('Linha '+(index+2)+' inválida.');
+    const origem=agregadoImportPlace(cells[0]),destino=agregadoImportPlace(cells[1]);
+    if(!/^[A-Z0-9 -]+$/.test(origem)||!/^[A-Z0-9 -]+$/.test(destino))throw Error('Rota inválida na linha '+(index+2)+'.');
+    const key=origem+' X '+destino;
+    if(keys.has(key))throw Error('Rota duplicada: '+key);
+    keys.add(key);
+    const values=cells.slice(2).map(v=>{
+      if(!/^\d+(?:[,.]\d{1,2})?$/.test(v))throw Error('Valor inválido na linha '+(index+2)+'.');
+      const n=Number(v.replace(',','.'));
+      if(!Number.isFinite(n)||n<=0||n>1000000)throw Error('Valor inválido na linha '+(index+2)+'.');
+      return n;
+    });
+    return {origem,destino,values};
+  });
+}
+function applyAgregadoCsv(tables,records,mode) {
+  if(!['PJ','PF','AMBOS'].includes(mode))throw Error('Selecione PJ, PF ou AMBOS.');
+  if(!Array.isArray(tables?.routes)||!tables.routes.length)throw Error('Tabela atual indisponível. Nenhum dado foi alterado.');
+  const next=JSON.parse(JSON.stringify(tables)), created=[];
+  const fields=mode==='AMBOS'?['pj','pf']:[mode.toLowerCase()];
+  const defaults=()=>[5,6,7,9].map(eixos=>({eixos,pj:null,pf:null}));
+  for(const {origem,destino,values} of records){
+    const matches=next.routes.filter(route=>{
+      const [a,b]=String(route.rota||'').split(/\s+X\s+/i);
+      return agregadoImportPlace(route.origem||a)===origem&&agregadoImportPlace(route.destino||b)===destino;
+    });
+    if(matches.length>1)throw Error('Há mais de uma rota equivalente: '+origem+' X '+destino);
+    let route=matches[0];
+    if(!route){
+      route={rota:origem+' X '+destino,origem,destino,rows:defaults(),agregado:defaults()};
+      next.routes.push(route);created.push(route.rota);
+    }
+    route.agregado=Array.isArray(route.agregado)?route.agregado:[];
+    for(const [i,eixos] of [7,9].entries()){
+      const duplicates=route.agregado.filter(row=>Number(row.eixos)===eixos);
+      if(duplicates.length>1)throw Error('Eixo duplicado em '+route.rota);
+      let row=duplicates[0];
+      if(!row){row={eixos,pj:null,pf:null};route.agregado.push(row);}
+      for(const field of fields)row[field]=values[i];
+    }
+    route.agregado.sort((a,b)=>Number(a.eixos)-Number(b.eixos));
+  }
+  return {tables:next,created,count:records.length*2*fields.length};
+}
+function openAgregadoCsvImport(){
+  if(!isAdmin()||isBetaReadOnly()||freteBoardSaving)return;
+  const input=document.createElement('input');input.type='file';input.accept='.csv,text/csv';
+  input.addEventListener('change',async()=>{
+    const file=input.files?.[0];if(!file)return;
+    if(file.size>250000){alert('Arquivo muito grande.');return;}
+    if(freteBoardSaving||!isAdmin()||isBetaReadOnly())return;
+    freteBoardSaving=true;
+    try{
+      const records=parseAgregadoCsv(await file.text());
+      const mode=String(prompt('A tabela contém um valor por eixo. Digite PJ, PF ou AMBOS para definir quais colunas serão preenchidas.')||'').trim().toUpperCase();
+      if(!mode)return;
+      if(!['PJ','PF','AMBOS'].includes(mode))throw Error('Escolha inválida. Use PJ, PF ou AMBOS.');
+      const current=await apiFetch('/api/frete-consultas');
+      if(!current||!Array.isArray(current.routes)||!current.routes.length)throw Error('Não foi possível obter a tabela atual.');
+      const result=applyAgregadoCsv(current,records,mode);
+      const detail=result.created.length?'\nNovas rotas (Terceiros sem valores):\n'+result.created.join('\n'):'';
+      if(!confirm('Importar '+records.length+' rotas de Agregado para '+mode+'? '+result.count+' células serão atualizadas. Valores existentes de Terceiros serão preservados.'+detail))return;
+      const saved=await apiFetch('/api/frete-consultas',{method:'PUT',body:JSON.stringify({tables:result.tables})});
+      if(!saved)throw Error('Gravação não confirmada. Atualize a tabela e tente novamente.');
+      state.freteConsultas=mergeFreteConsultas(saved);
+      showSummaryToast('Importação de Agregado concluída.');
+    }catch(error){alert(error.message);}
+    finally{freteBoardSaving=false;freteBoardRefreshPending=false;await refreshFreteConsultas();}
+  },{once:true});
+  input.click();
+}
+
 function renderFreteTools(routeFilter = '') {
   return `<section class="frete-tools">
     <label class="frete-route-search">
@@ -2732,7 +2816,7 @@ function renderFreteTools(routeFilter = '') {
       <input type="search" id="frete-route-filter" value="${escapeAttr(routeFilter)}" placeholder="Digite origem ou destino" oninput="updateFreteRouteBoard()">
     </label>
     <button type="button" onclick="toggleFreteAlphabeticSort()" class="${state.freteSort?.alphabetic ? 'is-active' : ''}">A-Z</button>
-    ${isAdmin() && !isBetaReadOnly() ? '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
+    ${isAdmin() && !isBetaReadOnly() ? (isBetaTripWorkspace() ? '<button type="button" onclick="openAgregadoCsvImport()">Importar Agregado</button>' : '') + '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
   </section>`;
 }
 
