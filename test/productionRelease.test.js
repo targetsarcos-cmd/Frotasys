@@ -65,3 +65,25 @@ test('socket não autenticado expira e não pode receber mensagens',()=>{
   const timer=[...a.timers.values()][0];assert.equal(timer.ms,10000);timer.fn();
   assert.equal(a.ws.authenticated,false);assert.equal(a.ws.code,4401);
 });
+
+test('renovação do socket mantém a conexão autenticada e não aceita trocar de usuário',async()=>{
+  let id='op',checks=0;
+  const a=fixture(async()=>{checks++;return {userId:id,profile:{ativo:true,role:'operador'},expiresAt:601000};});
+  await a.receive({type:'authenticate',token:'valid'});
+  await a.receive({type:'authenticate',token:'unsolicited'});
+  assert.equal(checks,1);
+  [...a.timers.values()].find(t=>t.ms===285000).fn();
+  assert.equal(a.sent.at(-1).type,'auth_renew');
+  await a.receive({type:'authenticate',token:'valid'});
+  assert.equal(a.sent.at(-1).type,'auth_ok');
+  assert.equal(a.sent.at(-1).renewed,true);
+  assert.equal(a.ws.readyState,1);
+  assert.equal(a.ws.authenticated,true);
+  broadcastAuthenticated([a.ws],{type:'viagem_atualizada',payload:{id:2}});
+  assert.equal(a.sent.at(-1).type,'viagem_atualizada');
+  id='other';
+  [...a.timers.values()].find(t=>t.ms===285000).fn();
+  await a.receive({type:'authenticate',token:'other'});
+  assert.equal(a.ws.code,4403);
+  assert.equal(a.ws.authenticated,false);
+});
