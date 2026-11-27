@@ -361,3 +361,20 @@
     <header><h2 id="espera-list-title">Fila de motoristas</h2><span id="espera-count"></span></header>
   </section>
 </main>
+
+<main class="workspace" id="beta-settings" aria-labelledby="beta-settings-title" hidden>
+  <header class="pagehead beta-settings-head">
+    <div><h1 id="beta-settings-title">Configurações</h1><p>Administração do sistema e parâmetros operacionais</p></div>
+    <div class="beta-settings-search"><svg aria-hidden="true"><use href="#beta-icon-search"/></svg><input id="beta-settings-search" type="search" placeholder="Buscar nas configurações..." aria-label="Buscar nas configurações"></div>
+  </header>
+  <div id="beta-settings-overview" class="beta-settings-overview" aria-label="Visão geral"></div>
+  <div class="beta-settings-tabs" role="group" aria-label="Seções de configurações">
+    <button type="button" data-settings-tab="all" aria-pressed="true">Geral</button>
+    <button type="button" data-settings-tab="catalog" aria-pressed="false">Cadastros</button>
+    <button type="button" data-settings-tab="messages" aria-pressed="false">Mensagens</button>
+    <button type="button" data-settings-tab="operational" aria-pressed="false">Operacionais</button>
+  </div>
+  <p class="beta-settings-notice" id="beta-settings-notice" role="status">As alterações são salvas por seção ou automaticamente, conforme o controle.</p>
+  <div id="beta-settings-content"></div>
+  <div id="beta-settings-empty" hidden>Nenhuma configuração encontrada.</div>
+</main>
