@@ -9,10 +9,13 @@ const base = {
 
 test('DT e programacao avancam e regridem', () => {
   assert.equal(calculateTripStatus({ ...base }), 'CRIAR DT / PROGRAMAR');
-  assert.equal(calculateTripStatus({ ...base, dt: '123' }), 'ENVIAR PEDIDO');
+  assert.equal(calculateTripStatus({ ...base, dt: '123' }), 'PROGRAMAR');
   assert.equal(calculateTripStatus({ ...base, dt: '123', pedidoEnviadoDt:'123' }), 'PROGRAMAR');
-  assert.equal(calculateTripStatus({ ...base, dt: '124', pedidoEnviadoDt:'123' }), 'ENVIAR PEDIDO');
-  assert.equal(calculateTripStatus({ ...base, dt: '123', programado: true }), 'AGUARDANDO CARREGAMENTO');
+  assert.equal(calculateTripStatus({ ...base, dt: '124', pedidoEnviadoDt:'123' }), 'PROGRAMAR');
+  assert.equal(calculateTripStatus({ ...base, dt: '123', programado: true }), 'ENVIAR PEDIDO');
+  assert.equal(calculateTripStatus({ ...base, dt: '123', programado: true, pedidoEnviadoDt:'123' }), 'AGUARDANDO CARREGAMENTO');
+  assert.equal(calculateTripStatus({ ...base, dt: '124', programado: true, pedidoEnviadoDt:'123' }), 'ENVIAR PEDIDO');
+  assert.equal(calculateTripStatus({ ...base, dt: '123', programado: false, pedidoEnviadoDt:'123' }), 'PROGRAMAR');
   assert.equal(calculateTripStatus({ ...base, programado: true }), 'CRIAR DT');
   assert.equal(calculateTripStatus({ ...base, programado: false }), 'CRIAR DT / PROGRAMAR');
 });
@@ -20,7 +23,7 @@ test('DT e programacao avancam e regridem', () => {
 test('nota fiscal e pedagio controlam emitir CTE com regressao', () => {
   const ready = { ...base, dt: '123', programado: true, nota: '390339', num_pedagio: '105974597' };
   assert.equal(calculateTripStatus(ready), 'EMITIR CTE');
-  assert.equal(calculateTripStatus({ ...ready, num_pedagio: '' }), 'AGUARDANDO CARREGAMENTO');
+  assert.equal(calculateTripStatus({ ...ready, num_pedagio: '' }), 'ENVIAR PEDIDO');
   assert.equal(calculateTripStatus({ ...ready, num_pedagio: '105974597' }), 'EMITIR CTE');
 });
 

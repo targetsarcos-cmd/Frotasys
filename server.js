@@ -83,7 +83,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
   kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
-  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(betaWorkspace?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
+  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'ENVIAR PEDIDO', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(betaWorkspace?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA']
 };
@@ -324,7 +324,7 @@ app.get('/login', (req, res) => {
 
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
-  if (doc.status === 'PROGRAMAR' && doc.dt) doc.status = calculateTripStatus(doc);
+  if (['PROGRAMAR','ENVIAR PEDIDO','AGUARDANDO CARREGAMENTO'].includes(doc.status) && doc.dt) doc.status = calculateTripStatus(doc);
   if (betaWorkspace && doc.placa !== undefined && doc.secao !== undefined) {
     doc.status = calculateTripStatus(doc);
     doc.secao = betaBilling.isBilled(doc) ? 'arcos' : 'agenciando';
@@ -2641,8 +2641,8 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (Object.hasOwn(patch, 'pedidoEnviadoDt') &&
-        (Object.keys(patch).length !== 1 || !current.dt || patch.pedidoEnviadoDt !== String(current.dt).trim())) {
-      return res.status(409).json({ error: 'Confira a DT atual antes de enviar o pedido.' });
+        (Object.keys(patch).length !== 1 || !current.dt || current.programado !== true || patch.pedidoEnviadoDt !== String(current.dt).trim())) {
+      return res.status(409).json({ error: 'Confira a DT atual e programe a viagem antes de enviar o pedido.' });
     }
     if (Object.hasOwn(patch, 'dt') && String(patch.dt || '').trim() !== String(current.dt || '').trim()) patch.pedidoEnviadoDt = '';
     delete patch.__manualStatus;
@@ -2712,10 +2712,6 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         patch.billingRuleVersion=2;
         nextData.billingRuleVersion=2;
       }
-    }
-    if (patch.programado === true && !current.programado &&
-        calculateTripStatus({...nextData, programado:false}) === 'ENVIAR PEDIDO') {
-      return res.status(409).json({ error: 'Envie o pedido pelo WhatsApp antes de programar.' });
     }
     if (normalizeTipo(nextData.tipo) === 'FROTA') patch.contrato = nextData.contrato;
     patch.status = calculateTripStatus(nextData);

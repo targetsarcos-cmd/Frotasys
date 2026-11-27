@@ -395,7 +395,7 @@
   // Match the operational progression in tripStatus.js; completed trips keep their own section.
   const statusTabOrder = [
     'CONFERIR MOTORISTA', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA',
-    'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'ENVIAR PEDIDO', 'PROGRAMAR',
+    'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'ENVIAR PEDIDO',
     'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'HORA NF', 'ADIANTAMENTO / DESCARGA',
     'ADIANTAMENTO', 'AGENDAR DESCARGA'
   ];

@@ -114,7 +114,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['ENVIAR PEDIDO', 'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(isBetaTripWorkspace()?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
+const STATUS = ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'ENVIAR PEDIDO', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(isBetaTripWorkspace()?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -3623,7 +3623,7 @@ function selectedViagem() {
 
 const betaPedidosEnviados = new Map();
 function viagemStatusDisplay(viagem) {
-  if (viagem?.status === 'ENVIAR PEDIDO' && viagem.dt && betaPedidosEnviados.get(viagem._id) === String(viagem.dt).trim()) return 'PROGRAMAR';
+  if (viagem?.status === 'ENVIAR PEDIDO' && viagem.dt && betaPedidosEnviados.get(viagem._id) === String(viagem.dt).trim()) return 'AGUARDANDO CARREGAMENTO';
   return String(viagem?.status || '').trim();
 }
 
@@ -4086,7 +4086,7 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
   if (pendingWindow.closed) return;
   pendingWindow.opener = null;
   pendingWindow.location.href = href;
-  if (viagemStatusDisplay(viagem) !== 'ENVIAR PEDIDO' || !viagem.dt) return;
+  if (viagemStatusDisplay(viagem) !== 'ENVIAR PEDIDO' || !viagem.dt || viagem.programado !== true) return;
   const dt = String(viagem.dt).trim();
   closeRowActionMenus();
   if (isBetaReadOnly()) {

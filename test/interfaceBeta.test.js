@@ -210,8 +210,8 @@ test('cadastro efetuado libera o status sem alterar as demais regras',()=>{
   const {calculateTripStatus}=require('../tripStatus');
   const trip={status:'SEM CADASTRO',pamcard:'',dt:'123',programado:false};
   assert.equal(calculateTripStatus(trip),'SEM CADASTRO / DT CRIADA');
-  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK'}),'ENVIAR PEDIDO');
-  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK',programado:true}),'AGUARDANDO CARREGAMENTO');
+  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK'}),'PROGRAMAR');
+  assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK',programado:true}),'ENVIAR PEDIDO');
   assert.equal(calculateTripStatus({...trip,pamcard:'PAMCARD OK',nota:'456',num_pedagio:'789'}),'EMITIR CTE');
 });
 test('agendamento verde tem estilo na tabela beta e palete usa uma unica gravacao',()=>{
@@ -362,7 +362,7 @@ test('beta ordena abas pelo fluxo operacional sem filtro de concluidos', () => {
   const trips=statuses=>statuses.map(status=>({status}));
   assert.deepEqual([...build(trips(['CONCLUIDO','ADIANTAMENTO / DESCARGA',...Array(5).fill('AGUARDANDO CARREGAMENTO')]))],
     [['all',7],['AGUARDANDO CARREGAMENTO',5],['ADIANTAMENTO / DESCARGA',1]]);
-  const order=['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA','CRIAR DT / PROGRAMAR','CRIAR DT','ENVIAR PEDIDO','PROGRAMAR','AGUARDANDO CARREGAMENTO','EMITIR CTE','HORA NF','ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA'];
+  const order=['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA','CRIAR DT / PROGRAMAR','CRIAR DT','PROGRAMAR','ENVIAR PEDIDO','AGUARDANDO CARREGAMENTO','EMITIR CTE','HORA NF','ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA'];
   assert.deepEqual([...build(trips(['CUSTOM','CONCLUÍDO',...order.slice().reverse()])).keys()],['all',...order,'CUSTOM']);
   assert.deepEqual([...build(trips(['CONCLUÍDO']))],[['all',1]]);
   assert.deepEqual([...build([])],[['all',0]]);
