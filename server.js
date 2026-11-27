@@ -1403,23 +1403,28 @@ function normalizeHours(value) {
 }
 
 function normalizeDescargaDateTime(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
-  if (isoMatch) return `${isoMatch[4]}:${isoMatch[5]} ${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
-
-  const brMatch = raw.match(/^(\d{1,2}):(\d{2})\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
-  if (brMatch) {
-    const hour = brMatch[1].padStart(2, '0').slice(-2);
-    const minute = brMatch[2].padStart(2, '0').slice(0, 2);
-    const day = brMatch[3].padStart(2, '0').slice(-2);
-    const month = brMatch[4].padStart(2, '0').slice(-2);
-    const year = brMatch[5].length === 2 ? `20${brMatch[5]}` : brMatch[5];
-    return `${hour}:${minute} ${day}/${month}/${year}`;
-  }
-
-  return raw;
+  const raw=String(value??'').trim();
+  if(!raw)return '';
+  let y,m,d,h,min;
+  const iso=/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::00(?:\.0+)?)?$/.exec(raw);
+  const timeFirst=/^(\d{1,2}):(\d{2})\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(raw);
+  const dateFirst=/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})\s+(\d{1,2}):(\d{2})$/.exec(raw);
+  if(iso){[,y,m,d,h,min]=iso;}
+  else if(timeFirst){[,h,min,d,m,y]=timeFirst;if(y.length===2)y='20'+y;}
+  else if(dateFirst){[,d,m,y,h,min]=dateFirst;}
+  else return raw;
+  const date=new Date(Date.UTC(+y,+m-1,+d));
+  if(+y<1900||+y>9999||+h>23||+min>59||date.getUTCFullYear()!==+y||date.getUTCMonth()!==+m-1||date.getUTCDate()!==+d)return raw;
+  const pad=v=>String(v).padStart(2,'0');
+  return pad(h)+':'+pad(min)+' '+pad(d)+'/'+pad(m)+'/'+y;
+}
+function validDescargaDateTime(value){
+  const raw=String(value??'').trim();
+  if(!raw)return true;
+  const m=/^(\d{2}):(\d{2}) (\d{2})\/(\d{2})\/(\d{4})$/.exec(normalizeDescargaDateTime(raw));
+  if(!m)return false;
+  const [,h,min,d,month,y]=m,date=new Date(Date.UTC(+y,+month-1,+d));
+  return +y>=1900&&+y<=9999&&+h<=23&&+min<=59&&date.getUTCFullYear()===+y&&date.getUTCMonth()===+month-1&&date.getUTCDate()===+d;
 }
 
 function isIsoDate(value) {
@@ -2647,6 +2652,30 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
   }
 });
 
+// Read-only, on-demand audit. Never correct ambiguous historical dates automatically.
+app.get('/api/viagens/descarga-audit', requireAdmin, async (req,res)=>{
+  try{
+    const end=require('./beta/discharge-notifications').localDay();
+    const date=new Date(end+'T12:00:00Z');date.setUTCDate(date.getUTCDate()-2);
+    const start=date.toISOString().slice(0,10);
+    const invalid=[];let checked=0,cursor=null;
+    for(;;){
+      let query=supabase.from(TABLES.viagens).select('id,data:dados->>data,placa:dados->>placa,descarga:dados->>descarga,descargaVerde:dados->descargaVerde')
+        .gte('dados->>data',start).lte('dados->>data',end).order('id',{ascending:true}).limit(200);
+      if(cursor!==null)query=query.gt('id',cursor);
+      const {data,error}=await query;if(error)throw error;
+      for(const row of data||[]){
+        checked++;
+        const raw=String(row.descarga??'').trim();
+        if(!validDescargaDateTime(raw)||(!raw&&row.descargaVerde===true))invalid.push({...row,reason:raw?'DATA_HORA_INVALIDA':'CONFIRMADA_SEM_DATA'});
+      }
+      if(!data||data.length<200)break;
+      cursor=data[data.length-1].id;
+    }
+    res.set('Cache-Control','no-store').json({start,end,checked,invalid});
+  }catch(e){res.status(500).json({error:'Não foi possível auditar as descargas.'});}
+});
+
 app.get('/api/viagens/:id', async (req, res) => {
   try {
     const {data,error}=await supabase.from(TABLES.viagens).select(tripProjection()).eq('id',req.params.id).maybeSingle();
@@ -2738,6 +2767,12 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       try { Object.assign(payload,betaInvoices.invoicePatch({},payload)); }
       catch(error) { return res.status(400).json({error:error.message}); }
     }
+    if(payload.descarga!==undefined){
+      if(!validDescargaDateTime(payload.descarga))return res.status(400).json({error:'Descarga inválida. Informe dd/mm/aaaa hh:mm ou deixe vazio.',field:'descarga'});
+      payload.descarga=normalizeDescargaDateTime(payload.descarga);
+      if(betaEditable&&!payload.descarga)payload.descargaVerde=false;
+    }
+    if(betaEditable&&payload.descargaVerde===true&&(!payload.descarga||!validDescargaDateTime(payload.descarga)))return res.status(400).json({error:'Informe uma descarga válida antes de confirmar.',field:'descarga'});
     normalizeViagemDocumentNumbers(payload);
     applyFrotaContratoRule(payload);
     if (betaEditable) payload.secao = betaMode.persistedSection(payload);
@@ -2827,7 +2862,12 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (patch.trocaMotoristaConcluida !== undefined) patch.trocaMotoristaConcluida = Boolean(patch.trocaMotoristaConcluida);
     if (patch.programado !== undefined) patch.programado = Boolean(patch.programado);
     if (patch.adiantamentoOk !== undefined) patch.adiantamentoOk = Boolean(patch.adiantamentoOk);
-    if (patch.descarga !== undefined) patch.descarga = normalizeDescargaDateTime(patch.descarga);
+    if (patch.descarga !== undefined) {
+      if(!validDescargaDateTime(patch.descarga))return res.status(400).json({error:'Descarga inválida. Informe dd/mm/aaaa hh:mm ou deixe vazio.',field:'descarga'});
+      patch.descarga = normalizeDescargaDateTime(patch.descarga);
+      if(betaEditable&&!patch.descarga)patch.descargaVerde=false;
+    }
+    if(betaEditable&&patch.descargaVerde===true&&(!String(patch.descarga??current.descarga??'').trim()||!validDescargaDateTime(patch.descarga??current.descarga)))return res.status(400).json({error:'Informe uma data e hora de descarga válidas antes de confirmar.',field:'descarga'});
     if (isViagemBloqueada(current)) {
       const isAdminUser = req.userProfile?.role === 'admin';
       const isAdminUndoContrato = req.userProfile?.role === 'admin' &&

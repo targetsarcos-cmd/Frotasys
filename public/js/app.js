@@ -745,6 +745,7 @@ function initUI() {
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
   document.getElementById('btn-save').addEventListener('click', saveViagem);
   document.getElementById('f-placa').addEventListener('input', handleNewViagemPlacaInput);
+  document.getElementById('f-descarga')?.addEventListener('input',e=>maskDescargaInput(e.target));
   document.getElementById('f-agendamento').addEventListener('input', e => {
     e.target.value = maskHourInput(e.target.value);
   });
@@ -3795,8 +3796,8 @@ function drawerField(field, label, type = 'text') {
   const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : isBetaInvoiceTimeField(field) ? normalizeHours(drawerValue(field)) : drawerValue(field);
   const display = field === 'peso' ? formatPeso(value) : field === 'vlr_pedagio' ? formatMoney(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
   if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
-  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'datetime-local' : 'text';
-  return `<label class="drawer-field is-editing" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" autofocus></label>`;
+  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : 'text';
+  return `<label class="drawer-field is-editing" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" ${field === 'descarga' ? 'inputmode="numeric" placeholder="dd/mm/aaaa --:--" autocomplete="off"' : ''} autofocus></label>`;
 }
 
 function drawerReadOnlyValue(label, value, copyType = 'text') {
@@ -4067,6 +4068,7 @@ function handleDrawerInput(event) {
   if (!field || state.drawerActiveField !== field) return;
   if (!state.drawerDraft) state.drawerDraft = { ...selectedViagem() };
   if (field === 'telefone' || field === 'telefone2') event.target.value = maskPhoneListInput(event.target.value);
+  if(field==='descarga')maskDescargaInput(event.target);
   state.drawerDraft[field] = event.target.value;
   if (field === 'frete') state.drawerDraft.eventoEditado = true;
 }
@@ -4238,6 +4240,7 @@ async function commitActiveDrawerField() {
     renderTravelDrawer();
     return;
   }
+  if(field==='descarga'&&!validDescargaDateTime(next)&&next!==current){showSummaryToast('Descarga inválida. Use dd/mm/aaaa hh:mm ou apague o campo.','error');return;}
   if (next === current) {
     state.drawerActiveField = '';
     state.drawerDraft = null;
@@ -7584,10 +7587,10 @@ function startInlineEdit(td) {
   lockInlineEditCellWidth(td);
   activeInlineCell = td;
 
-  const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : field === 'descarga' ? 'datetime-local' : 'text';
+  const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : 'text';
   const inputValue = field === 'descarga' ? descargaToInputValue(cur) : cur;
   const step = field === 'peso' ? '0.001' : field === 'vlr_pedagio' ? '0.01' : '';
-  const placeholder = inputPlaceholder(field);
+  const placeholder = field==='descarga'?'dd/mm/aaaa --:--':inputPlaceholder(field);
   const max = field === 'data' ? maxAllowedViagemDate() : '';
   td.innerHTML = `<input type="${inputType}" value="${escapeAttr(inputValue)}" ${step ? `step="${step}"` : ''} ${max ? `max="${max}"` : ''} ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}>`;
   const inp = td.querySelector('input');
@@ -7626,6 +7629,7 @@ function startInlineEdit(td) {
   if (isDocumentNumberField(field)) {
     inp.oninput = () => { inp.value = formatDocumentNumber(inp.value, field); };
   }
+  if(field==='descarga'){inp.inputMode='numeric';inp.autocomplete='off';inp.addEventListener('input',()=>maskDescargaInput(inp));}
   inp.addEventListener('input', () => updateActiveInlineEditSnapshot(inp));
   if (field === 'frete') {
     inp.addEventListener('change', () => {
@@ -7762,6 +7766,7 @@ async function updateViagemField(id, field, value, options = {}) {
   if (field === 'data' && !canSaveViagemDate(value)) return null;
   const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
   const nextValue = normalizeFieldValue(field, value);
+  if(field==='descarga'&&previousValue===nextValue){if(!options.skipRender)renderAll();return viagem;}
   const updated = await persistTripField(id, field, nextValue);
   if (updated) {
     const idx = state.viagens.findIndex(v => v._id === id);
@@ -7788,6 +7793,7 @@ async function updateViagemField(id, field, value, options = {}) {
 }
 
 async function persistTripField(id, field, value) {
+  if(field==='descarga'&&!validDescargaDateTime(value)){showSummaryToast('Descarga inválida. Use dd/mm/aaaa hh:mm ou apague o campo.','error');return null;}
   const updated = await apiFetch(`/api/viagens/${id}`, {
     method: 'PUT',
     body: JSON.stringify({ [field]: value })
@@ -8164,6 +8170,7 @@ async function saveViagem() {
   if (eventoInput.value !== eventoInput.defaultValue) data.frete = eventoInput.value.trim();
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
 
+  if(!validDescargaDateTime(data.descarga)){showSummaryToast('Descarga inválida. Use dd/mm/aaaa hh:mm ou apague o campo.','error');return;}
   if (!canSaveViagemDate(data.data)) return;
 
   if (!data.produto) {
@@ -8617,23 +8624,28 @@ function normalizeHours(value) {
 }
 
 function normalizeDescargaDateTime(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
-  if (isoMatch) return `${isoMatch[4]}:${isoMatch[5]} ${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
-
-  const brMatch = raw.match(/^(\d{1,2}):(\d{2})\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
-  if (brMatch) {
-    const hour = brMatch[1].padStart(2, '0').slice(-2);
-    const minute = brMatch[2].padStart(2, '0').slice(0, 2);
-    const day = brMatch[3].padStart(2, '0').slice(-2);
-    const month = brMatch[4].padStart(2, '0').slice(-2);
-    const year = brMatch[5].length === 2 ? `20${brMatch[5]}` : brMatch[5];
-    return `${hour}:${minute} ${day}/${month}/${year}`;
-  }
-
-  return raw;
+  const raw=String(value??'').trim();
+  if(!raw)return '';
+  let y,m,d,h,min;
+  const iso=/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::00(?:\.0+)?)?$/.exec(raw);
+  const timeFirst=/^(\d{1,2}):(\d{2})\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(raw);
+  const dateFirst=/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})\s+(\d{1,2}):(\d{2})$/.exec(raw);
+  if(iso){[,y,m,d,h,min]=iso;}
+  else if(timeFirst){[,h,min,d,m,y]=timeFirst;if(y.length===2)y='20'+y;}
+  else if(dateFirst){[,d,m,y,h,min]=dateFirst;}
+  else return raw;
+  const date=new Date(Date.UTC(+y,+m-1,+d));
+  if(+y<1900||+y>9999||+h>23||+min>59||date.getUTCFullYear()!==+y||date.getUTCMonth()!==+m-1||date.getUTCDate()!==+d)return raw;
+  const pad=v=>String(v).padStart(2,'0');
+  return pad(h)+':'+pad(min)+' '+pad(d)+'/'+pad(m)+'/'+y;
+}
+function validDescargaDateTime(value){
+  const raw=String(value??'').trim();
+  if(!raw)return true;
+  const m=/^(\d{2}):(\d{2}) (\d{2})\/(\d{2})\/(\d{4})$/.exec(normalizeDescargaDateTime(raw));
+  if(!m)return false;
+  const [,h,min,d,month,y]=m,date=new Date(Date.UTC(+y,+month-1,+d));
+  return +y>=1900&&+y<=9999&&+h<=23&&+min<=59&&date.getUTCFullYear()===+y&&date.getUTCMonth()===+month-1&&date.getUTCDate()===+d;
 }
 
 function formatDescargaDateTime(value) {
@@ -8641,15 +8653,24 @@ function formatDescargaDateTime(value) {
 }
 
 function descargaToInputValue(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}`;
-
-  const brMatch = normalizeDescargaDateTime(raw).match(/^(\d{2}):(\d{2})\s+(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!brMatch) return '';
-  return `${brMatch[5]}-${brMatch[4]}-${brMatch[3]}T${brMatch[1]}:${brMatch[2]}`;
+  const raw=String(value??'').trim();
+  if(!validDescargaDateTime(raw))return raw; // never hide a malformed saved value
+  const m=/^(\d{2}):(\d{2}) (\d{2})\/(\d{2})\/(\d{4})$/.exec(normalizeDescargaDateTime(raw));
+  return m?m[3]+'/'+m[4]+'/'+m[5]+' '+m[1]+':'+m[2]:'';
+}
+function maskDescargaInput(input){
+  const raw=input.value;
+  // Preserve a complete pasted date, including legacy ISO, without truncation.
+  if(raw&&validDescargaDateTime(raw)){input.value=descargaToInputValue(raw);return;}
+  const caret=input.selectionStart??raw.length;
+  const before=raw.slice(0,caret).replace(/\D/g,'').length;
+  const digits=raw.replace(/\D/g,'');
+  // Do not silently turn a malformed five-digit year into a different date.
+  if(digits.length>12)return;
+  input.value=digits.slice(0,2)+(digits.length>2?'/'+digits.slice(2,4):'')+(digits.length>4?'/'+digits.slice(4,8):'')+(digits.length>8?' '+digits.slice(8,10):'')+(digits.length>10?':'+digits.slice(10,12):'');
+  let pos=0,seen=0;
+  while(pos<input.value.length&&seen<before){if(/\d/.test(input.value[pos]))seen++;pos++;}
+  input.setSelectionRange(pos,pos);
 }
 
 function maskHourInput(value) {

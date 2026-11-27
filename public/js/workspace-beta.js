@@ -155,15 +155,18 @@
     if(dateFirst)return text;
     const normalized=formatDescargaDateTime(text);
     const match=/^(\d{2}:\d{2}) (\d{2}\/\d{2}\/\d{4})$/.exec(normalized);
-    return match?match[2]+' '+match[1]:'';
+    return match?match[2]+' '+match[1]:text;
   }
   function dischargeEditPatch(value,confirm){
+    if(!String(value||'').trim())return confirm?null:{descarga:'',descargaVerde:false};
     const parsed=parseDischargeDate(value);
     if(!parsed)return null;
     return confirm?{descarga:parsed,descargaVerde:true}:{descarga:parsed};
   }
   function maskDischargeDate(value){
-    const digits=String(value||'').replace(/\D/g,'').slice(0,12);
+    const raw=String(value||'');
+    const digits=raw.replace(/\D/g,'');
+    if(digits.length>12)return raw;
     return digits.slice(0,2)+(digits.length>2?'/'+digits.slice(2,4):'')+
       (digits.length>4?'/'+digits.slice(4,8):'')+(digits.length>8?' '+digits.slice(8,10):'')+
       (digits.length>10?':'+digits.slice(10,12):'');
@@ -258,8 +261,8 @@
             const error=makeElement('p','beta-notice-error','');error.setAttribute('role','status');
             let input,editor,save,cancel;
             if(kind==='discharge'){
-              input=makeElement('input','beta-discharge-schedule');input.type='text';input.inputMode='numeric';input.maxLength=16;
-              input.placeholder='dd/mm/aaaa hh:mm';input.autocomplete='off';
+              input=makeElement('input','beta-discharge-schedule');input.type='text';input.inputMode='numeric';input.maxLength=32;
+              input.placeholder='dd/mm/aaaa --:--';input.autocomplete='off';
               input.setAttribute('aria-label','Data e hora da descarga');
               editor=makeElement('div','beta-discharge-editor');
               input.value=draft??dischargeEditorValue(item.descarga);
@@ -297,7 +300,7 @@
               async function persistDischarge(confirm){
                 if(!canEditViagens()||mark.disabled)return;
                 const patch=dischargeEditPatch(input.value,confirm);
-                if(!patch){dischargeDrafts.set(item.id,input.value);input.focus();if(input.value)input.setAttribute('aria-invalid','true');return;}
+                if(!patch){dischargeDrafts.set(item.id,input.value);input.focus();input.setAttribute('aria-invalid','true');return;}
                 mark.disabled=save.disabled=cancel.disabled=input.disabled=true;
                 dischargeWrites++;
                 error.textContent='';

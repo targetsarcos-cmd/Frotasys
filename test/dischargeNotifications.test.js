@@ -93,7 +93,7 @@ test('máscara contínua limita ano a quatro dígitos e valida datas e horas',()
   const start=js.indexOf('  function maskDischargeDate('),end=js.indexOf('  function attachDischargeMask(',start);
   const {maskDischargeDate:mask,parseDischargeDate:parse}=new Function(js.slice(start,end)+'return {maskDischargeDate,parseDischargeDate};')();
   assert.equal(mask('271120260830'),'27/11/2026 08:30');
-  assert.equal(mask('27112026083099'),'27/11/2026 08:30');
+  assert.equal(mask('27112026083099'),'27112026083099'); // reject overflow rather than silently truncate
   assert.equal(mask(''),'');
   assert.equal(mask('27112026'),'27/11/2026');
   assert.equal(parse('27/11/2026 08:30'),'08:30 27/11/2026');
@@ -101,7 +101,7 @@ test('máscara contínua limita ano a quatro dígitos e valida datas e horas',()
   assert.equal(parse('27/11/2026 24:30'),null);
   assert.equal(parse('29/02/2028 23:59'),'23:59 29/02/2028');
   assert.equal(parse('27/11/202666 08:30'),null);
-  assert.match(js,/input\.maxLength=16/);
+  assert.match(js,/input\.maxLength=32/);
   assert.match(js,/event\.key!=='Backspace'&&event\.key!=='Delete'/);
   assert.doesNotMatch(js,/Agendamento: '\+schedule/);
   assert.match(js,/patch=\{adiantamentoOk:true\}/);
@@ -133,7 +133,9 @@ test('editor carrega a data existente, salva sem confirmar e confirma com os val
   assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',false),{descarga:'09:45 28/11/2026'});
   assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',true),{descarga:'09:45 28/11/2026',descargaVerde:true});
   assert.equal(dischargeEditPatch('31/02/2026 09:45',true),null);
-  assert.equal(dischargeEditPatch('',false),null);
+  assert.deepEqual(dischargeEditPatch('',false),{descarga:'',descargaVerde:false});
+  assert.equal(dischargeEditPatch('',true),null);
+  assert.equal(dischargeEditorValue('20260-11-28T15:00'),'20260-11-28T15:00');
   assert.match(js,/dateRow\.append\(input\)/);
   assert.doesNotMatch(js,/beta-discharge-edit','Editar|function openEditor\(/);
   assert.match(js,/editor\.hidden=!changed/);
