@@ -341,6 +341,7 @@ async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
 function invalidateAfterWrite(table, after, before) {
   if (table === TABLES.viagens) {
     invalidateCache('dashboard-trips-');
+    for(const plate of new Set([before?.placa,after?.placa].filter(Boolean)))invalidateCache('plate-lookup-'+normalizeUniqueValue(plate));
     if(!betaWorkspace)return;
     const {localDay,dischargeNotification,advanceNotification}=require('./beta/discharge-notifications');
     const day=localDay();
@@ -727,7 +728,7 @@ function hasLoadedHistory(doc = {}) {
 async function latestViagemByPlaca(placa) {
   const normalizedPlaca = normalizeUniqueValue(placa);
   if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
-  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT,fields:[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt','nome','carroceria','telefone','telefone2'])],order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] });
+  const docs = await cachedValue('plate-lookup-'+normalizedPlaca,()=>selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT,fields:[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt','nome','carroceria','telefone','telefone2'])],order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] }),30000);
   return docs
     .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
     .filter(doc => isViagemBloqueada(doc) || normalizeUniqueValue(doc.status) === 'CONCLUIDO')
@@ -737,7 +738,7 @@ async function latestViagemByPlaca(placa) {
 async function latestAnyViagemByPlaca(placa, ignoreId = '') {
   const normalizedPlaca = normalizeUniqueValue(placa);
   if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
-  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT, order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] });
+  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: 2, fields:['placa','data','createdAt'], order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] });
   return docs
     .filter(doc => doc._id !== ignoreId)
     .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
