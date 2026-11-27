@@ -98,3 +98,14 @@ test('máscara contínua limita ano a quatro dígitos e valida datas e horas',()
   assert.match(js,/patch=\{programado:true\}/);
   assert.match(js,/id="beta-program-list"/);
 });
+
+test('data de carregamento no cabeçalho e validação sem aviso textual',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(js,/makeElement\('time','beta-notice-loading-date',dischargeDate\(item\.data\)\)/);
+  assert.match(js,/top\.append\(identity,loadingDate\)/);
+  assert.match(css,/\.beta-notice-loading-date \{[^}]*margin-left:auto/);
+  assert.doesNotMatch(js,/Informe uma data e hora válidas/);
+  assert.match(js,/if\(!parsed\)/);
+  assert.match(js,/input\.setAttribute\('aria-invalid','true'\)/);
+});
