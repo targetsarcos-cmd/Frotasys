@@ -279,6 +279,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 
 /* Keep the added product column compact while preserving the original data value. */
 #beta-shell .tablewrap :is(th,td)[data-field=produto] {text-align:center;white-space:nowrap}
+#beta-shell .tablewrap :is(th,td):is([data-field=produto],[data-field=peso]) {padding-inline:4px}
 #beta-shell .tablewrap :is(th,td)[data-field=tipo] {padding-inline:4px}
 #beta-shell .tablewrap :is(th,td)[data-field=agendamento] {padding-inline:5px}
 @media(min-width:1251px){
@@ -794,3 +795,6 @@ body.workspace-beta #event-warning button {min-width:80px;padding:8px 16px;borde
 body.workspace-beta #event-warning button:disabled {opacity:.55;cursor:wait}
 @keyframes beta-event-warning-enter {from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){body.workspace-beta #event-warning[open]{animation:none}}
+
+/* Preserve the compact product/weight gutters with the travel drawer open. */
+.workspace-beta.travel-drawer-open #beta-shell .tablewrap :is(th,td):is([data-field=produto],[data-field=peso]) {padding-inline:4px}
