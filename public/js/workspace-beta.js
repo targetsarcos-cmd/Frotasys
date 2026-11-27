@@ -88,6 +88,12 @@
   const reminderStatus = byId('reminder-status');
   const reminderClose = byId('reminder-note-close');
   const reminderNav = shell.querySelector('[data-nav="Lembretes"]');
+  reminderNav.classList.add('beta-header-reminder');
+  shell.querySelector('.top .search').before(reminderNav);
+  reminderNav.querySelector('span').hidden=true;
+  const reminderBadge=document.createElement('span');
+  reminderBadge.id='beta-reminder-badge';reminderBadge.hidden=true;
+  reminderNav.append(reminderBadge);
   reminderNav.setAttribute('aria-controls','reminder-note');
   reminderNav.setAttribute('aria-expanded','false');
   reminderPanel.setAttribute('role','region');
@@ -101,9 +107,10 @@
     <div class="beta-reminder-body">
       <div class="beta-reminder-editor"><label for="reminder-text">Anotações</label><div class="beta-reminder-text-slot"></div><div id="beta-reminder-count" class="beta-reminder-count">0 / 2.000 caracteres</div></div>
       <section class="beta-discharge-notifications" aria-labelledby="beta-discharge-title">
-        <div class="beta-discharge-heading"><h3 id="beta-discharge-title">Notificações</h3><span id="beta-discharge-count" aria-label="Quantidade de pendências">0</span></div>
-        <p id="beta-discharge-status" role="status">Consultando descargas pendentes...</p>
-        <div id="beta-discharge-list"></div>
+        <div class="beta-discharge-heading"><h3 id="beta-discharge-title">Notificações</h3></div>
+        <p id="beta-discharge-status" role="status">Consultando pendências...</p>
+        <details class="beta-notice-group" open><summary>Descarga <span id="beta-discharge-count">0</span></summary><div id="beta-discharge-list"></div></details>
+        <details class="beta-notice-group"><summary>Adiantamento <span id="beta-advance-count">0</span></summary><div id="beta-advance-list"></div></details>
       </section>
     </div>
     <footer class="beta-reminder-footer"><div class="beta-reminder-status-slot"></div><span>Esc para fechar</span></footer>`;
@@ -139,33 +146,82 @@
     try{if(!document.execCommand('copy'))throw Error('Cópia indisponível.');}
     finally{input.remove();}
   }
-  function renderDischargeNotifications(items){
+  function renderDischargeNotifications(items,advances){
     byId('beta-discharge-count').textContent=String(items.length);
-    reminderNav.setAttribute('data-has-discharge',String(items.length>0));
-    dischargeStatus.textContent=items.length?'Descargas sem confirmação após o dia do carregamento.':'Nenhuma descarga pendente.';
-    const signature=JSON.stringify(items);
+    byId('beta-advance-count').textContent=String(advances.length);
+    const total=items.length+advances.length;
+    reminderBadge.textContent=String(total);
+    reminderBadge.hidden=total===0;
+    reminderNav.setAttribute('data-has-discharge',String(total>0));
+    reminderNav.setAttribute('data-pending-count',String(total));
+    syncBetaReminderPanel();
+    dischargeStatus.textContent=total?'Pendências de carregamentos de dias anteriores.':'Nenhuma pendência.';
+    const signature=JSON.stringify([items,advances,canEditViagens()]);
     if(signature===dischargeSignature)return;
     dischargeSignature=signature;
-    dischargeList.replaceChildren();
-    for(const item of items){
-      const card=makeElement('article','beta-discharge-card');
-      const top=makeElement('div','beta-discharge-card-top');
-      top.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-pending','Descarga pendente'));
-      card.append(top,makeElement('div','beta-discharge-driver',item.nome||'Motorista não informado'));
-      const schedule=dischargeDate(item.data)+(item.agendamento?' · '+item.agendamento:'');
-      card.append(makeElement('div','beta-discharge-date','Agendamento: '+schedule));
-      if(item.descarga)card.append(makeElement('div','beta-discharge-date','Descarga informada: '+item.descarga));
-      const copyRow=makeElement('div','beta-discharge-copy-row');
-      const value=makeElement('span','beta-discharge-copy-value',item.copiar);
-      const copy=makeElement('button','beta-discharge-copy','Copiar');
-      copy.type='button';copy.title='Copiar placa, produto e nota fiscal';
-      copy.addEventListener('click',async()=>{
-        try{await copyDischarge(item.copiar);copy.textContent='Copiado!';}
-        catch(_error){copy.textContent='Falha ao copiar';}
-        setTimeout(()=>{copy.textContent='Copiar';},1700);
-      });
-      copyRow.append(value,copy);card.append(copyRow);dischargeList.append(card);
+    function renderGroup(list,rows,kind){
+      list.replaceChildren();
+      if(!rows.length){list.append(makeElement('p','beta-notice-empty','Nenhuma pendência.'));return;}
+      let shown=0;
+      function appendBatch(){
+        const next=rows.slice(shown,shown+50);
+        for(const item of next){
+          const card=makeElement('article','beta-discharge-card');
+          const top=makeElement('div','beta-discharge-card-top');
+          top.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-driver',item.nome||'Motorista não informado'));
+          card.append(top);
+          const schedule=dischargeDate(item.data)+(item.agendamento?' · '+item.agendamento:'');
+          card.append(makeElement('div','beta-discharge-date','Agendamento: '+schedule));
+          if(kind==='discharge')card.append(makeElement('div','beta-discharge-date','Descarga: '+(item.descarga?formatDescargaDateTime(item.descarga):'Não informada')));
+          const copyRow=makeElement('div','beta-discharge-copy-row');
+          const value=makeElement('span','beta-discharge-copy-value',item.copiar);
+          const copy=makeElement('button','beta-discharge-copy','Copiar');
+          copy.type='button';copy.title='Copiar placa, produto e nota fiscal';
+          copy.addEventListener('click',async()=>{
+            try{await copyDischarge(item.copiar);copy.textContent='Copiado!';}
+            catch(_error){copy.textContent='Falha ao copiar';}
+            setTimeout(()=>{copy.textContent='Copiar';},1700);
+          });
+          copyRow.append(value,copy);
+          if(kind==='discharge'&&canEditViagens()){
+            const mark=makeElement('button','beta-discharge-mark','Agendado');
+            mark.type='button';mark.title='Confirmar agendamento de descarga';
+            const input=makeElement('input','beta-discharge-schedule');input.type='datetime-local';input.hidden=true;
+            input.setAttribute('aria-label','Data e hora da descarga');
+            const error=makeElement('p','beta-notice-error','');error.setAttribute('role','status');
+            mark.addEventListener('click',async()=>{
+              if(!item.descarga&&!input.value){
+                input.hidden=false;input.focus();error.textContent='Informe a data e hora da descarga.';return;
+              }
+              if(!canEditViagens())return;
+              mark.disabled=true;error.textContent='';
+              try{
+                const patch={descargaVerde:true};
+                if(!item.descarga)patch.descarga=input.value;
+                const updated=await apiFetch('/api/viagens/'+encodeURIComponent(item.id),{method:'PUT',body:JSON.stringify(patch)});
+                if(!updated||updated.descargaVerde!==true)throw Error('Confirmação não gravada.');
+                const index=state.viagens.findIndex(v=>v._id===item.id);
+                if(index!==-1)state.viagens[index]=updated;
+                if(state.selectedViagemId===item.id)state.selectedViagemDetails=updated;
+                card.remove();renderAllUnlessInlineEditing();
+                void refreshDischargeNotifications();
+              }catch(e){error.textContent='Não foi possível confirmar a descarga.';}
+              finally{mark.disabled=false;}
+            });
+            copyRow.append(mark);card.append(copyRow,input,error);
+          }else card.append(copyRow);
+          list.append(card);
+        }
+        shown+=next.length;
+        if(shown<rows.length){
+          const more=makeElement('button','beta-notice-more','Mostrar mais ('+(rows.length-shown)+')');
+          more.type='button';more.onclick=()=>{more.remove();appendBatch();};list.append(more);
+        }
+      }
+      appendBatch();
     }
+    renderGroup(dischargeList,items,'discharge');
+    renderGroup(byId('beta-advance-list'),advances,'advance');
   }
   async function refreshDischargeNotifications(){
     if(document.hidden)return;
@@ -178,9 +234,10 @@
       if(!response.ok)throw Error('Consulta indisponível');
       const payload=await response.json();
       if(!Array.isArray(payload.items))throw Error('Resposta inválida');
-      renderDischargeNotifications(payload.items);
+      renderDischargeNotifications(payload.items,Array.isArray(payload.advances)?payload.advances:[]);
     }catch(_error){
       dischargeStatus.textContent='Não foi possível atualizar as notificações. Nova tentativa automática.';
+      dischargeSignature=null;
     }finally{
       dischargeLoading=false;
       if(dischargeQueued){dischargeQueued=false;void refreshDischargeNotifications();}
@@ -469,7 +526,8 @@ function syncBetaReminderPanel(hasContent) {
   nav.setAttribute('aria-expanded',String(open));
   const hasReminder = typeof hasContent === 'boolean' ? hasContent : Boolean(input.value.trim());
   nav.setAttribute('data-has-reminder',String(hasReminder));
-  const label = hasReminder ? 'Lembretes — há um recado' : 'Lembretes';
+  const pending = Number(nav.getAttribute?.('data-pending-count')||0);
+  const label = 'Lembretes'+(hasReminder?' — há um recado':'')+(pending?' — '+pending+' notificações':'');
   nav.setAttribute('aria-label',label);
   nav.setAttribute('title',label);
   document.body.classList.toggle('beta-reminder-open',open);
