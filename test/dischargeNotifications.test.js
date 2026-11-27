@@ -113,7 +113,10 @@ test('editor carrega a data existente, salva sem confirmar e confirma com os val
   assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',true),{descarga:'09:45 28/11/2026',descargaVerde:true});
   assert.equal(dischargeEditPatch('31/02/2026 09:45',true),null);
   assert.equal(dischargeEditPatch('',false),null);
-  assert.match(js,/edit.addEventListener\('click',openEditor\)/);
+  assert.match(js,/dateRow\.append\(input\)/);
+  assert.doesNotMatch(js,/beta-discharge-edit','Editar|function openEditor\(/);
+  assert.match(js,/editor\.hidden=!changed/);
+  assert.match(js,/input\.addEventListener\('input',syncEditorActions\)/);
   assert.match(js,/save.addEventListener\('click',\(\)=>persistDischarge\(false\)\)/);
   assert.match(js,/cancel.addEventListener\('click',closeEditor\)/);
   assert.match(js,/if\(confirm\)card.remove\(\)/);

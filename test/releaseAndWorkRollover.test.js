@@ -28,13 +28,14 @@ test('HTML inclui versão do documento e invalida cache dos scripts e estilos lo
   assert.ok(html.includes('/js/version-notice.js?v='+a));
   assert.ok(html.includes('https://example.com/lib.js"'));
 });
-test('avisa uma vez por versão sem confundir erro ou mesma versão',()=>{
+test('nova versão mantém bloqueio obrigatório até carregar novo documento',()=>{
   const tracker=versionTracker(a);
   tracker.observe(a);assert.equal(tracker.pending(),'');
   tracker.observe(null);assert.equal(tracker.pending(),'');
   tracker.observe(b);assert.equal(tracker.pending(),b);
-  tracker.acknowledge(b);assert.equal(tracker.pending(),'');
-  tracker.observe(b);assert.equal(tracker.pending(),'');
+  tracker.observe(b);assert.equal(tracker.pending(),b);
+  tracker.observe(null);assert.equal(tracker.pending(),b);
+  tracker.observe(a);assert.equal(tracker.pending(),b);
   tracker.observe(c);assert.equal(tracker.pending(),c);
   assert.equal(versionTracker(c).pending(),'');
 });
@@ -60,4 +61,16 @@ test('menu nasce recolhido e a interface preserva ações e aviso manual F5',()=
   assert.match(server,/expiredWorkPatch\(current\)/);
   assert.match(notice,/<kbd>F5<\/kbd>/);
   assert.doesNotMatch(notice,/location\.reload/);
+});
+
+test('aviso obrigatório bloqueia a interface, impede fechar e mantém F5 nativo',()=>{
+  const notice=read('public/js/version-notice.js'),css=read('public/css/workspace-beta.css');
+  assert.match(notice,/dialog\.showModal\(\)/);
+  assert.match(notice,/dialog\.setAttribute\('closedby','none'\)/);
+  assert.match(notice,/dialog\.addEventListener\('cancel',event=>event\.preventDefault\(\)\)/);
+  assert.match(notice,/dialog\.addEventListener\('close',showPending\)/);
+  assert.match(notice,/event\.stopImmediatePropagation\(\)/);
+  assert.match(notice,/if\(event\.key==='Escape'\)event\.preventDefault\(\)/);
+  assert.doesNotMatch(notice,/<button|Entendi|acknowledge\(|dialog\.close\(|location\.reload|activeElement|modal-overlay/);
+  assert.match(css,/#frotasys-version-notice \{position:fixed;inset:0;margin:auto/);
 });

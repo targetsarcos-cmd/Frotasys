@@ -961,8 +961,6 @@ body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,t
 .version-notice-body p {margin:0 0 9px}
 .version-notice-body p:last-child {margin:0}
 .version-notice-body kbd {display:inline-block;border:1px solid #b7cbdc;background:#edf3f8;border-radius:3px;padding:1px 7px;font:700 13px 'Segoe UI',sans-serif}
-.version-notice-footer {display:flex;justify-content:flex-end;border-top:1px solid #d6e1eb;padding:11px 18px;background:#f5f8fb}
-.version-notice-footer button {border:1px solid #135c92;background:#135c92;color:white;font-weight:600;font-size:13px;border-radius:4px;padding:7px 16px;cursor:pointer}
 /* Allow explicit menu expansion even at narrower supported desktop widths. */
 #beta-shell:not(.nav-compact) {--rail:184px}
 #beta-shell.nav-compact {--rail:64px}
@@ -999,12 +997,20 @@ body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,t
 
 /* Edit a pending discharge without confirming the appointment. */
 #beta-shell .beta-discharge-date-row {display:flex;align-items:center;gap:8px;justify-content:space-between}
-#beta-shell .beta-discharge-edit {flex:none;border:1px solid #b8cbdc;border-radius:3px;background:#fff;color:#135c92;font:600 11px 'Segoe UI',sans-serif;padding:3px 8px;cursor:pointer}
-#beta-shell .beta-discharge-edit:hover {background:#eaf3fa}
 #beta-shell .beta-discharge-editor {display:grid;gap:5px;margin-top:4px}
 #beta-shell .beta-discharge-editor[hidden] {display:none!important}
 #beta-shell .beta-discharge-editor .beta-discharge-schedule {box-sizing:border-box;margin:0}
 #beta-shell .beta-discharge-editor-actions {display:flex;justify-content:flex-end;gap:6px}
 #beta-shell .beta-discharge-save,#beta-shell .beta-discharge-cancel {border:1px solid #b8cbdc;border-radius:3px;background:white;color:#135c92;font:600 11px 'Segoe UI',sans-serif;padding:5px 10px;cursor:pointer}
 #beta-shell .beta-discharge-save {background:#135c92;color:#fff;border-color:#135c92}
-#beta-shell :is(.beta-discharge-save,.beta-discharge-edit,.beta-discharge-cancel):disabled {opacity:.55;cursor:wait}
+#beta-shell :is(.beta-discharge-save,.beta-discharge-cancel):disabled {opacity:.55;cursor:wait}
+
+/* Mandatory version gate and directly editable discharge field. */
+#frotasys-version-notice {position:fixed;inset:0;margin:auto;max-height:calc(100dvh - 32px);overflow:auto;text-align:left}
+#frotasys-version-notice::backdrop {background:rgba(20,43,66,.65)}
+#frotasys-version-notice .version-notice-blocked {font-size:12px;color:#526b80;margin-top:14px;padding-top:12px;border-top:1px solid #d6e1eb}
+body:has(#frotasys-version-notice[open]) {overflow:hidden}
+#beta-shell .beta-discharge-date-row:has(.beta-discharge-schedule) {justify-content:flex-start;gap:7px}
+#beta-shell .beta-discharge-date-row:has(.beta-discharge-schedule) .beta-discharge-date {flex:none}
+#beta-shell .beta-discharge-date-row .beta-discharge-schedule {flex:1;min-width:0;width:100%;margin:0;height:28px;box-sizing:border-box;background:#fff;cursor:text}
+#beta-shell .beta-discharge-date-row .beta-discharge-schedule:focus {border-color:#1665a3;outline:1px solid #1665a3;outline-offset:0}
