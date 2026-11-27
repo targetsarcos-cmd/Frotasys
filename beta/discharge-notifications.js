@@ -9,7 +9,7 @@ function localDay(now=new Date()){
   return get('year')+'-'+get('month')+'-'+get('day');
 }
 
-function pendingTrip(trip,today,{requireInvoice=true}={}){
+function pendingTrip(trip,today){
   const date=String(trip.data||'').trim();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>=today)return null;
   // Historical completed trips predate the explicit green flag.
@@ -17,7 +17,7 @@ function pendingTrip(trip,today,{requireInvoice=true}={}){
   const notes=invoiceEntries(trip).map(item=>item.value);
   // A nota fiscal identifica uma viagem efetivamente carregada, em vez de
   // disparar alertas para programações antigas que nunca carregaram.
-  if(requireInvoice&&!notes.length)return null;
+  if(!notes.length)return null;
   const plate=String(trip.placa||'').trim().toUpperCase().replace(/[\s-]/g,'');
   if(!plate)return null;
   const product=String(trip.produto||'').trim().toUpperCase().replace(/[\s-]/g,'');
@@ -33,16 +33,8 @@ function advanceNotification(trip,today){
   return hasAdvanceOk(trip)?null:pendingTrip(trip,today);
 }
 
-function programNotification(trip,today){
-  if(trip.programado===true||normalizeText(trip.status)==='CONCLUIDO')return null;
-  // Include genuinely unprogrammed active trips even before a fiscal note exists.
-  // Legacy loaded trips without a programming flag are not evidence of a pending task.
-  if(trip.programado===undefined&&invoiceEntries(trip).length)return null;
-  return pendingTrip(trip,today,{requireInvoice:false});
-}
-
 async function listPendingNotifications(client,table,today=localDay()){
-  const pageSize=200, result=[], advances=[], programs=[];
+  const pageSize=200, result=[], advances=[];
   let cursor=null;
   for(;;){
     let query=client.from(table).select('id,dados')
@@ -59,8 +51,6 @@ async function listPendingNotifications(client,table,today=localDay()){
       const advance=advanceNotification(trip,today);
       if(notification)result.push(notification);
       if(advance)advances.push(advance);
-      const program=programNotification(trip,today);
-      if(program)programs.push(program);
     }
     if(page.length<pageSize)break;
     const next=page[page.length-1].id;
@@ -68,9 +58,9 @@ async function listPendingNotifications(client,table,today=localDay()){
     cursor=next;
   }
   const order=(a,b)=>a.data.localeCompare(b.data)||a.placa.localeCompare(b.placa)||a.id.localeCompare(b.id);
-  return {items:result.sort(order),advances:advances.sort(order),programs:programs.sort(order)};
+  return {items:result.sort(order),advances:advances.sort(order)};
 }
 async function listDischargeNotifications(client,table,today=localDay()){
   return (await listPendingNotifications(client,table,today)).items;
 }
-module.exports={localDay,dischargeNotification,advanceNotification,programNotification,listDischargeNotifications,listPendingNotifications};
+module.exports={localDay,dischargeNotification,advanceNotification,listDischargeNotifications,listPendingNotifications};

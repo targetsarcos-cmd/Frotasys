@@ -111,7 +111,6 @@
         <p id="beta-discharge-status" role="status">Consultando pendências...</p>
         <details class="beta-notice-group" open><summary>Descarga <span id="beta-discharge-count">0</span></summary><div id="beta-discharge-list"></div></details>
         <details class="beta-notice-group"><summary>Adiantamento <span id="beta-advance-count">0</span></summary><div id="beta-advance-list"></div></details>
-        <details class="beta-notice-group"><summary>Programação <span id="beta-program-count">0</span></summary><div id="beta-program-list"></div></details>
       </section>
     </div>
     <footer class="beta-reminder-footer"><div class="beta-reminder-status-slot"></div><span>Esc para fechar</span></footer>`;
@@ -193,18 +192,17 @@
       dischargeDrafts.set(id,input.value);
     });
   }
-  function renderDischargeNotifications(items,advances,programs){
+  function renderDischargeNotifications(items,advances){
     byId('beta-discharge-count').textContent=String(items.length);
     byId('beta-advance-count').textContent=String(advances.length);
-    byId('beta-program-count').textContent=String(programs.length);
-    const total=items.length+advances.length+programs.length;
+    const total=items.length+advances.length;
     reminderBadge.textContent=String(total);
     reminderBadge.hidden=total===0;
     reminderNav.setAttribute('data-has-discharge',String(total>0));
     reminderNav.setAttribute('data-pending-count',String(total));
     syncBetaReminderPanel();
     dischargeStatus.textContent=total?'Pendências de carregamentos de dias anteriores.':'Nenhuma pendência.';
-    const signature=JSON.stringify([items,advances,programs,canEditViagens()]);
+    const signature=JSON.stringify([items,advances,canEditViagens()]);
     if(signature===dischargeSignature)return;
     dischargeSignature=signature;
     function renderGroup(list,rows,kind){
@@ -224,7 +222,7 @@
           top.append(identity,loadingDate);
           card.append(top);
           if(kind==='discharge')card.append(makeElement('div','beta-discharge-date','Descarga: '+(item.descarga?formatDescargaDateTime(item.descarga):'Não informada')));
-          else card.append(makeElement('div','beta-discharge-date',kind==='advance'?'Adiantamento não efetuado':'Não programado'));
+          else card.append(makeElement('div','beta-discharge-date','Adiantamento não efetuado'));
           const draft=dischargeDrafts.get(item.id);
           const copyRow=makeElement('div','beta-discharge-copy-row');
           if(kind==='discharge'){
@@ -239,7 +237,7 @@
             copyRow.append(value,copy);
           }
           if(canEditViagens()){
-            const mark=makeElement('button','beta-discharge-mark',kind==='discharge'?'Agendado':kind==='advance'?'Adiantamento OK':'Programar');
+            const mark=makeElement('button','beta-discharge-mark',kind==='discharge'?'Agendado':'Adiantamento OK');
             mark.type='button';
             const error=makeElement('p','beta-notice-error','');error.setAttribute('role','status');
             let input;
@@ -269,10 +267,10 @@
                   patch={descargaVerde:true,descarga:parsed};
                 }else patch={descargaVerde:true};
                 field='descargaVerde';
-              }else if(kind==='advance'){
+              }else{
                 if(!item.canAdvance)return;
                 patch={adiantamentoOk:true};field='adiantamentoOk';
-              }else{patch={programado:true};field='programado';}
+              }
               mark.disabled=true;error.textContent='';
               try{
                 const updated=await apiFetch('/api/viagens/'+encodeURIComponent(item.id),{method:'PUT',body:JSON.stringify(patch)});
@@ -302,7 +300,6 @@
     }
     renderGroup(dischargeList,items,'discharge');
     renderGroup(byId('beta-advance-list'),advances,'advance');
-    renderGroup(byId('beta-program-list'),programs,'program');
   }
   async function refreshDischargeNotifications(){
     if(document.hidden)return;
@@ -315,7 +312,7 @@
       if(!response.ok)throw Error('Consulta indisponível');
       const payload=await response.json();
       if(!Array.isArray(payload.items))throw Error('Resposta inválida');
-      renderDischargeNotifications(payload.items,Array.isArray(payload.advances)?payload.advances:[],Array.isArray(payload.programs)?payload.programs:[]);
+      renderDischargeNotifications(payload.items,Array.isArray(payload.advances)?payload.advances:[]);
     }catch(_error){
       dischargeStatus.textContent='Não foi possível atualizar as notificações. Nova tentativa automática.';
       dischargeSignature=null;
