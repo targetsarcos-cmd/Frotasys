@@ -370,40 +370,70 @@ async function startApp() {
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
-  if (document.body?.classList?.contains?.('workspace-beta')) {
+  const production = document.body.dataset.workspaceRuntime === 'production';
+  if (!production) {
     const badge = document.getElementById('ws-status');
     badge.textContent = isBetaReadOnly() ? 'Beta | Somente leitura' : 'Beta | Banco compartilhado';
     badge.title = 'Atualize a pagina para consultar dados recentes';
-  } else {
-    initWS();
   }
   initUI();
   if(isBetaTripWorkspace()) initBetaColumnLayout();
   applyPermissions();
   if(isBetaTripWorkspace() && location.hash==='#usuarios'){if(isAdmin())loadUsers();else location.hash='';}
-  loadAll();
+  await loadAll();
+  if (production) initWS();
 }
 
 // ─── WEBSOCKET ────────────────────────────────────────────────────────────────
+let wsWasAuthenticated=false;
+let wsRefreshPending=false;
+function refreshProductionAfterReconnect(){
+  if(!wsRefreshPending)return;
+  if(activeInlineEdit?.input?.isConnected||state.drawerSaving||state.drawerActiveField||
+    document.activeElement===document.getElementById('reminder-text')||
+    document.getElementById('reminder-status')?.dataset.state==='Salvando...'){
+    setTimeout(refreshProductionAfterReconnect,2000);return;
+  }
+  wsRefreshPending=false;
+  // Force a complete snapshot after a disconnected interval.
+  state.staticDataLoaded=false;
+  void loadAll();
+}
 function initWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${proto}://${location.host}`;
-  state.ws = new WebSocket(wsUrl);
-
-  state.ws.onopen = () => {
-    document.getElementById('ws-status').className = 'ws-status online';
-    document.getElementById('ws-status').textContent = 'Conectado';
+  const socket = new WebSocket(wsUrl);
+  state.ws = socket;
+  let authenticated=false;
+  const status=document.getElementById('ws-status');
+  socket.onopen = async () => {
+    try {
+      const token=await FrotasysAuth.getAccessToken();
+      if(socket.readyState!==WebSocket.OPEN)return;
+      if(!token){socket.close();return;}
+      socket.send(JSON.stringify({type:'authenticate',token}));
+    } catch(_error){socket.close();}
   };
-
-  state.ws.onclose = () => {
-    document.getElementById('ws-status').className = 'ws-status offline';
-    document.getElementById('ws-status').textContent = 'Desconectado';
-    setTimeout(initWS, 3000);
+  socket.onclose = () => {
+    if(state.ws!==socket)return;
+    status.className='ws-status offline';
+    status.textContent='Desconectado';
+    setTimeout(initWS,3000);
   };
-
-  state.ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    handleWsMessage(msg);
+  socket.onerror=()=>socket.close();
+  socket.onmessage = (event) => {
+    let msg;
+    try{msg=JSON.parse(event.data);}catch(_error){return;}
+    if(msg.type==='auth_ok'){
+      authenticated=true;
+      status.className='ws-status online';
+      status.textContent='Conectado';
+      if(msg.payload){state.userProfile=msg.payload;applyPermissions();}
+      if(wsWasAuthenticated&&!wsRefreshPending){wsRefreshPending=true;refreshProductionAfterReconnect();}
+      wsWasAuthenticated=true;
+      return;
+    }
+    if(authenticated)handleWsMessage(msg);
   };
 }
 
@@ -945,7 +975,7 @@ function applyPermissions() {
     const button = document.getElementById('newTrip');
     if (button) {
       button.disabled = !canEdit;
-      button.title = canEdit ? 'Cadastrar viagem no banco compartilhado' : 'Beta somente leitura';
+      button.title = canEdit ? 'Cadastrar viagem' : 'Somente leitura';
     }
     const label = canEdit ? 'Edicao ativa' : 'Somente leitura';
     const userMode = document.querySelector('#beta-shell .connected')?.parentElement;
@@ -954,7 +984,7 @@ function applyPermissions() {
       userMode.replaceChildren(indicator, document.createTextNode(' ' + label));
     }
     const footer = document.querySelector('#beta-shell .operations-panel > .footer > span:last-child');
-    if (footer) footer.textContent = 'Beta · ' + label + (canEdit ? ' · Banco compartilhado' : '');
+    if (footer) footer.textContent = (document.body.dataset.workspaceRuntime === 'production' ? 'Frotasys · ' : 'Beta · ') + label + (canEdit ? ' · Banco compartilhado' : '');
     document.getElementById('f-secao').disabled = true;
   }
 }
