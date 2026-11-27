@@ -2650,6 +2650,7 @@ function mergeFreteConsultas(saved = {}) {
     const routes = saved.routes.map(normalizeFreteRoute).filter(route => route.rota && (route.rows.length || route.agregado.length));
     return {
       revision: String(saved.revision || ''),
+      axesInitialized: saved.axesInitialized === true,
       updatedAt: String(saved.updatedAt || ''),
       source: String(saved.source || ''),
       routes: routes.length ? routes : DEFAULT_FRETE_ROUTES.map(normalizeFreteRoute)
@@ -2684,7 +2685,20 @@ async function saveFreteConsultas() {
   localStorage.setItem(FRETE_CONSULT_KEY, JSON.stringify(state.freteConsultas));
 }
 
+function prepareFreteBoardAxes(tables) {
+  if (!tables || tables.axesInitialized === true || !Array.isArray(tables.routes) || !tables.routes.length) return;
+  for (const route of tables.routes) {
+    for (const key of ['agregado','rows']) {
+      const rows = Array.isArray(route[key]) ? route[key] : [];
+      const existing = new Set(rows.map(row=>Number(row.eixos)));
+      route[key] = [...rows, ...[5,6,7,9].filter(eixos=>!existing.has(eixos)).map(eixos=>({eixos,pj:null,pf:null}))].sort((a,b)=>Number(a.eixos)-Number(b.eixos));
+    }
+  }
+  tables.axesInitialized=true;
+}
+
 function renderFreteConsultas() {
+  if(isBetaTripWorkspace()) prepareFreteBoardAxes(state.freteConsultas);
   const grid = document.getElementById('frete-consult-grid');
   const routeFilter = document.getElementById('frete-route-filter')?.value || '';
   const routes = filteredFreteRoutes(routeFilter);
@@ -2896,7 +2910,8 @@ async function addFreteRoute() {
     rota: base,
     origem: parts.origem,
     destino: parts.destino,
-    rows: [5, 6, 7, 9].map(eixos => ({ eixos, pj: null, pf: null }))
+    rows: [5, 6, 7, 9].map(eixos => ({ eixos, pj: null, pf: null })),
+    agregado: [5, 6, 7, 9].map(eixos => ({ eixos, pj: null, pf: null }))
   });
   await saveFreteConsultas();
   renderFreteConsultas();
@@ -2937,11 +2952,12 @@ async function deleteFreteEixo(routeIndex, rowIndex, group = 'rows') {
   renderFreteConsultas();
 }
 
+let freteBoardSaving=false;
 async function commitFreteBoardEdit(cell) {
   if (!isAdmin()) return;
   if (isBetaTripWorkspace()) {
     cell.removeAttribute('contenteditable');
-    if (isBetaReadOnly() || cell.textContent.trim() === cell.dataset.value) return;
+    if (isBetaReadOnly() || freteBoardSaving || cell.textContent.trim() === cell.dataset.value) return;
   }
   const field = cell.dataset.freteField;
   const routeIndex = Number(cell.dataset.routeIndex);
@@ -2958,6 +2974,9 @@ async function commitFreteBoardEdit(cell) {
       return;
     }
     const parts = splitFreteRoute(rota);
+    if (!parts.origem || !parts.destino || freteRoutes().some(other=>other!==route&&normalizeOption(other.rota)===normalizeOption(rota))) {
+      cell.textContent=previous;showSummaryToast('Informe uma rota válida e não duplicada.','error');return;
+    }
     route.rota = rota;
     route.origem = parts.origem;
     route.destino = parts.destino;
@@ -2966,7 +2985,7 @@ async function commitFreteBoardEdit(cell) {
     const row = route[group]?.[rowIndex];
     if (!row) return;
     if (field === 'eixos') {
-      const eixos = Number(String(raw).replace(/\D/g, ''));
+      const eixos = /^\d+$/.test(raw) ? Number(raw) : 0;
       if (!eixos || route[group].some((other,i) => i !== rowIndex && other.eixos === eixos)) {
         cell.textContent = previous || row.eixos;
         return;
@@ -2974,13 +2993,15 @@ async function commitFreteBoardEdit(cell) {
       row.eixos = eixos;
     } else if (field === 'pj' || field === 'pf') {
       const value = parseFreteCurrency(raw);
+      if(raw && (!Number.isFinite(value)||value<0)){cell.textContent=previous;showSummaryToast('Informe um valor de frete válido.','error');return;}
       row[field] = Number.isFinite(value) ? value : null;
     }
     route[group] = (route[group] || []).sort((a, b) => Number(a.eixos) - Number(b.eixos));
   }
 
-  await saveFreteConsultas();
-  renderFreteConsultas();
+  freteBoardSaving=true;
+  try { await saveFreteConsultas(); }
+  finally { freteBoardSaving=false; renderFreteConsultas(); }
 }
 
 function formatFreteUpdatedAt(value) {
