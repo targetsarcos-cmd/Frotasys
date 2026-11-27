@@ -60,8 +60,6 @@ const WORK_TYPE_FIELD = '__work_type';
 const WORK_SESSION_FIELD = '__trip_work_session';
 const WORK_EVENT_FIELD = '__trip_work_session_event';
 const FRETE_XLSX_PATH = process.env.FRETE_XLSX_PATH || path.join(__dirname, 'data', 'fretes_arcos.xlsx');
-const AVATAR_UPLOAD_DIR = path.join(__dirname, 'public', 'uploads', 'avatars');
-const AVATAR_PUBLIC_PREFIX = '/uploads/avatars';
 const FRETE_COLUMNS = ['ROTA', 'EIXOS', 'VALOR PJ', 'VALOR PF'];
 const DEFAULT_WORK_TYPES = [
   { name: 'DT', code: 'DT', color: '#f97316', icon: 'play', displayOrder: 1 },
@@ -1096,18 +1094,21 @@ async function activeWorkSessions() {
 async function publicWorkSessions() {
   const [sessions, types] = await Promise.all([activeWorkSessions(), workTypeDocs({ includeDeleted: true })]);
   const typeMap = Object.fromEntries(types.map(type => [type._id, publicWorkType(type)]));
+  const userIds=[...new Set(sessions.map(session=>session.userId).filter(Boolean))];
+  const profiles=userIds.length?await selectDocsByJson(TABLES.configOptions,{field:USER_PROFILE_SETTINGS_FIELD},{in:{userId:userIds}}):[];
+  const avatars=new Map(profiles.map(profile=>[profile.userId,normalizeAvatarUrl(profile.avatarUrl)]));
   return sessions.map(session => ({
     ...session,
-    userAvatarSnapshot: '',
+    userAvatarSnapshot: avatars.get(session.userId)||'',
     workType: typeMap[session.workTypeId] || null
   }));
 }
 
 async function publicWorkSession(session = {}) {
-  const type = session.workTypeId ? await findOneById(TABLES.configOptions, session.workTypeId) : null;
+  const [type,settings]=await Promise.all([session.workTypeId?findOneById(TABLES.configOptions,session.workTypeId):null,userProfileSettings(session.userId)]);
   return {
     ...session,
-    userAvatarSnapshot: '',
+    userAvatarSnapshot: settings.avatarUrl||'',
     workType: type && type.field === WORK_TYPE_FIELD ? publicWorkType(type) : null
   };
 }
@@ -1520,7 +1521,7 @@ function publicProfile(profile = {}) {
     user_id: profile.user_id,
     nome: profile.nome || '',
     displayName: profile.displayName || profile.nome || '',
-    avatarUrl: '',
+    avatarUrl: normalizeAvatarUrl(profile.avatarUrl),
     email: profile.email || '',
     role: profile.role || 'visualizador',
     ativo: profile.ativo !== false,
@@ -1532,32 +1533,34 @@ function profileDisplayName(profile = {}) {
   return String(profile.displayName || profile.nome || profile.email || 'Usuário').trim();
 }
 
+// Store only small raster thumbnails in the existing Supabase JSON profile record.
+// No external URLs, SVG, local filesystem or publicly served upload directory.
 function normalizeAvatarUrl(value = '') {
-  const url = String(value || '').trim();
-  if (!url) return '';
-  if (url.length > 800000) return '';
-  return /^(https?:|data:image\/)/i.test(url) || url.startsWith(`${AVATAR_PUBLIC_PREFIX}/`) ? url : '';
-}
-
-function safeAvatarUserId(userId = '') {
-  return String(userId || 'user').replace(/[^a-z0-9_-]/gi, '_').slice(0, 80) || 'user';
-}
-
-async function persistAvatarUrl(userId, value = '') {
-  const url = normalizeAvatarUrl(value);
-  if (!url || !url.startsWith('data:image/')) return url;
-
-  const match = url.match(/^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=\s]+)$/i);
-  if (!match) return '';
-
-  const ext = match[1].toLowerCase().replace('jpeg', 'jpg');
-  const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
-  if (!buffer.length || buffer.length > 250 * 1024) return '';
-
-  await fs.mkdir(AVATAR_UPLOAD_DIR, { recursive: true });
-  const filename = `${safeAvatarUserId(userId)}-${Date.now()}.${ext}`;
-  await fs.writeFile(path.join(AVATAR_UPLOAD_DIR, filename), buffer);
-  return `${AVATAR_PUBLIC_PREFIX}/${filename}`;
+  if(typeof value!=='string'||value.length>44000)return '';
+  const match=/^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  if(!match)return '';
+  const bytes=Buffer.from(match[1],'base64');
+  if(bytes.length<20||bytes.length>32768||bytes.toString('base64')!==match[1]||
+     bytes[0]!==255||bytes[1]!==216||bytes[bytes.length-2]!==255||bytes[bytes.length-1]!==217)return '';
+  // Validate the JPEG frame dimensions before accepting the thumbnail.
+  let i=2,frame=false;
+  while(i<bytes.length-2){
+    if(bytes[i++]!==255)return '';
+    while(bytes[i]===255)i++;
+    const marker=bytes[i++];
+    if(marker===0xda)return frame?value:'';
+    if(marker===0xd9||i+2>bytes.length)return '';
+    const length=bytes.readUInt16BE(i);
+    if(length<2||i+length>bytes.length)return '';
+    if([0xc0,0xc1,0xc2].includes(marker)){
+      if(length<8||bytes[i+2]!==8)return '';
+      const h=bytes.readUInt16BE(i+3),w=bytes.readUInt16BE(i+5);
+      if(!w||!h||w>128||h>128)return '';
+      frame=true;
+    }
+    i+=length;
+  }
+  return '';
 }
 
 async function userProfileSettings(userId) {
@@ -1566,25 +1569,28 @@ async function userProfileSettings(userId) {
   const doc = await findOneByJson(TABLES.configOptions, { field: USER_PROFILE_SETTINGS_FIELD, userId: key });
   return {
     displayName: String(doc?.displayName || '').trim(),
-    avatarUrl: ''
+    avatarUrl: normalizeAvatarUrl(doc?.avatarUrl)
   };
 }
 
 async function saveUserProfileSettings(userId, data = {}) {
   const key = String(userId || '').trim();
   const existing = await findOneByJson(TABLES.configOptions, { field: USER_PROFILE_SETTINGS_FIELD, userId: key });
+  const avatarUrl=data.avatarUrl===undefined?normalizeAvatarUrl(existing?.avatarUrl):normalizeAvatarUrl(data.avatarUrl);
+  if(data.avatarUrl!==undefined && data.avatarUrl!=='' && !avatarUrl){const error=new Error('Foto inválida. Selecione uma imagem válida.');error.status=400;throw error;}
   const payload = {
     field: USER_PROFILE_SETTINGS_FIELD,
     userId: key,
-    displayName: String(data.displayName || '').trim().slice(0, 80),
-    avatarUrl: ''
+    displayName: String(data.displayName ?? existing?.displayName ?? '').trim().slice(0, 80),
+    avatarUrl
   };
   const saved = existing
-    ? await updateDoc(TABLES.configOptions, existing._id, payload)
+    ? await updateDoc(TABLES.configOptions, existing._id, payload, existing)
     : await insertDoc(TABLES.configOptions, payload);
+  if(!saved){const error=new Error('Perfil alterado durante a edição. Tente novamente.');error.status=409;throw error;}
   return {
     displayName: saved.displayName || '',
-    avatarUrl: ''
+    avatarUrl: normalizeAvatarUrl(saved.avatarUrl)
   };
 }
 
@@ -1638,7 +1644,7 @@ function requireAuth(req, res, next) {
     const profile = await profileForUser(data.user.id);
     if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
 
-    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role) && !(req.method === 'PUT' && req.path === '/auth/table-preferences')) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
+    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role) && !(req.method === 'PUT' && ['/auth/table-preferences','/auth/profile'].includes(req.path))) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
     req.authUser = data.user;
     req.userProfile = profile;
     next();
@@ -1708,8 +1714,10 @@ app.put('/api/auth/table-preferences',(req,res)=>{
 
 app.put('/api/auth/profile', async (req, res) => {
   try {
+    if(betaReadOnly)return res.status(403).json({error:'Somente leitura.'});
     const saved = await saveUserProfileSettings(req.authUser.id, {
-      displayName: req.body?.displayName
+      displayName: req.body?.displayName,
+      avatarUrl: req.body?.avatarUrl
     });
     const profile = {
       ...req.userProfile,
@@ -1729,7 +1737,7 @@ app.put('/api/auth/profile', async (req, res) => {
     broadcast({ type: 'work_sessions_atualizadas', payload: sessions });
     res.json(profile);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.status===400||e.status===409?e.status:500).json({ error: e.message });
   }
 });
 
