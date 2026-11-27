@@ -316,7 +316,7 @@ app.get('/login', (req, res) => {
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
   if (doc.status === 'PROGRAMAR' && doc.dt) doc.status = calculateTripStatus(doc);
-  if (betaWorkspace && ['ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA','CONCLUIDO'].includes(doc.status) && doc.descargaVerde !== undefined) doc.status = calculateTripStatus(doc);
+  if (betaWorkspace && ['ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA','CONCLUIDO'].includes(doc.status)) doc.status = calculateTripStatus(doc);
   if (isViagemBloqueada(doc)) {
     doc.status = 'CONCLUIDO';
     doc.usuario = '';
