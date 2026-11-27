@@ -9,6 +9,9 @@
   const settings = document.getElementById('beta-settings');
   const settingsNav = shell.querySelector('[data-nav="Configurações"]');
   prepareBetaSettingsPage();
+  const users = document.getElementById('beta-users');
+  const usersNav = shell.querySelector('[data-nav="Usuários"]');
+  prepareBetaUsersPage();
   const form = document.getElementById('waitlist-form');
   document.getElementById('espera-cadastro').append(form);
   for (const group of form.querySelectorAll('.form-group')) {
@@ -27,16 +30,20 @@
     const active = location.hash === '#fretes';
     const queueActive = location.hash === '#lista-espera';
     const settingsActive = location.hash === '#configuracoes';
+    const usersActive = location.hash === '#usuarios';
+    if(usersActive && state.userProfile && !isAdmin()){location.hash='';return;}
+    users.hidden = !usersActive;
     settings.hidden = !settingsActive;
     queue.hidden = !queueActive;
     page.hidden = !active;
-    shell.querySelector('main.workspace').hidden = active || queueActive || settingsActive;
-    title.textContent = active ? 'Tabela de Fretes' : queueActive ? 'Lista de Espera' : settingsActive ? 'Configurações' : homeTitle;
-    for (const [button,selected] of [[home,!active && !queueActive && !settingsActive],[nav,active],[queueNav,queueActive],[settingsNav,settingsActive]]) {
+    shell.querySelector('main.workspace').hidden = active || queueActive || settingsActive || usersActive;
+    title.textContent = active ? 'Tabela de Fretes' : queueActive ? 'Lista de Espera' : settingsActive ? 'Configurações' : usersActive ? 'Usuários' : homeTitle;
+    for (const [button,selected] of [[home,!active && !queueActive && !settingsActive && !usersActive],[nav,active],[queueNav,queueActive],[settingsNav,settingsActive],[usersNav,usersActive]]) {
       button.classList.toggle('nav-current',selected);
       if (selected) button.setAttribute('aria-current','page');
       else button.removeAttribute('aria-current');
     }
+    if(usersActive){closeTravelDrawer();if(state.userProfile&&isAdmin())loadUsers();window.scrollTo(0,0);}
     if (settingsActive) {
       closeTravelDrawer();
       if(state.userProfile){resetExportViagensForm();renderSettingsModal();}
@@ -54,7 +61,7 @@
       if (state.userProfile) refreshFreteConsultas();
     }
   }
-  home.addEventListener('click',() => { if (!page.hidden || !queue.hidden || !settings.hidden) location.hash = ''; });
+  home.addEventListener('click',() => { if (!page.hidden || !queue.hidden || !settings.hidden || !users.hidden) location.hash = ''; });
   window.addEventListener('hashchange',navigate);
   navigate();
 })();
