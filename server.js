@@ -103,6 +103,8 @@ const VIAGENS_SEARCH_LIMIT = 200;
 const APP_CACHE_TTL_MS = 45 * 1000;
 // Enable only after installing and validating sql/egress-phase3.sql.
 const EGRESS_V3_RPC = runtime.production && process.env.FROTASYS_EGRESS_V3_RPC === '1';
+// Only enable where this server is the sole writer and there is one instance.
+const replayJournal=runtime.production&&process.env.FROTASYS_EGRESS_WS_REPLAY==='1'?require('./beta/egress-replay').createReplayJournal():null;
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -1643,7 +1645,8 @@ async function findDuplicateViagemFields(data, currentId = null, previous = null
 }
 
 function broadcast(data) {
-  broadcastAuthenticated(wss.clients,['viagem_atualizada','viagem_criada'].includes(data.type)?{...data,payload:publicTrip(data.payload)}:data);
+  const message=['viagem_atualizada','viagem_criada'].includes(data.type)?{...data,payload:publicTrip(data.payload)}:data;
+  broadcastAuthenticated(wss.clients,replayJournal?replayJournal.record(message):message);
 }
 
 function publicProfile(profile = {}) {
@@ -2398,7 +2401,7 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
 });
 
 wss.on('connection', ws => {
-  bindAuthenticatedSocket(ws,{authenticate:async token=>{
+  bindAuthenticatedSocket(ws,{resume:replayJournal?cursor=>replayJournal.resume(cursor):undefined,authenticate:async token=>{
     const {data,error}=await verifyAuthUser(token);
     if(error||!data?.user||!canAccessUser(runtime,data.user.id,process.env))return null;
     const profile=await profileForUser(data.user.id);
