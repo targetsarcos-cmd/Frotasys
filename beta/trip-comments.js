@@ -47,4 +47,48 @@ function applyCommentAction(existing, input, actor, options = {}) {
   target.editedAt = now();
   return threads;
 }
-module.exports = { CommentError, applyCommentAction };
+const RETENTION_MS=72*60*60*1000;
+const nonempty=value=>String(value??'').trim()!=='';
+function timestamp(value){
+  if(typeof value!=='string'||!value.trim())return null;
+  const result=Date.parse(value);
+  return Number.isFinite(result)?result:null;
+}
+function observationStart(trip,now){
+  const explicit=timestamp(trip.obsCriadaEm);
+  if(explicit!==null)return explicit;
+  const history=Array.isArray(trip.historico)?trip.historico:[];
+  const changes=history.filter(item=>item?.campo==='obs'&&nonempty(item.atual))
+    .map(item=>timestamp(item.dataHora)).filter(value=>value!==null);
+  return changes.length?Math.max(...changes):timestamp(trip.createdAt)??now;
+}
+function observationWritePatch(current,patch,now=Date.now()){
+  if(!Object.hasOwn(patch,'obs'))return {};
+  if(!nonempty(patch.obs))return {obsCriadaEm:null};
+  const start=nonempty(current.obs)?observationStart(current,now):now;
+  return {obsCriadaEm:new Date(start).toISOString()};
+}
+function expiredTripContentPatch(trip,now=Date.now()){
+  const patch={};
+  if(nonempty(trip.obs)){
+    const start=observationStart(trip,now);
+    if(now-start>=RETENTION_MS){patch.obs='';patch.obsCriadaEm=null;}
+    else if(timestamp(trip.obsCriadaEm)===null)patch.obsCriadaEm=new Date(start).toISOString();
+  }
+  if(Array.isArray(trip.comentariosBeta)){
+    const next=trip.comentariosBeta.flatMap(thread=>{
+      if(!thread||!Array.isArray(thread.messages))return [];
+      const messages=thread.messages.flatMap(msg=>{
+        if(!msg)return [];
+        const explicit=timestamp(msg.createdAt);
+        const start=explicit??timestamp(trip.createdAt)??now;
+        if(now-start>=RETENTION_MS)return [];
+        return [explicit===null?{...msg,createdAt:new Date(start).toISOString()}:msg];
+      });
+      return messages.length?[{...thread,messages}]:[];
+    });
+    if(JSON.stringify(next)!==JSON.stringify(trip.comentariosBeta))patch.comentariosBeta=next;
+  }
+  return patch;
+}
+module.exports = { CommentError, applyCommentAction, RETENTION_MS, observationWritePatch, expiredTripContentPatch };

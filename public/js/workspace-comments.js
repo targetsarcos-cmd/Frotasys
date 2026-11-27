@@ -388,5 +388,12 @@
     if (panel.hidden || (event.target instanceof Node && panel.contains(event.target))) return;
     if (pinned) position(); else close();
   }, true);
-  window.FrotasysBetaComments = { decorate, configureMenu };
+  function refreshTrip(id){
+    if(String(id)!==activeId||panel.hidden||pending)return;
+    if(!hasHistory(byTrip(id))&&!pinned){close();return;}
+    // Preserve unsaved input; expired items are rejected by the server on save.
+    if(panel.querySelector('textarea:focus')||[...panel.querySelectorAll('textarea')].some(input=>input.value.trim()))return;
+    render();
+  }
+  window.FrotasysBetaComments = { decorate, configureMenu, refreshTrip };
 })();
