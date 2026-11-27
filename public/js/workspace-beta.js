@@ -95,13 +95,16 @@
   reminderPanel.innerHTML = `
     <header class="beta-reminder-head">
       <svg class="beta-reminder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5h12v16H4V5h4m0 0V3h8v4H8zM8 11h8m-8 4h8"/></svg>
-      <div><h2 id="beta-reminder-title">Lembretes</h2><p>Anotações operacionais</p></div>
+      <div><h2 id="beta-reminder-title">Lembretes</h2></div>
       <div class="beta-reminder-close-slot"></div>
     </header>
     <div class="beta-reminder-body">
-      <div class="beta-reminder-info"><span class="beta-reminder-indicator"></span><span>Nota compartilhada da operação</span></div>
       <div class="beta-reminder-editor"><label for="reminder-text">Anotações</label><div class="beta-reminder-text-slot"></div><div id="beta-reminder-count" class="beta-reminder-count">0 / 2.000 caracteres</div></div>
-      <p class="beta-reminder-hint">Registre pendências, agendamentos e informações importantes para a equipe. As alterações são salvas automaticamente.</p>
+      <section class="beta-discharge-notifications" aria-labelledby="beta-discharge-title">
+        <div class="beta-discharge-heading"><h3 id="beta-discharge-title">Notificações</h3><span id="beta-discharge-count" aria-label="Quantidade de pendências">0</span></div>
+        <p id="beta-discharge-status" role="status">Consultando descargas pendentes...</p>
+        <div id="beta-discharge-list"></div>
+      </section>
     </div>
     <footer class="beta-reminder-footer"><div class="beta-reminder-status-slot"></div><span>Esc para fechar</span></footer>`;
   reminderClose.textContent = '×';
@@ -116,6 +119,79 @@
   reminder.append(reminderPanel);
   shell.append(reminder, byId('travel-drawer'));
   syncBetaReminderPanel();
+  let dischargeLoading=false, dischargeQueued=false, dischargeSignature=null;
+  const dischargeList=byId('beta-discharge-list'), dischargeStatus=byId('beta-discharge-status');
+  function makeElement(tag,cls,text){
+    const el=document.createElement(tag);
+    if(cls)el.className=cls;
+    if(text!==undefined)el.textContent=text;
+    return el;
+  }
+  function dischargeDate(value){
+    return /^\d{4}-\d{2}-\d{2}$/.test(value)?value.split('-').reverse().join('/'):value;
+  }
+  async function copyDischarge(text){
+    if(navigator.clipboard?.writeText){
+      try{await navigator.clipboard.writeText(text);return;}catch(_error){}
+    }
+    const input=makeElement('textarea','beta-discharge-copy-buffer');
+    input.value=text;document.body.append(input);input.select();
+    try{if(!document.execCommand('copy'))throw Error('Cópia indisponível.');}
+    finally{input.remove();}
+  }
+  function renderDischargeNotifications(items){
+    byId('beta-discharge-count').textContent=String(items.length);
+    reminderNav.setAttribute('data-has-discharge',String(items.length>0));
+    dischargeStatus.textContent=items.length?'Descargas sem confirmação após o dia do carregamento.':'Nenhuma descarga pendente.';
+    const signature=JSON.stringify(items);
+    if(signature===dischargeSignature)return;
+    dischargeSignature=signature;
+    dischargeList.replaceChildren();
+    for(const item of items){
+      const card=makeElement('article','beta-discharge-card');
+      const top=makeElement('div','beta-discharge-card-top');
+      top.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-pending','Descarga pendente'));
+      card.append(top,makeElement('div','beta-discharge-driver',item.nome||'Motorista não informado'));
+      const schedule=dischargeDate(item.data)+(item.agendamento?' · '+item.agendamento:'');
+      card.append(makeElement('div','beta-discharge-date','Agendamento: '+schedule));
+      if(item.descarga)card.append(makeElement('div','beta-discharge-date','Descarga informada: '+item.descarga));
+      const copyRow=makeElement('div','beta-discharge-copy-row');
+      const value=makeElement('span','beta-discharge-copy-value',item.copiar);
+      const copy=makeElement('button','beta-discharge-copy','Copiar');
+      copy.type='button';copy.title='Copiar placa, produto e nota fiscal';
+      copy.addEventListener('click',async()=>{
+        try{await copyDischarge(item.copiar);copy.textContent='Copiado!';}
+        catch(_error){copy.textContent='Falha ao copiar';}
+        setTimeout(()=>{copy.textContent='Copiar';},1700);
+      });
+      copyRow.append(value,copy);card.append(copyRow);dischargeList.append(card);
+    }
+  }
+  async function refreshDischargeNotifications(){
+    if(document.hidden)return;
+    if(dischargeLoading){dischargeQueued=true;return;}
+    dischargeLoading=true;
+    try{
+      const token=await FrotasysAuth.getAccessToken();
+      if(!token)return;
+      const response=await fetch('/api/lembretes/descargas-pendentes',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+      if(!response.ok)throw Error('Consulta indisponível');
+      const payload=await response.json();
+      if(!Array.isArray(payload.items))throw Error('Resposta inválida');
+      renderDischargeNotifications(payload.items);
+    }catch(_error){
+      dischargeStatus.textContent='Não foi possível atualizar as notificações. Nova tentativa automática.';
+    }finally{
+      dischargeLoading=false;
+      if(dischargeQueued){dischargeQueued=false;void refreshDischargeNotifications();}
+    }
+  }
+  document.addEventListener('beta-discharge-changed',refreshDischargeNotifications);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshDischargeNotifications();});
+  new MutationObserver(()=>{if(!reminderPanel.classList.contains('hidden'))void refreshDischargeNotifications();})
+    .observe(reminderPanel,{attributes:true,attributeFilter:['class']});
+  setInterval(refreshDischargeNotifications,30000);
+  void refreshDischargeNotifications();
   const globalSearch = adopt('globalSearch','header-search-input');
   globalSearch.setAttribute('form', 'header-search-form');
   globalSearch.placeholder = 'Pesquisar placa, motorista, nota, CT-e...';
