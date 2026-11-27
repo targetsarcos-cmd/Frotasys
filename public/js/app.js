@@ -5952,7 +5952,7 @@ function applyBetaColumnAlignment(root){
   }
 }
 function betaAlignIcon(mode){
-  const paths={default:'M4 5h16M4 10h10M4 15h16M4 20h12',left:'M4 5h16M4 10h10M4 15h16M4 20h10',center:'M4 5h16M7 10h10M4 15h16M7 20h10',right:'M4 5h16M10 10h10M4 15h16M10 20h10'};
+  const paths={default:'M4 5h16M7 10h10M4 15h12M10 20h10',left:'M4 5h16M4 10h10M4 15h16M4 20h10',center:'M4 5h16M7 10h10M4 15h16M7 20h10',right:'M4 5h16M10 10h10M4 15h16M10 20h10'};
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="'+paths[mode]+'"/></svg>';
 }
 function betaGlobalAlignment(){
@@ -5969,8 +5969,10 @@ function updateBetaAlignmentButton(){
   if(!button)return;
   const mode=betaGlobalAlignment();
   const labels={default:'Padrão',mixed:'Personalizado',left:'Esquerda',center:'Centralizado',right:'Direita'};
-  button.dataset.alignment=mode;
-  button.innerHTML=betaAlignIcon(mode==='mixed'?'default':mode);
+  if(button.dataset.alignment!==mode){
+    button.dataset.alignment=mode;
+    button.innerHTML=betaAlignIcon(mode==='mixed'?'default':mode);
+  }
   button.title='Alinhamento: '+labels[mode]+' · Próximo: '+labels[nextBetaAlignment(mode)]+(betaColumnSaveMessage?' · '+betaColumnSaveMessage:'');
   button.setAttribute('aria-label','Alinhamento atual: '+labels[mode]+'. Clique para alternar para '+labels[nextBetaAlignment(mode)]);
 }
