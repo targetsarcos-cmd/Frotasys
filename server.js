@@ -1417,7 +1417,7 @@ function appendViagemHistory(current, entries) {
 }
 
 function buildViagemHistoryEntries(current, patch, profile, action = 'ALTERACAO') {
-  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico']);
+  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico', 'billingRuleVersion']);
   const fields = Object.keys(patch || {}).filter(field => !ignored.has(field));
   const changed = fields.filter(field => historyTextValue(current?.[field]) !== historyTextValue(patch[field]));
   if (!changed.length && action !== 'CRIACAO') return [];
