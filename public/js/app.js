@@ -7550,6 +7550,9 @@ async function persistTripField(id, field, value) {
     method: 'PUT',
     body: JSON.stringify({ [field]: value })
   });
+  if (updated && isBetaTripWorkspace() && ['descargaVerde','descarga','adiantamentoOk','conclusaoContrato','tipo','nota','data'].includes(field)) {
+    document.dispatchEvent(new Event('beta-discharge-changed'));
+  }
   if (field === 'frete') {
     if (!updated || updated._id !== id || (updated.frete ?? '') !== value) {
       showSummaryToast('N\u00e3o foi poss\u00edvel confirmar a grava\u00e7\u00e3o do evento.', 'error');
