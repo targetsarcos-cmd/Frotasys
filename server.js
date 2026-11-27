@@ -6,16 +6,20 @@ const path = require('path');
 const fs = require('fs/promises');
 const zlib = require('zlib');
 const ExcelJS = require('exceljs');
-const betaReadOnly = process.env.FROTASYS_INTERFACE_BETA === 'readonly';
-const betaEditable = process.env.FROTASYS_INTERFACE_BETA === 'editable';
-const betaWorkspace = betaReadOnly || betaEditable;
+require('dotenv').config();
+const {resolveRuntime,canAccessUser}=require('./beta/runtime');
+const {bindAuthenticatedSocket,broadcastAuthenticated}=require('./beta/authenticated-socket');
+const runtime=resolveRuntime(process.env);
+const betaReadOnly = runtime.pilotReadOnly;
+const betaEditable = runtime.editable;
+const betaWorkspace = true;
 const betaAccess = betaWorkspace && require('./beta/access');
 const betaMode = betaEditable && require('./beta/mode');
 const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
 const betaBilling = betaWorkspace && require('./public/js/workspace-trip-sections');
 const betaRetention = betaWorkspace && require('./beta/trip-comments');
 const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
-  betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
+  runtime.pilotEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus: calculateBaseTripStatus, hasAdvanceOk } = require('./tripStatus');
 function calculateTripStatus(trip) {
   return calculateBaseTripStatus(trip,{requireDischargeConfirmation:betaWorkspace,requireBillingCompletion:betaWorkspace,preserveLegacyCompleted:true});
@@ -23,7 +27,7 @@ function calculateTripStatus(trip) {
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server(betaWorkspace ? { noServer: true } : { server });
+const wss = new WebSocket.Server({noServer:true,maxPayload:16384});
 
 const TABLES = {
   viagens: 'viagens',
@@ -254,14 +258,17 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
 }
 
 if (betaWorkspace) {
-  server.on('upgrade', (_req, socket) => socket.destroy());
+  server.on('upgrade', (req, socket, head) => {
+    if(runtime.pilot || req.url !== '/') return socket.destroy();
+    wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
+  });
   app.use((req, res, next) => {
     if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();
   });
   app.get(['/', '/index.html'], async (_req, res) => {
     const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
-    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable }));
+    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable, production: runtime.production }));
   });
   // Serve the reference report as a browser document, never as an attachment.
   app.get(['/beta/relatorios', '/beta-reports.html'], async (_req, res) => {
@@ -534,14 +541,14 @@ function slug(value) {
 }
 
 async function ensureDefaultOperacoes() {
-  if (betaWorkspace) return;
+  if (runtime.pilot) return;
   const total = await countDocs(TABLES.operacoes);
   if (total > 0) return;
   await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
 async function ensureDefaultConfigOptions() {
-  if (betaWorkspace) return;
+  if (runtime.pilot) return;
   const existing = await selectDocs(TABLES.configOptions);
 
   const docs = [];
@@ -1031,7 +1038,7 @@ async function workTypeDocs({ includeDeleted = false } = {}) {
 }
 
 async function ensureDefaultWorkTypes() {
-  if (betaWorkspace) return;
+  if (runtime.pilot) return;
   const existing = await workTypeDocs({ includeDeleted: true });
   if (existing.length) return existing.filter(doc => !doc.deletedAt);
   const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
@@ -1503,10 +1510,7 @@ async function findDuplicateViagemFields(data, currentId = null) {
 }
 
 function broadcast(data) {
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) client.send(msg);
-  });
+  broadcastAuthenticated(wss.clients,data);
 }
 
 function publicProfile(profile = {}) {
@@ -1629,7 +1633,7 @@ function requireAuth(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
 
-    if (betaWorkspace && data.user.id !== process.env.BETA_USER_ID) return res.status(403).json({ error: 'Acesso restrito a beta.' });
+    if (!canAccessUser(runtime,data.user.id,process.env)) return res.status(403).json({ error: 'Acesso restrito a beta.' });
     const profile = await profileForUser(data.user.id);
     if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
 
@@ -2233,9 +2237,14 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
-wss.on('connection', (ws) => {
-  console.log('Cliente conectado');
-  ws.on('close', () => console.log('Cliente desconectado'));
+wss.on('connection', ws => {
+  bindAuthenticatedSocket(ws,{authenticate:async token=>{
+    const {data,error}=await supabase.auth.getUser(token);
+    if(error||!data?.user||!canAccessUser(runtime,data.user.id,process.env))return null;
+    const profile=await profileForUser(data.user.id);
+    const claims=JSON.parse(Buffer.from(token.split('.')[1]||'','base64url').toString());
+    return {userId:data.user.id,profile,expiresAt:Number(claims.exp)*1000};
+  }});
 });
 
 // ─── VIAGENS API ───────────────────────────────────────────────────────────────
