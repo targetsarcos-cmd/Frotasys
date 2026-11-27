@@ -555,3 +555,42 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-espera.queue-readonly th:last-child {display:none}
 @media(max-width:1300px){#beta-espera .waitlist-form{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:720px){#beta-espera .waitlist-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Beta global search: dense workspace table, independent scrolling, full detail on demand. */
+body.workspace-beta #search-modal-overlay {z-index:650;background:#142b4266;backdrop-filter:blur(2px)}
+body.workspace-beta #search-modal-overlay .search-modal {width:min(1440px,94vw);max-width:94vw;height:min(820px,92dvh);max-height:92dvh;background:#edf2f6;border:1px solid #c4d4e2;border-radius:8px;overflow:hidden;color:#173950;font-family:'Segoe UI',Arial,sans-serif}
+body.workspace-beta #search-modal-overlay .modal-header {background:#142b42;color:#fff;padding:14px 20px;font-size:18px;font-weight:700;flex:none}
+body.workspace-beta #search-modal-overlay .modal-close {background:transparent;border:1px solid #ffffff50;color:#fff;border-radius:4px}
+body.workspace-beta #search-modal-overlay .modal-close:hover {background:#ffffff20}
+body.workspace-beta #search-modal-overlay .modal-body {display:flex;flex-direction:column;min-height:0;overflow:hidden;gap:12px;padding:16px 20px}
+body.workspace-beta #advanced-search-form {flex:none;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0;padding:14px;border:1px solid #cddde9;border-radius:6px;background:#fff}
+body.workspace-beta #advanced-search-form .beta-search-term {grid-column:1/-1}
+body.workspace-beta #advanced-search-form label {font:600 11px 'Segoe UI',sans-serif;color:#526b80}
+body.workspace-beta #advanced-search-form input {width:100%;min-width:0;height:35px;padding:7px 10px;border:1px solid #b5c9db;background:#fff;color:#173950;border-radius:4px;font:400 13px 'Segoe UI',sans-serif;box-shadow:none}
+body.workspace-beta #advanced-search-form input:focus {outline:2px solid #96c5e6;outline-offset:1px;border-color:#3684be}
+body.workspace-beta #advanced-search-form .advanced-search-actions {gap:8px}
+body.workspace-beta #search-modal-overlay #search-btn {background:#135c92;color:#fff;border:1px solid #135c92;border-radius:4px}
+body.workspace-beta #search-modal-overlay .btn-cancel {background:#fff;color:#284a62;border:1px solid #b5c9db;border-radius:4px}
+body.workspace-beta #search-status {flex:none;margin:0;min-height:20px;color:#284a62;font-size:13px;font-weight:600}
+body.workspace-beta #search-results {display:block;flex:1;min-height:0;overflow:auto;border:1px solid #cddde9;border-radius:6px;background:#fff}
+body.workspace-beta #search-results:empty {border:0;background:transparent}
+body.workspace-beta .beta-search-table-wrap {min-width:980px}
+body.workspace-beta .beta-search-table {width:100%;border-collapse:separate;border-spacing:0;font:400 13px 'Segoe UI',sans-serif;font-variant-numeric:tabular-nums;color:#173950}
+body.workspace-beta .beta-search-table th {position:sticky;top:0;z-index:2;padding:11px 10px;text-align:left;background:#142b42;color:#fff;font-size:11px;font-weight:650;white-space:nowrap}
+body.workspace-beta .beta-search-table td {padding:9px 10px;text-align:left;border-bottom:1px solid #d9e4ed;vertical-align:middle;background:#fff}
+body.workspace-beta .beta-search-row:nth-child(4n+3) td {background:#f5f8fb}
+body.workspace-beta .beta-search-row:hover td {background:#eaf3fa}
+body.workspace-beta .beta-search-plate {color:#075b9e;font-weight:700;white-space:nowrap}
+body.workspace-beta .beta-search-status-label {display:inline-block;padding:4px 7px;background:#e4edf4;border:1px solid #c8d8e6;border-radius:4px;color:#284a62;font-size:10px;font-weight:650}
+body.workspace-beta [data-beta-search-detail] {padding:5px 9px;border:1px solid #b5c9db;border-radius:4px;background:#fff;color:#075b9e;font:600 11px 'Segoe UI',sans-serif;cursor:pointer;white-space:nowrap}
+body.workspace-beta [data-beta-search-detail]:hover,body.workspace-beta [data-beta-search-detail][aria-expanded=true] {background:#e1eef9}
+body.workspace-beta .beta-search-detail-row[hidden] {display:none!important}
+body.workspace-beta .beta-search-detail-row td {background:#edf2f6;padding:12px}
+body.workspace-beta .beta-search-detail-title {font-size:13px;font-weight:700;color:#173950;margin:0 0 9px}
+body.workspace-beta .beta-search-detail-row .search-result-grid {grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;border:1px solid #cddde9;border-radius:5px;overflow:hidden}
+body.workspace-beta .beta-search-detail-row .search-result-field {padding:9px 12px;gap:4px}
+body.workspace-beta .beta-search-detail-row .search-result-field span {font:600 10px 'Segoe UI',sans-serif;color:#60778a}
+body.workspace-beta .beta-search-detail-row .search-result-field strong {font:600 12px 'Segoe UI',sans-serif;color:#173950}
+body.workspace-beta #search-modal-overlay .modal-footer {background:#fff;border-top:1px solid #cddde9;padding:10px 20px;flex:none}
+@media(max-width:1100px){body.workspace-beta #advanced-search-form{grid-template-columns:repeat(3,minmax(0,1fr))}body.workspace-beta #search-modal-overlay .modal-body{overflow:auto}body.workspace-beta #search-results{min-height:180px}}

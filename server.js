@@ -2109,8 +2109,46 @@ app.get('/api/viagens', async (req, res) => {
 });
 
 
+function betaGlobalSearchSpec(value) {
+  const text = String(value || '').trim().slice(0,120);
+  const numeric = /^[\d.\s]+$/.test(text) && /\d/.test(text);
+  return {text, numeric, digits:numeric?text.replace(/\D/g,''):'', plate:text.replace(/[\s-]/g,'').toUpperCase()};
+}
+
+async function searchBetaGlobalTrips(spec, query, options) {
+  const opts={...options,limit:VIAGENS_SEARCH_LIMIT,order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}]};
+  const branches=[];
+  if(spec.numeric) {
+    const formatted=formatDocumentNumber(spec.digits,'nota');
+    const variants=[...new Set([formatted,spec.digits])];
+    branches.push(searchBetaInvoices(formatted,query,opts));
+    for(const key of ['cte','contrato','dt']) {
+      branches.push(selectDocsByJson(TABLES.viagens,query,{...opts,in:{...(opts.in||{}),[key]:variants}}));
+    }
+  } else {
+    const literal=spec.text.replace(/[\\%_]/g,'\\$&');
+    const plate=spec.plate.replace(/[\\%_]/g,'\\$&');
+    for(const [key,value] of [['nome',literal],['placa',plate],['frete',literal]]) {
+      if(value) branches.push(selectDocsByJson(TABLES.viagens,query,{...opts,ilike:{...(opts.ilike||{}),[key]:value}}));
+    }
+  }
+  const lists=await Promise.all(branches);
+  return [...new Map(lists.flat().map(doc=>[doc._id,doc])).values()];
+}
+
+function betaGlobalTripMatches(doc,spec) {
+  if(spec.numeric) {
+    return betaInvoices.invoiceEntries(doc).some(item=>betaInvoices.digits(item.value)===spec.digits) ||
+      ['cte','contrato','dt'].some(key=>comparableSearchValue(key,doc[key])===spec.digits);
+  }
+  const term=spec.text.toUpperCase();
+  return ['nome','frete'].some(key=>String(doc[key]||'').toUpperCase().includes(term)) ||
+    (spec.plate && String(doc.placa||'').replace(/[\s-]/g,'').toUpperCase().includes(spec.plate));
+}
+
 app.get('/api/viagens/search', async (req, res) => {
   try {
+    const globalSearch = betaWorkspace ? betaGlobalSearchSpec(req.query.global) : null;
     const term = comparableSearchValue('cte', req.query.q);
     const dtTerm = comparableSearchValue('dt', req.query.dt);
     const notaTerm = comparableSearchValue('nota', req.query.nota);
@@ -2122,7 +2160,7 @@ app.get('/api/viagens/search', async (req, res) => {
     const origem = String(req.query.origem || '').trim().toUpperCase();
     const dataInicio = String(req.query.dataInicio || '').trim();
     const dataFim = String(req.query.dataFim || '').trim();
-    if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento && !dataInicio && !dataFim) return res.json([]);
+    if (!globalSearch?.text && !term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento && !dataInicio && !dataFim) return res.json([]);
     if ((dataInicio && !isIsoDate(dataInicio)) || (dataFim && !isIsoDate(dataFim))) {
       return res.status(400).json({ error: 'Informe datas válidas para a busca.' });
     }
@@ -2150,7 +2188,9 @@ app.get('/api/viagens/search', async (req, res) => {
     }
 
     let docs;
-    if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento) {
+    if (globalSearch?.text) {
+      docs = await searchBetaGlobalTrips(globalSearch,query,options);
+    } else if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento) {
       const notaValue = formatDocumentNumber(term, 'nota');
       const cteValue = formatDocumentNumber(term, 'cte');
       const [notaDocs, cteDocs] = await Promise.all([
@@ -2185,12 +2225,13 @@ app.get('/api/viagens/search', async (req, res) => {
         if (cteTerm && cte !== cteTerm) return false;
         if (nomeTerm && !nome.includes(nomeTerm)) return false;
         if (placaTerm && !placa.includes(placaTerm)) return false;
+        if (globalSearch?.text && !betaGlobalTripMatches(doc,globalSearch)) return false;
         if (term) return notas.includes(term) || cte === term;
         return true;
       })
       .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
-    res.json(matches);
+    res.json(globalSearch?.text ? matches.slice(0,VIAGENS_SEARCH_LIMIT) : matches);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

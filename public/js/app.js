@@ -1212,6 +1212,15 @@ async function submitHeaderSearch(event) {
   event?.preventDefault();
   const input = document.getElementById('header-search-input');
   const term = v('header-search-input');
+  if (isBetaTripWorkspace()) {
+    openSearchModal();
+    clearAdvancedSearch({focus:false});
+    const searchInput = document.getElementById('beta-search-term');
+    searchInput.value = term;
+    searchInput.focus();
+    if (term) await searchBetaCarregamentos();
+    return;
+  }
   if (!term) {
     input?.focus();
     return;
@@ -1222,11 +1231,13 @@ async function submitHeaderSearch(event) {
 }
 
 function openAdvancedSearchModal() {
+  if (isBetaTripWorkspace()) return submitHeaderSearch();
   openSearchModal();
   document.getElementById('search-dt')?.focus();
 }
 
 function openSearchModal() {
+  if (isBetaTripWorkspace()) prepareBetaSearchModal();
   document.getElementById('search-modal-overlay').classList.remove('hidden');
 }
 
@@ -1237,6 +1248,7 @@ function closeSearchModal() {
 
 async function submitAdvancedSearch(event) {
   event?.preventDefault();
+  if (isBetaTripWorkspace()) return searchBetaCarregamentos();
   await searchCarregamento('', collectAdvancedSearchFilters());
 }
 
@@ -1259,6 +1271,13 @@ function hasSearchFilters(filters = {}) {
 }
 
 function clearAdvancedSearch({ focus = true } = {}) {
+  if (isBetaTripWorkspace()) {
+    betaSearchRequest++;
+    const term = document.getElementById('beta-search-term');
+    if (term) term.value = '';
+    const btn = document.getElementById('search-btn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Buscar'; }
+  }
   ['search-dt', 'search-nota', 'search-contrato', 'search-cte', 'search-nome', 'search-placa', 'search-evento', 'search-data-inicio', 'search-data-fim']
     .forEach(id => {
       const input = document.getElementById(id);
@@ -1266,7 +1285,7 @@ function clearAdvancedSearch({ focus = true } = {}) {
     });
   document.getElementById('search-status').textContent = '';
   document.getElementById('search-results').innerHTML = '';
-  if (focus) document.getElementById('search-dt')?.focus();
+  if (focus) document.getElementById(isBetaTripWorkspace() ? 'beta-search-term' : 'search-dt')?.focus();
 }
 
 async function openFreteConsultModal() {
@@ -2913,6 +2932,75 @@ function closeMetaGoalDialog() {
   showNextMetaGoalDialog();
 }
 
+let betaSearchRequest = 0;
+
+function prepareBetaSearchModal() {
+  const overlay = document.getElementById('search-modal-overlay');
+  if (overlay.classList.contains('beta-search-ready')) return;
+  overlay.classList.add('beta-search-ready');
+  const modal = overlay.querySelector('.search-modal');
+  const title = modal.querySelector('.modal-header span');
+  title.id = 'beta-search-title';
+  title.textContent = 'Pesquisa de carregamentos';
+  modal.setAttribute('role','dialog');
+  modal.setAttribute('aria-modal','true');
+  modal.setAttribute('aria-labelledby',title.id);
+  const form = document.getElementById('advanced-search-form');
+  form.insertAdjacentHTML('afterbegin','<div class="form-group beta-search-term"><label for="beta-search-term">PESQUISA GERAL</label><input type="search" id="beta-search-term" maxlength="120" placeholder="Nota, CT-e, DT, contrato, placa, motorista ou evento"></div>');
+  for (const field of form.querySelectorAll('.form-group')) {
+    const input=field.querySelector('input');
+    if(input) field.querySelector('label')?.setAttribute('for',input.id);
+  }
+  document.getElementById('search-status').setAttribute('aria-live','polite');
+}
+
+async function searchBetaCarregamentos() {
+  const request=++betaSearchRequest;
+  const global=v('beta-search-term');
+  const filters=collectAdvancedSearchFilters();
+  const status=document.getElementById('search-status');
+  const results=document.getElementById('search-results');
+  const btn=document.getElementById('search-btn');
+  results.innerHTML='';
+  if (!global && !hasSearchFilters(filters)) {
+    btn.disabled=false;btn.textContent='Buscar';
+    status.textContent='Informe um termo ou pelo menos um filtro.';
+    return;
+  }
+  if(filters.dataInicio && filters.dataFim && filters.dataInicio>filters.dataFim) {
+    btn.disabled=false;btn.textContent='Buscar';
+    status.textContent='A data inicial não pode ser maior que a final.';
+    return;
+  }
+  btn.disabled=true;btn.textContent='Buscando...';
+  status.textContent='Pesquisando carregamentos...';
+  const found=await fetchCarregamentosSearch({...filters,global,reportFailure:true});
+  if(request!==betaSearchRequest) return;
+  btn.disabled=false;btn.textContent='Buscar';
+  if(!Array.isArray(found)) {
+    status.textContent='Não foi possível concluir a pesquisa. Tente novamente.';
+    return;
+  }
+  if(!found.length) {
+    status.textContent='Nenhum carregamento encontrado. Revise os filtros.';
+    return;
+  }
+  status.textContent=found.length+' '+(found.length===1?'carregamento encontrado':'carregamentos encontrados')+(global&&found.length>=200?' · limite de 200 resultados; refine os filtros.':'.');
+  results.innerHTML=renderBetaSearchResults(found);
+}
+
+function renderBetaSearchResults(found) {
+  const headers=['Data','Placa','Motorista','Rota','Nota','CT-e','Status','Ações'];
+  const val=(key,trip)=>escapeHtml(formatSearchValue(key,trip[key]));
+  const rows=found.map((trip,index)=>{
+    const id='beta-search-detail-'+index;
+    const route=[trip.origem,trip.destino].filter(Boolean).join(' → ')||'—';
+    const fields=SEARCH_RESULT_FIELDS.map(field=>'<div class="search-result-field"><span>'+escapeHtml(field.label)+'</span><strong>'+val(field.key,trip)+'</strong></div>').join('');
+    return '<tr class="beta-search-row"><td>'+val('data',trip)+'</td><td class="beta-search-plate">'+val('placa',trip)+'</td><td>'+val('nome',trip)+'</td><td>'+escapeHtml(route)+'</td><td>'+val('nota',trip)+'</td><td>'+val('cte',trip)+'</td><td><span class="beta-search-status-label">'+val('status',trip)+'</span></td><td><button type="button" data-beta-search-detail aria-expanded="false" aria-controls="'+id+'">Detalhes</button></td></tr><tr class="beta-search-detail-row" id="'+id+'" hidden><td colspan="8"><div class="beta-search-detail-title">Dados completos do carregamento</div><div class="search-result-grid">'+fields+'</div></td></tr>';
+  }).join('');
+  return '<div class="beta-search-table-wrap"><table class="beta-search-table"><thead><tr>'+headers.map(label=>'<th scope="col">'+label+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
 async function searchCarregamento(termOverride = '', filters = {}) {
   const term = String(termOverride || v('header-search-input')).trim();
   const status = document.getElementById('search-status');
@@ -2959,6 +3047,7 @@ async function fetchCarregamentosSearch(filters = {}) {
     dataFim = ''
   } = filters;
   const params = new URLSearchParams();
+  if (isBetaTripWorkspace() && filters.global) params.set('global', filters.global);
   if (term) params.set('q', term);
   if (dt) params.set('dt', dt);
   if (cte) params.set('cte', cte);
@@ -2978,7 +3067,7 @@ async function fetchCarregamentosSearch(filters = {}) {
     console.warn('Busca dedicada indispon\u00edvel.', e);
   }
 
-  return [];
+  return filters.reportFailure ? null : [];
 }
 
 function normalizeSearchTerm(value) {
@@ -3030,6 +3119,15 @@ function renderSearchResult(viagem, index = 0, total = 1) {
 }
 
 function handleSearchResultToggle(event) {
+  const detail = event.target.closest('[data-beta-search-detail]');
+  if (detail) {
+    const row = document.getElementById(detail.getAttribute('aria-controls'));
+    if (!row) return;
+    row.hidden = !row.hidden;
+    detail.setAttribute('aria-expanded',String(!row.hidden));
+    detail.textContent = row.hidden ? 'Detalhes' : 'Recolher';
+    return;
+  }
   const button = event.target.closest('.search-result-toggle');
   if (!button) return;
   const card = button.closest('[data-search-result-card]');
