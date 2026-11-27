@@ -1777,9 +1777,9 @@ app.get('/api/lembretes', async (req, res) => {
 app.get('/api/lembretes/descargas-pendentes', async (req, res) => {
   if (!betaWorkspace) return res.status(404).json({error:'Recurso exclusivo do beta.'});
   try {
-    const { listDischargeNotifications } = require('./beta/discharge-notifications');
-    const items = await listDischargeNotifications(supabase,TABLES.viagens);
-    res.set('Cache-Control','no-store').json({items});
+    const { listPendingNotifications } = require('./beta/discharge-notifications');
+    const pending = await listPendingNotifications(supabase,TABLES.viagens);
+    res.set('Cache-Control','no-store').json(pending);
   } catch (error) {
     console.error('Falha nas notificações de descarga:',error.message);
     res.status(500).json({error:'Não foi possível consultar as descargas pendentes.'});
