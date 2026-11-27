@@ -1621,7 +1621,7 @@ function requireAuth(req, res, next) {
     const profile = await profileForUser(data.user.id);
     if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
 
-    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role)) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
+    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role) && !(req.method === 'PUT' && req.path === '/auth/table-preferences')) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
     req.authUser = data.user;
     req.userProfile = profile;
     next();
@@ -1659,6 +1659,34 @@ app.get('/api/auth/me', (req, res) => {
     },
     profile: req.userProfile
   });
+});
+
+
+const betaColumnPreferenceField = '__beta_table_preferences';
+const betaColumnLayout = require('./public/js/workspace-table-layout');
+let betaColumnSaveTail=Promise.resolve();
+app.get('/api/auth/table-preferences',async(req,res)=>{
+  if(!betaWorkspace)return res.status(404).json({error:'Recurso exclusivo do beta.'});
+  try{
+    const saved=await findOneByJson(TABLES.configOptions,{field:betaColumnPreferenceField,userId:req.authUser.id});
+    res.json({preference:saved?betaColumnLayout.normalizePreference(saved.preference):null});
+  }catch(e){res.status(500).json({error:'Não foi possível carregar as preferências.'});}
+});
+app.put('/api/auth/table-preferences',(req,res)=>{
+  if(!betaEditable)return res.status(403).json({error:'Beta somente leitura.'});
+  const run=async()=>{
+    try{
+      const preference=betaColumnLayout.normalizePreference(req.body);
+      const filter={field:betaColumnPreferenceField,userId:req.authUser.id};
+      const existing=await findOneByJson(TABLES.configOptions,filter);
+      const saved=existing?await updateDoc(TABLES.configOptions,existing._id,{preference}):await insertDoc(TABLES.configOptions,{...filter,preference});
+      if(!saved)return res.status(409).json({error:'Preferência não confirmada. Tente novamente.'});
+      res.json({preference:betaColumnLayout.normalizePreference(saved.preference)});
+    }catch(e){res.status(500).json({error:'Não foi possível salvar as preferências.'});}
+  };
+  const pending=betaColumnSaveTail.then(run,run);
+  betaColumnSaveTail=pending.catch(()=>{});
+  return pending;
 });
 
 app.put('/api/auth/profile', async (req, res) => {

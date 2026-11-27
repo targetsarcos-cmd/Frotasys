@@ -244,7 +244,7 @@ test('produto e fixo apos destino somente na beta e nao duplica preferencias ant
   const js=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
   const base=js.slice(js.indexOf('const BASE_FIELDS ='),js.indexOf('const FIELDS = BASE_FIELDS;'));
   const helpers=js.slice(js.indexOf('function optionalTableFields()'),js.indexOf('function allSortableTableFields()'));
-  const get=new Function('state','isBetaTripWorkspace',base+helpers+';return {visibleTableFields,optionalTableFields};');
+  const get=(state,isBetaTripWorkspace)=>new Function('state','isBetaTripWorkspace','window',base+helpers+';return {visibleTableFields,optionalTableFields};')(state,isBetaTripWorkspace,{FrotasysBetaTableLayout:require('../public/js/workspace-table-layout')});
   const beta=get({additionalColumns:['produto','frete']},()=>true);
   const keys=beta.visibleTableFields().map(f=>f.key);
   assert.equal(keys.indexOf('produto'),keys.indexOf('destino')+1);
@@ -755,4 +755,60 @@ test('pagina beta usuarios tem filtros, editor e confirmacao de exclusao',()=>{
   assert.match(app,/if\(betaUsersBusy\|\|!isAdmin\(\)\|\|isBetaReadOnly\(\)\)return/);
   assert.match(app,/escapeHtml\(user.email/);
   assert.match(css,/\.beta-users-overview \{display:grid;grid-template-columns:repeat\(4,/);
+});
+
+test('preferencias de colunas beta validam chaves, alinhamento e ordem',()=>{
+  const api=require('../public/js/workspace-table-layout');
+  const pref=api.normalizePreference({order:['nome','placa','nome','actions','invalid'],alignment:{nome:'center',placa:'right',tipo:'invalid',invalid:'left'},extra:['nota','nota','produto','invalid']});
+  assert.deepEqual(pref,{order:['nome','placa'],alignment:{placa:'right',nome:'center'},extra:['nota']});
+  const fields=['placa','nome','tipo','status'].map(key=>({key}));
+  assert.deepEqual(api.orderFields(fields,pref).map(f=>f.key),['nome','placa','tipo','status']);
+  assert.deepEqual(api.orderFields(fields,{}).map(f=>f.key),['placa','nome','tipo','status']);
+  assert.deepEqual(api.moveField(['a','b','c'],'a','c'),['b','c','a']);
+  assert.deepEqual(api.moveField(['a','b','c'],'c','a'),['c','a','b']);
+  assert.deepEqual(api.moveField(['a','b'],'x','a'),['a','b']);
+  assert.deepEqual(api.normalizePreference(null),{order:[],alignment:{},extra:null});
+});
+test('preferencias beta sao persistidas exclusivamente para a conta autenticada',async()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const start=server.indexOf('const betaColumnPreferenceField'),end=server.indexOf("app.put('/api/auth/profile'",start);
+  const records=[],routes={};
+  const app={get:(url,fn)=>routes['GET '+url]=fn,put:(url,fn)=>routes['PUT '+url]=fn};
+  const api=require('../public/js/workspace-table-layout');
+  new Function('app','require','betaWorkspace','betaEditable','TABLES','findOneByJson','insertDoc','updateDoc',server.slice(start,end))(app,()=>api,true,true,{configOptions:'config'},async(t,filter)=>records.find(r=>r.field===filter.field&&r.userId===filter.userId),async(t,p)=>{const r={...p,_id:String(records.length+1)};records.push(r);return r;},async(t,id,p)=>Object.assign(records.find(r=>r._id===id),p));
+  async function request(method,id,body){let status=200,data;const res={status(n){status=n;return this},json(v){data=v;return this}};await routes[method+' /api/auth/table-preferences']({authUser:{id},body},res);return {status,data};}
+  assert.deepEqual((await request('GET','a')).data,{preference:null});
+  assert.equal((await request('PUT','a',{userId:'b',order:['nome','placa'],alignment:{nome:'right'}})).status,200);
+  assert.equal(records[0].userId,'a');
+  assert.deepEqual((await request('GET','b')).data,{preference:null});
+  assert.equal((await request('PUT','b',{order:['tipo'],alignment:{tipo:'center'}})).status,200);
+  assert.deepEqual((await request('GET','a')).data.preference.order,['nome','placa']);
+  assert.deepEqual((await request('GET','b')).data.preference.order,['tipo']);
+  await request('PUT','a',{order:[],alignment:{},extra:['nota']});
+  assert.equal(records.length,2);
+  assert.deepEqual((await request('GET','a')).data.preference,{order:[],alignment:{},extra:['nota']});
+});
+test('icone de layout fica entre pesquisa e filtros e aplica alinhamento nas tabelas',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.ok(html.indexOf('id="tableSearch"')<html.indexOf('id="beta-column-layout-btn"'));
+  assert.ok(html.indexOf('id="beta-column-layout-btn"')<html.indexOf('id="filterBtn"'));
+  assert.match(app,/if\(isBetaTripWorkspace\(\)\) await loadBetaColumnPreference\(\)/);
+  assert.match(app,/orderFields\(fields,state.betaColumnPreference\)/);
+  assert.match(app,/applyBetaColumnAlignment\(headRow\)/);
+  assert.match(app,/applyBetaColumnAlignment\(tbody\)/);
+  assert.match(app,/draggable="true"/);
+  assert.match(app,/prefers-reduced-motion: reduce/);
+  assert.match(app,/duration:220/);
+  assert.match(css,/\[data-beta-align=left\] \{text-align:left\}/);
+  assert.match(css,/\[data-beta-align=center\] \{text-align:center\}/);
+  assert.match(css,/\[data-beta-align=right\] \{text-align:right\}/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+  const start=app.indexOf('function applyBetaColumnAlignment('),end=app.indexOf('function betaAlignIcon(',start);
+  const cells=[{dataset:{field:'nome'}},{dataset:{field:'placa',betaAlign:'left'}},{dataset:{}}];
+  let pref={alignment:{nome:'center',trabalho:'right'}};
+  const apply=new Function('betaColumnPref',app.slice(start,end)+'return applyBetaColumnAlignment;')(()=>pref);
+  apply({querySelectorAll:()=>cells});
+  assert.deepEqual(cells.map(c=>c.dataset.betaAlign),['center',undefined,'right']);
 });
