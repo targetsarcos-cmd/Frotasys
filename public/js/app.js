@@ -114,7 +114,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['ENVIAR PEDIDO', 'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
+const STATUS = ['ENVIAR PEDIDO', 'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(isBetaTripWorkspace()?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -158,6 +158,7 @@ const DEFAULT_CONFIG_COLORS = {
     'ADIANTAMENTO / DESCARGA': '#C2410C',
     ADIANTAMENTO: '#115927',
     'EMITIR CTE': '#2563EB',
+    ...(isBetaTripWorkspace()?{'HORA NF':'#0E7490'}:{}),
     MANIFESTO: '#2563EB',
     'FALTA ADIANTAMENTO': '#C2410C',
     'AGENDAR DESCARGA': '#39107B',
@@ -4817,6 +4818,7 @@ function renderTableHeader(secao) {
 }
 
 function hasDocumentosCompletos(viagem) {
+  if(isBetaTripWorkspace())return window.FrotasysBetaTripSections.hasBillingDocuments(viagem);
   return ['cte', 'manifesto', 'contrato'].every(field => String(viagem[field] || '').trim() !== '');
 }
 
@@ -4847,12 +4849,12 @@ function operationalTripSection(viagem) {
 
 // Completed trips remain in the financial totals; only their operational table changes.
 function isFaturadoForSummary(viagem) {
-  if (isBetaTripWorkspace()) return window.FrotasysBetaTripSections.hasInvoice(viagem);
+  if (isBetaTripWorkspace()) return window.FrotasysBetaTripSections.isBilled(viagem);
   return viagem.secao === 'arcos' && hasNotaPreenchida(viagem);
 }
 
 function isAgenciadoForSummary(viagem) {
-  if (isBetaTripWorkspace()) return !window.FrotasysBetaTripSections.hasInvoice(viagem);
+  if (isBetaTripWorkspace()) return !window.FrotasysBetaTripSections.isBilled(viagem);
   return viagem.secao === 'agenciando' || (viagem.secao === 'arcos' && !hasNotaPreenchida(viagem));
 }
 
