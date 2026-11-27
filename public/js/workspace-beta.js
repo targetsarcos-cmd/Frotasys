@@ -111,6 +111,7 @@
         <p id="beta-discharge-status" role="status">Consultando pendências...</p>
         <details class="beta-notice-group" open><summary>Descarga <span id="beta-discharge-count">0</span></summary><div id="beta-discharge-list"></div></details>
         <details class="beta-notice-group"><summary>Adiantamento <span id="beta-advance-count">0</span></summary><div id="beta-advance-list"></div></details>
+        <details class="beta-notice-group"><summary>Programação <span id="beta-program-count">0</span></summary><div id="beta-program-list"></div></details>
       </section>
     </div>
     <footer class="beta-reminder-footer"><div class="beta-reminder-status-slot"></div><span>Esc para fechar</span></footer>`;
@@ -146,17 +147,64 @@
     try{if(!document.execCommand('copy'))throw Error('Cópia indisponível.');}
     finally{input.remove();}
   }
-  function renderDischargeNotifications(items,advances){
+  const dischargeDrafts=new Map();
+  function maskDischargeDate(value){
+    const digits=String(value||'').replace(/\D/g,'').slice(0,12);
+    return digits.slice(0,2)+(digits.length>2?'/'+digits.slice(2,4):'')+
+      (digits.length>4?'/'+digits.slice(4,8):'')+(digits.length>8?' '+digits.slice(8,10):'')+
+      (digits.length>10?':'+digits.slice(10,12):'');
+  }
+  function parseDischargeDate(value){
+    const m=/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/.exec(value);
+    if(!m)return null;
+    const [,d,month,y,h,min]=m;
+    if(+y<1900||+month<1||+month>12||+d<1||+d>31||+h>23||+min>59)return null;
+    const date=new Date(Date.UTC(+y,+month-1,+d));
+    if(date.getUTCFullYear()!==+y||date.getUTCMonth()!==+month-1||date.getUTCDate()!==+d)return null;
+    return h+':'+min+' '+d+'/'+month+'/'+y;
+  }
+  function attachDischargeMask(input,id){
+    input.addEventListener('input',()=>{
+      const cursor=input.selectionStart??input.value.length;
+      const before=input.value.slice(0,cursor).replace(/\D/g,'').length;
+      input.value=maskDischargeDate(input.value);
+      let pos=0,seen=0;
+      while(pos<input.value.length&&seen<before){if(/\d/.test(input.value[pos]))seen++;pos++;}
+      while(pos<input.value.length&&!/\d/.test(input.value[pos]))pos++;
+      input.setSelectionRange(pos,pos);
+      dischargeDrafts.set(id,input.value);
+    });
+    input.addEventListener('keydown',event=>{
+      if(event.key!=='Backspace'&&event.key!=='Delete')return;
+      const start=input.selectionStart,end=input.selectionEnd;
+      if(start!==end)return;
+      const step=event.key==='Backspace'?-1:1;
+      const index=event.key==='Backspace'?start-1:start;
+      if(index<0||index>=input.value.length||/\d/.test(input.value[index]))return;
+      let target=index;
+      while(target>=0&&target<input.value.length&&!/\d/.test(input.value[target]))target+=step;
+      if(target<0||target>=input.value.length)return;
+      event.preventDefault();
+      const digitsBefore=input.value.slice(0,target).replace(/\D/g,'').length;
+      input.value=maskDischargeDate(input.value.slice(0,target)+input.value.slice(target+1));
+      let caret=0,seen=0;
+      while(caret<input.value.length&&seen<digitsBefore){if(/\d/.test(input.value[caret]))seen++;caret++;}
+      input.setSelectionRange(caret,caret);
+      dischargeDrafts.set(id,input.value);
+    });
+  }
+  function renderDischargeNotifications(items,advances,programs){
     byId('beta-discharge-count').textContent=String(items.length);
     byId('beta-advance-count').textContent=String(advances.length);
-    const total=items.length+advances.length;
+    byId('beta-program-count').textContent=String(programs.length);
+    const total=items.length+advances.length+programs.length;
     reminderBadge.textContent=String(total);
     reminderBadge.hidden=total===0;
     reminderNav.setAttribute('data-has-discharge',String(total>0));
     reminderNav.setAttribute('data-pending-count',String(total));
     syncBetaReminderPanel();
     dischargeStatus.textContent=total?'Pendências de carregamentos de dias anteriores.':'Nenhuma pendência.';
-    const signature=JSON.stringify([items,advances,canEditViagens()]);
+    const signature=JSON.stringify([items,advances,programs,canEditViagens()]);
     if(signature===dischargeSignature)return;
     dischargeSignature=signature;
     function renderGroup(list,rows,kind){
@@ -170,46 +218,71 @@
           const top=makeElement('div','beta-discharge-card-top');
           top.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-driver',item.nome||'Motorista não informado'));
           card.append(top);
-          const schedule=dischargeDate(item.data)+(item.agendamento?' · '+item.agendamento:'');
-          card.append(makeElement('div','beta-discharge-date','Agendamento: '+schedule));
           if(kind==='discharge')card.append(makeElement('div','beta-discharge-date','Descarga: '+(item.descarga?formatDescargaDateTime(item.descarga):'Não informada')));
+          else card.append(makeElement('div','beta-discharge-date',kind==='advance'?'Adiantamento não efetuado':'Não programado'));
+          const draft=dischargeDrafts.get(item.id);
           const copyRow=makeElement('div','beta-discharge-copy-row');
-          const value=makeElement('span','beta-discharge-copy-value',item.copiar);
-          const copy=makeElement('button','beta-discharge-copy','Copiar');
-          copy.type='button';copy.title='Copiar placa, produto e nota fiscal';
-          copy.addEventListener('click',async()=>{
-            try{await copyDischarge(item.copiar);copy.textContent='Copiado!';}
-            catch(_error){copy.textContent='Falha ao copiar';}
-            setTimeout(()=>{copy.textContent='Copiar';},1700);
-          });
-          copyRow.append(value,copy);
-          if(kind==='discharge'&&canEditViagens()){
-            const mark=makeElement('button','beta-discharge-mark','Agendado');
-            mark.type='button';mark.title='Confirmar agendamento de descarga';
-            const input=makeElement('input','beta-discharge-schedule');input.type='datetime-local';input.hidden=true;
-            input.setAttribute('aria-label','Data e hora da descarga');
+          if(kind==='discharge'){
+            const value=makeElement('span','beta-discharge-copy-value',item.copiar);
+            const copy=makeElement('button','beta-discharge-copy','Copiar');
+            copy.type='button';copy.title='Copiar placa, produto e nota fiscal';
+            copy.addEventListener('click',async()=>{
+              try{await copyDischarge(item.copiar);copy.textContent='Copiado!';}
+              catch(_error){copy.textContent='Falha ao copiar';}
+              setTimeout(()=>{copy.textContent='Copiar';},1700);
+            });
+            copyRow.append(value,copy);
+          }
+          if(canEditViagens()){
+            const mark=makeElement('button','beta-discharge-mark',kind==='discharge'?'Agendado':kind==='advance'?'Adiantamento OK':'Programar');
+            mark.type='button';
             const error=makeElement('p','beta-notice-error','');error.setAttribute('role','status');
+            let input;
+            if(kind==='discharge'){
+              input=makeElement('input','beta-discharge-schedule');input.type='text';input.inputMode='numeric';input.maxLength=16;
+              input.placeholder='dd/mm/aaaa hh:mm';input.autocomplete='off';
+              input.setAttribute('aria-label','Data e hora da descarga');
+              input.hidden=draft===undefined;input.value=draft||'';
+              attachDischargeMask(input,item.id);
+            }
+            if(kind==='advance'&&!item.canAdvance){
+              mark.disabled=true;mark.title='Preencha os documentos obrigatórios antes de concluir o adiantamento.';
+              error.textContent='Documentação pendente.';
+            }
             mark.addEventListener('click',async()=>{
-              if(!item.descarga&&!input.value){
-                input.hidden=false;input.focus();error.textContent='Informe a data e hora da descarga.';return;
-              }
               if(!canEditViagens())return;
+              let patch,field;
+              if(kind==='discharge'){
+                if(!item.descarga){
+                  const parsed=parseDischargeDate(input.value);
+                  if(!parsed){
+                    input.hidden=false;dischargeDrafts.set(item.id,input.value);input.focus();
+                    error.textContent='Informe uma data e hora válidas (dd/mm/aaaa hh:mm).';return;
+                  }
+                  patch={descargaVerde:true,descarga:parsed};
+                }else patch={descargaVerde:true};
+                field='descargaVerde';
+              }else if(kind==='advance'){
+                if(!item.canAdvance)return;
+                patch={adiantamentoOk:true};field='adiantamentoOk';
+              }else{patch={programado:true};field='programado';}
               mark.disabled=true;error.textContent='';
               try{
-                const patch={descargaVerde:true};
-                if(!item.descarga)patch.descarga=input.value;
                 const updated=await apiFetch('/api/viagens/'+encodeURIComponent(item.id),{method:'PUT',body:JSON.stringify(patch)});
-                if(!updated||updated.descargaVerde!==true)throw Error('Confirmação não gravada.');
+                if(!updated||updated[field]!==true)throw Error('Confirmação não gravada.');
                 const index=state.viagens.findIndex(v=>v._id===item.id);
                 if(index!==-1)state.viagens[index]=updated;
                 if(state.selectedViagemId===item.id)state.selectedViagemDetails=updated;
+                if(kind==='discharge')dischargeDrafts.delete(item.id);
                 card.remove();renderAllUnlessInlineEditing();
                 void refreshDischargeNotifications();
-              }catch(e){error.textContent='Não foi possível confirmar a descarga.';}
-              finally{mark.disabled=false;}
+              }catch(e){error.textContent='Não foi possível concluir. Verifique as regras da viagem.';}
+              finally{mark.disabled=kind==='advance'&&!item.canAdvance;}
             });
-            copyRow.append(mark);card.append(copyRow,input,error);
-          }else card.append(copyRow);
+            copyRow.append(mark);card.append(copyRow);
+            if(input)card.append(input);
+            card.append(error);
+          }else if(kind==='discharge')card.append(copyRow);
           list.append(card);
         }
         shown+=next.length;
@@ -222,6 +295,7 @@
     }
     renderGroup(dischargeList,items,'discharge');
     renderGroup(byId('beta-advance-list'),advances,'advance');
+    renderGroup(byId('beta-program-list'),programs,'program');
   }
   async function refreshDischargeNotifications(){
     if(document.hidden)return;
@@ -234,7 +308,7 @@
       if(!response.ok)throw Error('Consulta indisponível');
       const payload=await response.json();
       if(!Array.isArray(payload.items))throw Error('Resposta inválida');
-      renderDischargeNotifications(payload.items,Array.isArray(payload.advances)?payload.advances:[]);
+      renderDischargeNotifications(payload.items,Array.isArray(payload.advances)?payload.advances:[],Array.isArray(payload.programs)?payload.programs:[]);
     }catch(_error){
       dischargeStatus.textContent='Não foi possível atualizar as notificações. Nova tentativa automática.';
       dischargeSignature=null;

@@ -7550,7 +7550,7 @@ async function persistTripField(id, field, value) {
     method: 'PUT',
     body: JSON.stringify({ [field]: value })
   });
-  if (updated && isBetaTripWorkspace() && ['descargaVerde','descarga','adiantamentoOk','conclusaoContrato','tipo','nota','data'].includes(field)) {
+  if (updated && isBetaTripWorkspace() && ['descargaVerde','descarga','adiantamentoOk','conclusaoContrato','tipo','nota','data','programado','cte','manifesto','contrato'].includes(field)) {
     document.dispatchEvent(new Event('beta-discharge-changed'));
   }
   if (field === 'frete') {

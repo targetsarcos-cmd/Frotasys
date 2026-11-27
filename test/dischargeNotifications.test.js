@@ -62,7 +62,39 @@ test('grupos recolhíveis, sino no topo e ação agendado mantêm a edição aut
   assert.match(js,/id="beta-advance-list"/);
   assert.match(js,/id="beta-discharge-list"/);
   assert.match(js,/const total=items\.length\+advances\.length/);
-  assert.match(js,/const patch=\{descargaVerde:true\}/);
-  assert.match(js,/if\(!item\.descarga&&!input\.value\)/);
+  assert.match(js,/patch=\{descargaVerde:true\}/);
+  assert.match(js,/parseDischargeDate\(input\.value\)/);
   assert.match(css,/#reminder-text \{height:175px;min-height:175px/);
+});
+
+test('programação pendente inclui viagem sem NF, exclui concluídas e programadas',()=>{
+  const {programNotification}=require('../beta/discharge-notifications');
+  const day='2026-11-27';
+  const base={...trip,nota:'',programado:false,status:'CRIAR DT / PROGRAMAR'};
+  assert.ok(programNotification(base,day));
+  assert.equal(programNotification({...base,programado:true},day),null);
+  assert.equal(programNotification({...base,status:'CONCLUIDO'},day),null);
+  assert.equal(programNotification(base,'2026-11-26'),null);
+  assert.equal(programNotification({...trip,programado:undefined},day),null);
+  assert.ok(programNotification({...trip,programado:false},day));
+});
+test('máscara contínua limita ano a quatro dígitos e valida datas e horas',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const start=js.indexOf('  function maskDischargeDate('),end=js.indexOf('  function attachDischargeMask(',start);
+  const {maskDischargeDate:mask,parseDischargeDate:parse}=new Function(js.slice(start,end)+'return {maskDischargeDate,parseDischargeDate};')();
+  assert.equal(mask('271120260830'),'27/11/2026 08:30');
+  assert.equal(mask('27112026083099'),'27/11/2026 08:30');
+  assert.equal(mask(''),'');
+  assert.equal(mask('27112026'),'27/11/2026');
+  assert.equal(parse('27/11/2026 08:30'),'08:30 27/11/2026');
+  assert.equal(parse('31/02/2026 08:30'),null);
+  assert.equal(parse('27/11/2026 24:30'),null);
+  assert.equal(parse('29/02/2028 23:59'),'23:59 29/02/2028');
+  assert.equal(parse('27/11/202666 08:30'),null);
+  assert.match(js,/input\.maxLength=16/);
+  assert.match(js,/event\.key!=='Backspace'&&event\.key!=='Delete'/);
+  assert.doesNotMatch(js,/Agendamento: '\+schedule/);
+  assert.match(js,/patch=\{adiantamentoOk:true\}/);
+  assert.match(js,/patch=\{programado:true\}/);
+  assert.match(js,/id="beta-program-list"/);
 });
