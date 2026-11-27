@@ -180,7 +180,7 @@ test('editar Evento em viagem com DT historica repetida preserva os documentos',
   assert.equal(conflict.code, 409);
 });
 
-test('JSONB, pesquisa, historico, planilha e atualizacoes concorrentes', async () => {
+test('JSONB, pesquisa, planilha e atualizacoes concorrentes', async () => {
   const { server, records, request } = setup();
   const created = await request('post', collection, { ...trip, frete: eventText });
   assert.equal(created.code, 200, created.data?.error);
@@ -190,8 +190,7 @@ test('JSONB, pesquisa, historico, planilha e atualizacoes concorrentes', async (
   assert.equal((await request('put', item, { nome: 'MARIA' }, 'operador', id)).data.frete, eventText);
   const snapshot = await server.findOneById('viagens', id);
   const edit = await request('put', item, { frete: 'Conferir nota' }, 'admin', id);
-  assert.equal(edit.data.historico.at(-1).label, 'EVENTO');
-  assert.equal(edit.data.historico.at(-1).anterior, eventText);
+  assert.equal(edit.data.historico, undefined);
   assert.equal(await server.updateDoc('viagens', id, { nome: 'ABC' }, snapshot), null);
   const found = await request('get', collection + '/search', {}, 'visualizador', null, { evento: 'nFeRiR' });
   assert.equal(found.data[0].frete, 'Conferir nota');
