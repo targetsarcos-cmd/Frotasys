@@ -6,11 +6,10 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   function versionTracker(loaded){
     const valid=v=>typeof v==='string'&&/^[a-f0-9]{40,64}$/.test(v);
-    let latest=loaded, acknowledged=loaded;
+    let required='';
     return {
-      observe(v){if(valid(v))latest=v;},
-      pending(){return valid(loaded)&&latest!==loaded&&latest!==acknowledged?latest:'';},
-      acknowledge(v){if(valid(v))acknowledged=v;}
+      observe(v){if(valid(loaded)&&valid(v)&&v!==loaded)required=v;},
+      pending(){return required;}
     };
   }
   let started=false;
@@ -20,27 +19,31 @@
     if(!loaded)return;
     started=true;
     const tracker=versionTracker(loaded);
-    let checking=false, displayed='';
+    let checking=false;
     const dialog=document.createElement('dialog');
     dialog.id='frotasys-version-notice';
     dialog.setAttribute('aria-labelledby','frotasys-version-title');
-    dialog.innerHTML='<div class="version-notice-head"><span class="version-notice-symbol" aria-hidden="true">↻</span><h2 id="frotasys-version-title">Atualização disponível</h2></div><div class="version-notice-body"><p>Uma nova versão do Frotasys está disponível.</p><p>Conclua ou salve suas alterações e pressione <kbd>F5</kbd> para atualizar o sistema.</p></div><div class="version-notice-footer"><button type="button" autofocus>Entendi</button></div>';
+    dialog.setAttribute('aria-describedby','frotasys-version-description');
+    dialog.setAttribute('aria-modal','true');
+    dialog.setAttribute('closedby','none');
+    dialog.innerHTML='<div class="version-notice-head"><span class="version-notice-symbol" aria-hidden="true">↻</span><h2 id="frotasys-version-title">Atualização obrigatória</h2></div><div class="version-notice-body" id="frotasys-version-description"><p>Uma nova versão do Frotasys está disponível.</p><p>Pressione <kbd>F5</kbd> para atualizar o sistema e continuar trabalhando.</p><p class="version-notice-blocked">O sistema permanecerá bloqueado até a atualização.</p></div>';
     document.body.append(dialog);
-    dialog.querySelector('button').addEventListener('click',()=>dialog.close());
-    dialog.addEventListener('close',()=>{tracker.acknowledge(displayed);displayed='';});
+    // No dismissal or acknowledgement. The browser must load the new document.
+    dialog.addEventListener('cancel',event=>event.preventDefault());
+    dialog.addEventListener('close',showPending);
+    document.addEventListener('keydown',event=>{
+      if(!tracker.pending())return;
+      event.stopImmediatePropagation();
+      if(event.key==='Escape')event.preventDefault();
+      // Do not prevent the native F5 / browser reload shortcuts.
+    },true);
     function showPending(){
       if(document.hidden||dialog.open||!tracker.pending())return;
-      if(document.querySelector('dialog[open]'))return;
-      const active=document.activeElement;
-      if(active?.isContentEditable||active?.matches('textarea,input:not([type=button]):not([type=checkbox]):not([type=radio]),select'))return;
-      if(document.querySelector('.modal-overlay:not(.hidden)'))return;
-      if(typeof state!=='undefined'&&(state.drawerSaving||state.drawerActiveField))return;
-      if(document.getElementById('reminder-status')?.dataset.state==='Salvando...')return;
-      displayed=tracker.pending();
       dialog.showModal();
     }
     async function check(){
       if(document.hidden||checking)return;
+      if(tracker.pending()){showPending();return;}
       checking=true;
       try{
         const response=await fetch('/api/version',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(10000)});
@@ -50,7 +53,6 @@
     }
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)void check();});
     window.addEventListener('focus',check);
-    document.addEventListener('focusout',()=>setTimeout(showPending,300));
     setInterval(check,30000);
     setInterval(showPending,3000);
     void check();
