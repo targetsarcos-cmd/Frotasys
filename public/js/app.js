@@ -1040,7 +1040,7 @@ function renderReminderNote() {
 
   if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '';
   if (!status.dataset.state) status.textContent = hasReminderContent(state.lembrete.texto) ? 'Salvo' : 'Sem lembrete';
-  if (isBetaTripWorkspace() && typeof syncBetaReminderPanel === 'function') syncBetaReminderPanel();
+  if (isBetaTripWorkspace() && typeof syncBetaReminderPanel === 'function') syncBetaReminderPanel(hasReminderContent(state.lembrete.texto));
 }
 
 function handleReminderInput(event) {
@@ -1049,6 +1049,7 @@ function handleReminderInput(event) {
   if (textarea.value !== texto) textarea.value = texto;
   state.lembrete = { data: '', texto };
   document.getElementById('btn-lembretes')?.classList.toggle('has-text', hasReminderContent(texto));
+  if (isBetaTripWorkspace() && typeof syncBetaReminderPanel === 'function') syncBetaReminderPanel(hasReminderContent(texto));
   setReminderStatus('Salvando...');
   clearTimeout(state.lembreteSaveTimer);
   state.lembreteSaveTimer = setTimeout(() => saveReminder(texto), 450);
