@@ -95,7 +95,6 @@ const UNIQUE_VIAGEM_FIELDS = [
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo', 'trocaMotoristaConcluida'];
-const VIAGEM_HISTORY_LIMIT = 500;
 const VIAGEM_MAX_FUTURE_DAYS = 3;
 const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
 const DEFAULT_RANGE_LIMIT = 200;
@@ -162,6 +161,24 @@ const VIAGEM_FIELD_LABELS = {
   conclusaoContrato: 'CONCLUSAO CONTRATO',
   marcadoAmarelo: 'MARCAÇÃO AMARELA'
 };
+
+const TRIP_STATUS_FIELDS = ['placa','secao','status','usuario','tipo','pamcard','trocaMotoristaConcluida','dt','programado','pedidoEnviadoDt','cte','manifesto','contrato','num_pedagio','descarga','descargaVerde','adiantamentoOk','conclusaoContrato','billingRuleVersion',...betaInvoices.FIELDS,...betaInvoices.TIME_FIELDS];
+const TRIP_READ_FIELDS = [...new Set([...TRIP_STATUS_FIELDS,...Object.keys(VIAGEM_FIELD_LABELS),...VIAGENS_EXPORT_COLUMNS.map(c=>c.key),'createdAt','updatedAt','agendamentoVerde','eventoCteConfirmadoPor','comentariosBeta','corLinhaBeta','obsCriadaEm','eixo','valorPf','valorPj','valor_pf','valor_pj'])];
+const TRIP_REPORT_FIELDS = [...new Set([...TRIP_STATUS_FIELDS,'data','origem','destino','produto','peso','createdAt'])];
+const TRIP_EXPORT_FIELDS = [...new Set([...TRIP_STATUS_FIELDS,...VIAGENS_EXPORT_COLUMNS.map(c=>c.key),'data','createdAt'])];
+function tripProjection(fields=TRIP_READ_FIELDS) {
+  return ['id','created_at','updated_at',...fields.map(key=>key+':dados->'+key)].join(',');
+}
+function projectedTrip(record,fields=TRIP_READ_FIELDS) {
+  // Absent JSON keys must stay absent for the legacy status rules.
+  const dados=Object.fromEntries(fields.filter(key=>record[key]!=null).map(key=>[key,record[key]]));
+  return supabaseToFrontend({id:record.id,created_at:record.created_at,updated_at:record.updated_at,dados});
+}
+function publicTrip(doc) {
+  if(!doc)return doc;
+  const {historico,...rest}=doc;
+  return rest;
+}
 
 const COMPRESSIBLE_TYPES = /^(text\/|application\/json|application\/javascript|application\/xml|image\/svg\+xml)/i;
 const STATIC_CACHE_EXTENSIONS = new Set(['.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.webmanifest', '.woff', '.woff2']);
@@ -419,8 +436,10 @@ function applyJsonFilters(query, filters = {}) {
 }
 
 async function selectDocsByJson(table, filters = {}, options = {}) {
-  let query = supabase.from(table).select(SUPABASE_DOC_SELECT);
+  const fields=table===TABLES.viagens?(options.fields||TRIP_READ_FIELDS):null;
+  let query = supabase.from(table).select(fields?tripProjection(fields):SUPABASE_DOC_SELECT);
   query = applyJsonFilters(query, filters);
+  if(options.or)query=query.or(options.or);
 
   if (options.gte) {
     Object.entries(options.gte).forEach(([key, value]) => {
@@ -452,16 +471,15 @@ async function selectDocsByJson(table, filters = {}, options = {}) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data || []).map(supabaseToFrontend);
+  return (data || []).map(row=>fields?projectedTrip(row,fields):supabaseToFrontend(row));
 }
 
 async function searchBetaInvoices(value, filters={}, options={}) {
   if(!value)return [];
   const variants=[...new Set([value,betaInvoices.digits(value)])];
-  const lists=await Promise.all(betaInvoices.FIELDS.map(key=>selectDocsByJson(TABLES.viagens,filters,{
-    ...options,in:{...(options.in||{}),[key]:variants}
-  })));
-  return [...new Map(lists.flat().map(doc=>[doc._id,doc])).values()];
+  if(!variants.every(v=>/^\d+(?:\.\d+)*$/.test(v)))return [];
+  const or=betaInvoices.FIELDS.map(key=>'dados->>'+key+'.in.('+variants.join(',')+')').join(',');
+  return selectDocsByJson(TABLES.viagens,filters,{...options,or});
 }
 
 async function selectJsonTextValues(table, key) {
@@ -704,7 +722,7 @@ function hasLoadedHistory(doc = {}) {
 async function latestViagemByPlaca(placa) {
   const normalizedPlaca = normalizeUniqueValue(placa);
   if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
-  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT });
+  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT,fields:[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt','nome','carroceria','telefone','telefone2'])],order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] });
   return docs
     .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
     .filter(doc => isViagemBloqueada(doc) || normalizeUniqueValue(doc.status) === 'CONCLUIDO')
@@ -1153,8 +1171,8 @@ async function publicWorkSessions() {
   const [sessions, types] = await Promise.all([activeWorkSessions(), workTypeDocs({ includeDeleted: true })]);
   const typeMap = Object.fromEntries(types.map(type => [type._id, publicWorkType(type)]));
   const userIds=[...new Set(sessions.map(session=>session.userId).filter(Boolean))];
-  const profiles=userIds.length?await selectDocsByJson(TABLES.configOptions,{field:USER_PROFILE_SETTINGS_FIELD},{in:{userId:userIds}}):[];
-  const avatars=new Map(profiles.map(profile=>[profile.userId,normalizeAvatarUrl(profile.avatarUrl)]));
+  const profiles=await Promise.all(userIds.map(userId=>cachedValue('profile-settings-'+userId,()=>userProfileSettings(userId),300000)));
+  const avatars=new Map(userIds.map((userId,i)=>[userId,profiles[i].avatarUrl||'']));
   return sessions.map(session => ({
     ...session,
     userAvatarSnapshot: avatars.get(session.userId)||'',
@@ -1514,43 +1532,6 @@ function buildViagensWorkbook(viagens, dates) {
   return workbook;
 }
 
-function historyTextValue(value) {
-  if (value === null || value === undefined) return '';
-  if (Array.isArray(value) || (typeof value === 'object' && value)) return JSON.stringify(value);
-  return String(value).trim();
-}
-
-function appendViagemHistory(current, entries) {
-  const existing = Array.isArray(current?.historico) ? current.historico : [];
-  return [...existing, ...entries].slice(-VIAGEM_HISTORY_LIMIT);
-}
-
-function buildViagemHistoryEntries(current, patch, profile, action = 'ALTERACAO') {
-  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico', 'billingRuleVersion', 'obsCriadaEm']);
-  const fields = Object.keys(patch || {}).filter(field => !ignored.has(field));
-  const changed = fields.filter(field => historyTextValue(current?.[field]) !== historyTextValue(patch[field]));
-  if (!changed.length && action !== 'CRIACAO') return [];
-
-  const when = new Date().toISOString();
-  const user = profileDisplayName(profile);
-  return (action === 'CRIACAO' ? [{ field: '', before: '', after: '' }] : changed.map(field => ({
-    field,
-    before: historyTextValue(current?.[field]),
-    after: historyTextValue(patch[field])
-  }))).map((item, index) => ({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${index}`,
-    tipo: action,
-    campo: item.field,
-    label: item.field ? (VIAGEM_FIELD_LABELS[item.field] || (/^nota(?:[2-9]|1[0-5])$/.test(item.field) ? 'NOTA FISCAL '+item.field.slice(4) : item.field.toUpperCase())) : 'CADASTRO',
-    anterior: item.before,
-    atual: item.after,
-    usuario: user,
-    email: String(profile?.email || ''),
-    role: String(profile?.role || ''),
-    dataHora: when
-  }));
-}
-
 function normalizeViagemDocumentNumbers(data = {}) {
   DOCUMENT_NUMBER_FIELDS.forEach(field => {
     if (Object.prototype.hasOwnProperty.call(data, field)) {
@@ -1573,32 +1554,33 @@ function isHexColor(color) {
   return /^#[0-9a-f]{6}$/i.test(String(color || ''));
 }
 
-async function findDuplicateViagemFields(data, currentId = null) {
+async function findDuplicateViagemFields(data, currentId = null, previous = null) {
   if (betaEditable) {
-    const entries=betaInvoices.invoiceEntries(data);
+    const oldInvoices=new Set(previous?betaInvoices.invoiceEntries(previous).map(item=>betaInvoices.digits(item.value)):[]);
+    const entries=betaInvoices.invoiceEntries(data).filter(item=>!oldInvoices.has(betaInvoices.digits(item.value)));
     const values=[...new Set(entries.flatMap(item=>[item.value,betaInvoices.digits(item.value)]))];
     if(values.length){
       const conditions=betaInvoices.FIELDS.map(key=>'dados->>'+key+'.in.('+values.join(',')+')').join(',');
-      let query=supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT).or(conditions);
+      let query=supabase.from(TABLES.viagens).select(tripProjection(betaInvoices.FIELDS)).or(conditions);
       if(currentId) query=query.neq('id',currentId);
       const {data:matches,error}=await query.limit(1);
       if(error)throw error;
       if(matches?.length){
-        const existing=new Set(betaInvoices.invoiceEntries(supabaseToFrontend(matches[0])).map(item=>betaInvoices.digits(item.value)));
+        const existing=new Set(betaInvoices.invoiceEntries(projectedTrip(matches[0],betaInvoices.FIELDS)).map(item=>betaInvoices.digits(item.value)));
         const match=entries.find(item=>existing.has(betaInvoices.digits(item.value)));
         if(match)return {key:match.key,label:'NOTA FISCAL',value:match.value};
       }
     }
   }
   const filledFields = UNIQUE_VIAGEM_FIELDS
-    .filter(field=>!betaEditable || field.key!=='nota')
+    .filter(field=>(!betaEditable || field.key!=='nota') && (!previous || comparableUniqueValue(field.key,data[field.key])!==comparableUniqueValue(field.key,previous[field.key])))
     .map(field => ({ ...field, value: comparableUniqueValue(field.key, data[field.key]) }))
     .filter(field => field.value);
 
   if (filledFields.length === 0) return null;
 
   for (const field of filledFields) {
-    const docs = await selectDocsByJson(TABLES.viagens, { [field.key]: data[field.key] }, { limit: 2 });
+    const docs = await selectDocsByJson(TABLES.viagens, { [field.key]: data[field.key] }, { limit: 2, fields:[field.key] });
     const duplicate = docs.find(doc => {
       if (currentId && doc._id === currentId) return false;
       return comparableUniqueValue(field.key, doc[field.key]) === field.value;
@@ -1611,7 +1593,7 @@ async function findDuplicateViagemFields(data, currentId = null) {
 }
 
 function broadcast(data) {
-  broadcastAuthenticated(wss.clients,data);
+  broadcastAuthenticated(wss.clients,['viagem_atualizada','viagem_criada'].includes(data.type)?{...data,payload:publicTrip(data.payload)}:data);
 }
 
 function publicProfile(profile = {}) {
@@ -2464,7 +2446,8 @@ app.get('/api/viagens/search', async (req, res) => {
       docs = [...new Map([...notaDocs, ...cteDocs].map(doc => [doc._id, doc])).values()];
     } else {
       const hasBoundedRange = Boolean(dataInicio && dataFim);
-      const searchOptions={...options,limit:hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT};
+      const reportOnly=String(req.query.report||'')==='1' && hasBoundedRange && !globalSearch?.text && !term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento;
+      const searchOptions={...options,...(reportOnly?{fields:TRIP_REPORT_FIELDS}:{}),limit:hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT};
       docs=betaWorkspace && notaTerm
         ? await searchBetaInvoices(formatDocumentNumber(req.query.nota,'nota'),query,searchOptions)
         : await selectDocsByJson(TABLES.viagens,query,searchOptions);
@@ -2572,6 +2555,7 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
     }
 
     const docs = await selectDocsByJson(TABLES.viagens, {}, {
+      fields:TRIP_EXPORT_FIELDS,
       gte: { data: inicio },
       lte: { data: fim }
     });
@@ -2592,7 +2576,7 @@ app.get('/api/viagens/:id', async (req, res) => {
   try {
     const viagem = await findOneById(TABLES.viagens, req.params.id);
     if (!viagem) return res.status(404).json({ error: 'Viagem não encontrada' });
-    res.json(viagem);
+    res.json(publicTrip(viagem));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2608,11 +2592,9 @@ if (betaEditable) {
       catch (error) { return res.status(400).json({error:error.message}); }
       const current = await findOneById(TABLES.viagens, req.params.id);
       if (!current) return res.status(404).json({error:'Viagem nao encontrada.'});
-      const history = buildViagemHistoryEntries(current, patch, req.userProfile);
-      if (history.length) patch.historico = appendViagemHistory(current, history);
       const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
       if (!updated) return res.status(409).json({error:'A viagem mudou. Atualize a pagina e tente novamente.'});
-      return res.json(updated);
+      return res.json(publicTrip(updated));
     } catch (error) {
       console.error('Falha ao marcar linha da beta:', error.message);
       return res.status(500).json({error:'Nao foi possivel salvar a cor.'});
@@ -2650,7 +2632,7 @@ function sendSavedViagem(res, previous, patch, saved) {
       patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
     res.set('X-Viagem-Evento', '1');
   }
-  return res.json(saved);
+  return res.json(publicTrip(saved));
 }
 
 app.post('/api/viagens/:id/evento-cte-confirmacao', requireViagemEditor, async(req,res)=>{
@@ -2662,8 +2644,6 @@ app.post('/api/viagens/:id/evento-cte-confirmacao', requireViagemEditor, async(r
       if(current.eventoCteConfirmadoEm)return res.json({ok:true});
       if(!String(current.cte||'').trim())return res.status(409).json({error:'O CT-e não está preenchido.'});
       const patch={eventoCteConfirmadoEm:new Date().toISOString(),eventoCteConfirmadoPor:req.authUser.id};
-      const entries=buildViagemHistoryEntries(current,{eventoCteConfirmadoEm:patch.eventoCteConfirmadoEm},req.userProfile);
-      patch.historico=appendViagemHistory(current,entries);
       const saved=await updateDoc(TABLES.viagens,req.params.id,patch,current);
       if(saved){broadcast({type:'viagem_atualizada',payload:saved});return res.json({ok:true});}
     }
@@ -2726,7 +2706,7 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       });
     }
 
-    payload.historico = buildViagemHistoryEntries({}, payload, req.userProfile, 'CRIACAO');
+    delete payload.historico;
     const inserted = await insertDoc(TABLES.viagens, payload);
     broadcast({ type: 'viagem_criada', payload: inserted });
     sendSavedViagem(res, null, payload, inserted);
@@ -2789,8 +2769,6 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         if (blockedFields.length) {
           return res.status(403).json({ error: 'Viagem concluída. Somente DESCARGA e marcação amarela podem ser editadas.' });
         }
-        const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
-        if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
         const lockedNextData = applyFrotaContratoRule({ ...current, ...patch });
         patch.status = calculateTripStatus(lockedNextData);
         if(betaEditable){lockedNextData.status=patch.status;patch.secao=betaMode.persistedSection(lockedNextData);}
@@ -2835,7 +2813,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
 
     const eventoOnly = Object.keys(req.body).length === 1 && typeof req.body.frete === 'string';
-    const duplicate = eventoOnly ? null : await findDuplicateViagemFields(nextData, req.params.id);
+    const duplicate = eventoOnly ? null : await findDuplicateViagemFields(nextData, req.params.id,current);
     if (duplicate) {
       return res.status(409).json({
         error: `${duplicate.label} já cadastrado: ${duplicate.value}`,
@@ -2843,8 +2821,6 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
       });
     }
 
-    const historyEntries = buildViagemHistoryEntries(current, patch, req.userProfile);
-    if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
     const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
     if (!updated) return res.status(409).json({ error: 'A viagem mudou durante a edicao. Atualize e tente novamente.' });
     const workChanged = updated.status === 'CONCLUIDO'
