@@ -12,7 +12,7 @@ const {bindAuthenticatedSocket,broadcastAuthenticated}=require('./beta/authentic
 const runtime=resolveRuntime(process.env);
 const betaReadOnly = runtime.pilotReadOnly;
 const betaEditable = runtime.editable;
-const betaWorkspace = true;
+const betaWorkspace = runtime.workspace;
 const betaAccess = betaWorkspace && require('./beta/access');
 const betaMode = betaEditable && require('./beta/mode');
 const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
@@ -257,11 +257,11 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
   };
 }
 
+server.on('upgrade', (req, socket, head) => {
+  if(runtime.pilot || req.url !== '/') return socket.destroy();
+  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
+});
 if (betaWorkspace) {
-  server.on('upgrade', (req, socket, head) => {
-    if(runtime.pilot || req.url !== '/') return socket.destroy();
-    wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
-  });
   app.use((req, res, next) => {
     if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();
