@@ -148,6 +148,20 @@
     finally{input.remove();}
   }
   const dischargeDrafts=new Map();
+  let dischargeWrites=0;
+  function dischargeEditorValue(value){
+    const text=String(value||'').trim();
+    const dateFirst=/^(\d{2}\/\d{2}\/\d{4}) (\d{2}:\d{2})$/.exec(text);
+    if(dateFirst)return text;
+    const normalized=formatDescargaDateTime(text);
+    const match=/^(\d{2}:\d{2}) (\d{2}\/\d{2}\/\d{4})$/.exec(normalized);
+    return match?match[2]+' '+match[1]:'';
+  }
+  function dischargeEditPatch(value,confirm){
+    const parsed=parseDischargeDate(value);
+    if(!parsed)return null;
+    return confirm?{descarga:parsed,descargaVerde:true}:{descarga:parsed};
+  }
   function maskDischargeDate(value){
     const digits=String(value||'').replace(/\D/g,'').slice(0,12);
     return digits.slice(0,2)+(digits.length>2?'/'+digits.slice(2,4):'')+
@@ -205,6 +219,7 @@
     dischargeStatus.textContent=total?'Pendências de carregamentos de dias anteriores.':'Nenhuma pendência.';
     const signature=JSON.stringify([items,advances,canEditViagens()]);
     if(signature===dischargeSignature)return;
+    if(dischargeWrites||document.activeElement?.matches('.beta-discharge-schedule'))return;
     dischargeSignature=signature;
     function renderGroup(list,rows,kind){
       list.replaceChildren();
@@ -222,8 +237,9 @@
           loadingDate.setAttribute('aria-label','Data de carregamento: '+dischargeDate(item.data));
           top.append(identity,loadingDate);
           card.append(top);
-          if(kind==='discharge')card.append(makeElement('div','beta-discharge-date','Descarga: '+(item.descarga?formatDescargaDateTime(item.descarga):'Não informada')));
-          else card.append(makeElement('div','beta-discharge-date','Adiantamento não efetuado'));
+          const dateRow=makeElement('div','beta-discharge-date-row');
+          const dateLabel=makeElement('span','beta-discharge-date',kind==='discharge'?'Descarga: '+(item.descarga?formatDescargaDateTime(item.descarga):'Não informada'):'Adiantamento não efetuado');
+          dateRow.append(dateLabel);card.append(dateRow);
           const draft=dischargeDrafts.get(item.id);
           const copyRow=makeElement('div','beta-discharge-copy-row');
           if(kind==='discharge'){
@@ -241,52 +257,90 @@
             const mark=makeElement('button','beta-discharge-mark',kind==='discharge'?'Agendado':'Adiantamento OK');
             mark.type='button';
             const error=makeElement('p','beta-notice-error','');error.setAttribute('role','status');
-            let input;
+            let input,editor,edit,save,cancel;
             if(kind==='discharge'){
               input=makeElement('input','beta-discharge-schedule');input.type='text';input.inputMode='numeric';input.maxLength=16;
               input.placeholder='dd/mm/aaaa hh:mm';input.autocomplete='off';
               input.setAttribute('aria-label','Data e hora da descarga');
-              input.hidden=draft===undefined;input.value=draft||'';
+              editor=makeElement('div','beta-discharge-editor');editor.hidden=draft===undefined;
+              input.value=draft??dischargeEditorValue(item.descarga);
               attachDischargeMask(input,item.id);
               input.addEventListener('input',()=>input.removeAttribute('aria-invalid'));
+              edit=makeElement('button','beta-discharge-edit','Editar');
+              edit.type='button';edit.title='Editar data e hora da descarga';
+              dateRow.append(edit);
+              save=makeElement('button','beta-discharge-save','Salvar');
+              save.type='button';
+              cancel=makeElement('button','beta-discharge-cancel','Cancelar');cancel.type='button';
+              const actions=makeElement('div','beta-discharge-editor-actions');actions.append(cancel,save);
+              editor.append(input,actions);
+              function openEditor(){
+                editor.hidden=false;
+                dischargeDrafts.set(item.id,input.value);
+                input.focus();input.select();
+              }
+              function closeEditor(){
+                dischargeDrafts.delete(item.id);
+                editor.hidden=true;input.removeAttribute('aria-invalid');
+                input.value=dischargeEditorValue(item.descarga);
+                error.textContent='';
+              }
+              edit.addEventListener('click',openEditor);
+              cancel.addEventListener('click',closeEditor);
+              save.addEventListener('click',()=>persistDischarge(false));
+              input.addEventListener('keydown',event=>{
+                if(event.key==='Enter'){event.preventDefault();void persistDischarge(false);}
+                if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeEditor();}
+              });
+              async function persistDischarge(confirm){
+                if(!canEditViagens()||mark.disabled)return;
+                if(confirm&&editor.hidden&&!input.value){openEditor();return;}
+                const patch=dischargeEditPatch(input.value,confirm);
+                if(!patch){editor.hidden=false;dischargeDrafts.set(item.id,input.value);input.focus();if(input.value)input.setAttribute('aria-invalid','true');return;}
+                mark.disabled=save.disabled=cancel.disabled=edit.disabled=input.disabled=true;
+                dischargeWrites++;
+                error.textContent='';
+                try{
+                  const updated=await apiFetch('/api/viagens/'+encodeURIComponent(item.id),{method:'PUT',body:JSON.stringify(patch)});
+                  if(!updated||formatDescargaDateTime(updated.descarga)!==patch.descarga||(confirm&&updated.descargaVerde!==true))throw Error('Alteração não gravada.');
+                  const index=state.viagens.findIndex(v=>v._id===item.id);
+                  if(index!==-1)state.viagens[index]=updated;
+                  if(state.selectedViagemId===item.id)state.selectedViagemDetails=updated;
+                  item.descarga=updated.descarga;
+                  dateLabel.textContent='Descarga: '+formatDescargaDateTime(item.descarga);
+                  closeEditor();
+                  if(confirm)card.remove();
+                  renderAllUnlessInlineEditing();
+                }catch(e){error.textContent='Não foi possível salvar a descarga. Tente novamente.';}
+                finally{
+                  dischargeWrites--;
+                  mark.disabled=save.disabled=cancel.disabled=edit.disabled=input.disabled=false;
+                  void refreshDischargeNotifications();
+                }
+              }
+              mark.addEventListener('click',()=>persistDischarge(true));
             }
             if(kind==='advance'&&!item.canAdvance){
               mark.disabled=true;mark.title='Preencha os documentos obrigatórios antes de concluir o adiantamento.';
               error.textContent='Documentação pendente.';
             }
-            mark.addEventListener('click',async()=>{
-              if(!canEditViagens())return;
-              let patch,field;
-              if(kind==='discharge'){
-                if(!item.descarga){
-                  const parsed=parseDischargeDate(input.value);
-                  if(!parsed){
-                    input.hidden=false;dischargeDrafts.set(item.id,input.value);input.focus();
-                    if(input.value)input.setAttribute('aria-invalid','true');
-                    return;
-                  }
-                  patch={descargaVerde:true,descarga:parsed};
-                }else patch={descargaVerde:true};
-                field='descargaVerde';
-              }else{
-                if(!item.canAdvance)return;
-                patch={adiantamentoOk:true};field='adiantamentoOk';
-              }
+            if(kind==='advance')mark.addEventListener('click',async()=>{
+              if(!canEditViagens()||!item.canAdvance)return;
+              const patch={adiantamentoOk:true};
               mark.disabled=true;error.textContent='';
+              dischargeWrites++;
               try{
                 const updated=await apiFetch('/api/viagens/'+encodeURIComponent(item.id),{method:'PUT',body:JSON.stringify(patch)});
-                if(!updated||updated[field]!==true)throw Error('Confirmação não gravada.');
+                if(!updated||updated.adiantamentoOk!==true)throw Error('Confirmação não gravada.');
                 const index=state.viagens.findIndex(v=>v._id===item.id);
                 if(index!==-1)state.viagens[index]=updated;
                 if(state.selectedViagemId===item.id)state.selectedViagemDetails=updated;
-                if(kind==='discharge')dischargeDrafts.delete(item.id);
                 card.remove();renderAllUnlessInlineEditing();
-                void refreshDischargeNotifications();
               }catch(e){error.textContent='Não foi possível concluir. Verifique as regras da viagem.';}
-              finally{mark.disabled=kind==='advance'&&!item.canAdvance;}
+              finally{dischargeWrites--;mark.disabled=!item.canAdvance;void refreshDischargeNotifications();}
             });
             copyRow.append(mark);card.append(copyRow);
-            if(input)card.append(input);
+            if(editor)card.append(editor);
             card.append(error);
           }else if(kind==='discharge')card.append(copyRow);
           list.append(card);
