@@ -514,6 +514,10 @@ function handleWsMessage(msg) {
     upsertWorkSession(payload);
     renderAllUnlessInlineEditing();
   } else if (type === 'frete_consultas_atualizada') {
+    if(isBetaTripWorkspace() && (freteBoardSaving || document.activeElement?.matches?.('[data-frete-field][contenteditable="true"]'))){
+      freteBoardRefreshPending=true;
+      return;
+    }
     state.freteConsultas = mergeFreteConsultas(payload);
     if (document.getElementById('beta-fretes')?.hidden === false || !document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
   }
@@ -2952,12 +2956,16 @@ async function deleteFreteEixo(routeIndex, rowIndex, group = 'rows') {
   renderFreteConsultas();
 }
 
-let freteBoardSaving=false;
+let freteBoardSaving=false, freteBoardRefreshPending=false;
 async function commitFreteBoardEdit(cell) {
   if (!isAdmin()) return;
   if (isBetaTripWorkspace()) {
     cell.removeAttribute('contenteditable');
-    if (isBetaReadOnly() || freteBoardSaving || cell.textContent.trim() === cell.dataset.value) return;
+    if (isBetaReadOnly() || freteBoardSaving) return;
+    if(cell.textContent.trim()===cell.dataset.value){
+      if(freteBoardRefreshPending){freteBoardRefreshPending=false;await refreshFreteConsultas();}
+      return;
+    }
   }
   const field = cell.dataset.freteField;
   const routeIndex = Number(cell.dataset.routeIndex);
@@ -3001,7 +3009,11 @@ async function commitFreteBoardEdit(cell) {
 
   freteBoardSaving=true;
   try { await saveFreteConsultas(); }
-  finally { freteBoardSaving=false; renderFreteConsultas(); }
+  finally {
+    freteBoardSaving=false;
+    if(freteBoardRefreshPending){freteBoardRefreshPending=false;await refreshFreteConsultas();}
+    else renderFreteConsultas();
+  }
 }
 
 function formatFreteUpdatedAt(value) {
