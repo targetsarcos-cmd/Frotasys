@@ -996,3 +996,15 @@ body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,t
 .workspace-beta .work-popover .work-actions .work-finish {background:#197044;border-color:#197044;color:#fff}
 .workspace-beta .work-popover .work-actions .work-finish:hover {background:#125a36}
 .workspace-beta .work-popover .work-empty {padding:10px;font-weight:500;font-size:12px}
+
+/* Edit a pending discharge without confirming the appointment. */
+#beta-shell .beta-discharge-date-row {display:flex;align-items:center;gap:8px;justify-content:space-between}
+#beta-shell .beta-discharge-edit {flex:none;border:1px solid #b8cbdc;border-radius:3px;background:#fff;color:#135c92;font:600 11px 'Segoe UI',sans-serif;padding:3px 8px;cursor:pointer}
+#beta-shell .beta-discharge-edit:hover {background:#eaf3fa}
+#beta-shell .beta-discharge-editor {display:grid;gap:5px;margin-top:4px}
+#beta-shell .beta-discharge-editor[hidden] {display:none!important}
+#beta-shell .beta-discharge-editor .beta-discharge-schedule {box-sizing:border-box;margin:0}
+#beta-shell .beta-discharge-editor-actions {display:flex;justify-content:flex-end;gap:6px}
+#beta-shell .beta-discharge-save,#beta-shell .beta-discharge-cancel {border:1px solid #b8cbdc;border-radius:3px;background:white;color:#135c92;font:600 11px 'Segoe UI',sans-serif;padding:5px 10px;cursor:pointer}
+#beta-shell .beta-discharge-save {background:#135c92;color:#fff;border-color:#135c92}
+#beta-shell :is(.beta-discharge-save,.beta-discharge-edit,.beta-discharge-cancel):disabled {opacity:.55;cursor:wait}
