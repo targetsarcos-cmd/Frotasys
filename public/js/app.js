@@ -193,7 +193,7 @@ const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const TIME_FIELDS = ['agendamento', 'horas', 'hora_nf'];
 const STABLE_INLINE_SELECTION_FIELDS = ['peso', 'dt', 'cte', 'manifesto', 'contrato', 'nota', 'num_pedagio', 'vlr_pedagio', 'horas'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo', 'trocaMotoristaConcluida'];
-const VIAGEM_MAX_FUTURE_DAYS = 3;
+const VIAGEM_MAX_FUTURE_DAYS = 5;
 const UNDO_FIELD_LABELS = {
   dt: 'DT',
   cte: 'CT-E',
@@ -293,17 +293,20 @@ function localDateStr(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function maxAllowedViagemDate() {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + VIAGEM_MAX_FUTURE_DAYS);
-  return localDateStr(date);
+function maxAllowedViagemDate(now=new Date()) {
+  // The operation uses Brazil time even if the Render host runs in UTC.
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const get=type=>parts.find(part=>part.type===type).value;
+  const date=new Date(get('year')+'-'+get('month')+'-'+get('day')+'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate()+VIAGEM_MAX_FUTURE_DAYS);
+  return date.toISOString().slice(0,10);
 }
 
 function viagemDateValidationMessage(value) {
   const data = String(value || '').trim();
-  if (!data) return '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return 'Informe uma data v\u00e1lida para a viagem.';
+  const parsed=new Date(data+'T00:00:00Z');
+  if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==data)return 'Informe uma data v\u00e1lida para a viagem.';
   const maxDate = maxAllowedViagemDate();
   if (data > maxDate) {
     return `N\u00e3o \u00e9 permitido lan\u00e7ar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data m\u00e1xima: ${formatDateBR(maxDate)}.`;
@@ -7963,6 +7966,9 @@ function openModal(viagem = null, defaults = {}) {
       ? (f === 'tipo' ? normalizeTipo(viagem[f]) : f === 'descarga' ? descargaToInputValue(viagem[f]) : (viagem[f] || ''))
       : (defaults[f] !== undefined ? defaults[f] : (f === 'secao' ? 'agenciando' : ''));
   });
+  const dateInput=document.getElementById('f-data');
+  dateInput.max=maxAllowedViagemDate();
+  dateInput.value=viagem?.data||defaults.data||state.currentDate||todayStr();
   const eventoInput = document.getElementById('f-frete');
   eventoInput.value = viagem?.frete || '';
   eventoInput.defaultValue = eventoInput.value;
@@ -8163,7 +8169,7 @@ async function saveViagem() {
     destino: v('f-destino'),
     peso: v('f-peso'),
     obs: v('f-obs'),
-    data: state.currentDate
+    data: v('f-data')
   };
   if (isBetaTripWorkspace()) delete data.secao;
   const eventoInput = document.getElementById('f-frete');
@@ -8171,7 +8177,8 @@ async function saveViagem() {
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
 
   if(!validDescargaDateTime(data.descarga)){showSummaryToast('Descarga inválida. Use dd/mm/aaaa hh:mm ou apague o campo.','error');return;}
-  if (!canSaveViagemDate(data.data)) return;
+  document.getElementById('f-data').max=maxAllowedViagemDate();
+  if (!canSaveViagemDate(data.data)) { document.getElementById('f-data').focus(); return; }
 
   if (!data.produto) {
     alert('Selecione PRODUTO para salvar a viagem.');
@@ -8210,6 +8217,12 @@ async function saveViagem() {
   if (!saved) return;
 
   closeModal();
+  if(state.currentDate!==data.data){
+    state.currentDate=data.data;
+    document.getElementById('date-picker').value=data.data;
+    clearTripFilterScope();
+    if(isBetaTripWorkspace())renderDateWeekday();
+  }
   loadAll();
 }
 
