@@ -236,8 +236,8 @@ test('layout beta inclui produto e reserva largura dos controles',()=>{
   assert.equal(normal.columns[10],'72px');
   assert.equal(normal.columns[2],'104px');
   assert.equal(normal.columns[8],'var(--beta-status-column)');
-  assert.equal(normal.minWidth,'calc(963px + var(--beta-status-column))');
-  assert.equal(layout([...keys,'nota']).minWidth,'calc(1063px + var(--beta-status-column))');
+  assert.equal(normal.minWidth,'calc(941px + var(--beta-status-column))');
+  assert.equal(layout([...keys,'nota']).minWidth,'calc(1041px + var(--beta-status-column))');
   assert.equal(layout(['placa','actions']).minWidth,'calc(157px)');
 });
 test('produto e fixo apos destino somente na beta e nao duplica preferencias antigas',()=>{
@@ -1076,4 +1076,28 @@ test('servidor, resumo e filtro beta compartilham regra de faturamento',()=>{
   assert.match(app,/!window\.FrotasysBetaTripSections\.isBilled\(viagem\)/);
   assert.match(app,/'HORA NF':'#0E7490'/);
   assert.match(beta,/'EMITIR CTE', 'HORA NF', 'ADIANTAMENTO \/ DESCARGA'/);
+});
+
+test('produto e peso compactos aproximam agendamento e descarga sem reduzir legibilidade',()=>{
+  const {layout}=require('../public/js/workspace-table-layout');
+  const keys=['placa','nome','tipo','origem','destino','produto','peso','agendamento','descarga','status','trabalho','actions'];
+  const result=layout(keys);
+  assert.equal(result.columns[5],'64px');
+  assert.equal(result.columns[6],'60px');
+  assert.equal(result.minWidth,'calc(1095px + var(--beta-status-column))');
+  assert.equal(result.columns[9],'var(--beta-status-column)');
+  const oldFlexible={placa:85,nome:120,origem:112,destino:98,produto:78,peso:68,agendamento:94,descarga:154};
+  const oldFlexTotal=Object.values(oldFlexible).reduce((sum,n)=>sum+n,0);
+  const fixedOld=104+132+72, status=180;
+  const width=(column,total)=>column.endsWith('px')&&!column.startsWith('calc')?parseFloat(column):column==='var(--beta-status-column)'?status:(total-432-status)*Number(column.match(/\* ([\d.]+)\)$/)[1]);
+  for(const total of [1297,1440,1600,1920]){
+    const previousStart=key=>keys.slice(0,keys.indexOf(key)).reduce((sum,k)=>sum+(k==='tipo'?104:(oldFlexible[k]||0)*(total-fixedOld-status)/oldFlexTotal),0);
+    const nextStart=key=>result.columns.slice(0,keys.indexOf(key)).reduce((sum,col)=>sum+width(col,total),0);
+    assert.ok(nextStart('agendamento')<previousStart('agendamento'));
+    assert.ok(nextStart('descarga')<previousStart('descarga'));
+    assert.ok(width(result.columns[7],total)>=94);
+    assert.ok(width(result.columns[8],total)>=154);
+  }
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(css,/\[data-field=produto\],\[data-field=peso\]\) \{padding-inline:4px\}/);
 });
