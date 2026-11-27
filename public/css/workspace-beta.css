@@ -1021,3 +1021,7 @@ body:has(#frotasys-version-notice[open]) {overflow:hidden}
 #beta-shell .beta-discharge-card-schedule .beta-discharge-copy-row {justify-content:flex-end;gap:7px;margin-top:auto;padding:7px 0 0;background:transparent;border-top:1px solid #e1e9f0;border-radius:0}
 #beta-shell .beta-discharge-card-schedule :is(.beta-discharge-copy,.beta-discharge-mark) {font-size:12px;min-height:28px;padding:5px 11px}
 #beta-shell .beta-discharge-card-schedule .beta-discharge-editor {margin-top:0}
+
+/* Header uses the persisted profile thumbnail, with initials as fallback. */
+#beta-shell .top .avatar {position:relative;overflow:hidden;flex-shrink:0}
+#beta-shell .top .avatar .profile-avatar-image {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
