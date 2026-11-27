@@ -988,8 +988,7 @@ function applyPermissions() {
       const indicator = userMode.querySelector('.connected');
       userMode.replaceChildren(indicator, document.createTextNode(' ' + label));
     }
-    const footer = document.querySelector('#beta-shell .operations-panel > .footer > span:last-child');
-    if (footer) footer.textContent = (document.body.dataset.workspaceRuntime === 'production' ? 'Frotasys · ' : 'Beta · ') + label + (canEdit ? ' · Banco compartilhado' : '');
+    syncWorkspaceProfileHeader();
     document.getElementById('f-secao').disabled = true;
   }
 }
@@ -1006,6 +1005,14 @@ function profileAvatarContent(name,value) {
   const photo=safeProfilePhoto(value);
   const initials=escapeHtml(initialsFromName(name));
   return photo?'<span class="profile-avatar-fallback">'+initials+'</span><img class="profile-avatar-image" src="'+escapeAttr(photo)+'" alt="" decoding="async" onerror="this.remove()">':initials;
+}
+
+function syncWorkspaceProfileHeader() {
+  const name=loggedUserDisplayName();
+  const avatar=document.querySelector('#beta-shell .top .avatar');
+  const username=document.querySelector('#beta-shell .top .username');
+  if(username)username.textContent=name;
+  if(avatar)avatar.innerHTML=profileAvatarContent(name,state.userProfile?.avatarUrl);
 }
 
 function loggedUserBadgeHtml() {
