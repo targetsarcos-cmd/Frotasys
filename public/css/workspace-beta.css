@@ -819,7 +819,6 @@ body.workspace-beta #event-warning button:disabled {opacity:.55;cursor:wait}
 #beta-shell .beta-discharge-driver {font-weight:600;font-size:12px;overflow-wrap:anywhere}
 #beta-shell .beta-discharge-date {font-size:11px;color:#526b80;overflow-wrap:anywhere}
 #beta-shell .beta-discharge-copy-row {display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 6px;background:#edf3f8;border-radius:3px}
-#beta-shell .beta-discharge-copy-value {flex:1;font-size:11px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:600;min-width:0}
 #beta-shell .beta-discharge-copy {border:0;border-radius:3px;background:#204866;color:#fff;font-size:11px;font-weight:600;padding:5px 8px;cursor:pointer;white-space:nowrap}
 #beta-shell .beta-discharge-copy:hover {background:#142b42}
 .beta-discharge-copy-buffer {position:fixed;left:-9999px;top:0}
@@ -1014,3 +1013,11 @@ body:has(#frotasys-version-notice[open]) {overflow:hidden}
 #beta-shell .beta-discharge-date-row:has(.beta-discharge-schedule) .beta-discharge-date {flex:none}
 #beta-shell .beta-discharge-date-row .beta-discharge-schedule {flex:1;min-width:0;width:100%;margin:0;height:28px;box-sizing:border-box;background:#fff;cursor:text}
 #beta-shell .beta-discharge-date-row .beta-discharge-schedule:focus {border-color:#1665a3;outline:1px solid #1665a3;outline-offset:0}
+
+/* Discharge card: larger date, cleaner action bar, same clipboard format. */
+#beta-shell .beta-discharge-card-schedule {min-height:116px;box-sizing:border-box;padding:11px 10px;display:flex;flex-direction:column;gap:7px}
+#beta-shell .beta-discharge-card-schedule .beta-discharge-date {font-size:15px;line-height:1.4}
+#beta-shell .beta-discharge-card-schedule .beta-discharge-date-row .beta-discharge-schedule {font-size:15px;height:32px;padding:5px 7px}
+#beta-shell .beta-discharge-card-schedule .beta-discharge-copy-row {justify-content:flex-end;gap:7px;margin-top:auto;padding:7px 0 0;background:transparent;border-top:1px solid #e1e9f0;border-radius:0}
+#beta-shell .beta-discharge-card-schedule :is(.beta-discharge-copy,.beta-discharge-mark) {font-size:12px;min-height:28px;padding:5px 11px}
+#beta-shell .beta-discharge-card-schedule .beta-discharge-editor {margin-top:0}
