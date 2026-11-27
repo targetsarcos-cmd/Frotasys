@@ -2679,8 +2679,7 @@ app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
     const normalizedOrigem = normalizeUniqueValue(current.origem);
     const sameOriginOps = await selectDocs(TABLES.operacoes);
     if (!sameOriginOps.some(op => normalizeUniqueValue(op.origem) === normalizedOrigem)) {
-      await deleteWhere(TABLES.configOptions, doc => doc.field === 'origem' && doc.normalized === normalizedOrigem);
-      const remainingOrigins = sortDocs(await selectDocsByJson(TABLES.configOptions, { field: 'origem' }), { ordem: 1, value: 1 });
+      const remainingOrigins = await deleteConfigOptionRecords('origem', normalizedOrigem);
       await Promise.all(remainingOrigins.map((doc, index) => updateDoc(TABLES.configOptions, doc._id, { ordem: index + 1 })));
     }
 
@@ -2877,21 +2876,41 @@ app.put('/api/config-options/:field/rename', requireAdmin, async (req, res) => {
   } catch(e) { res.status(500).json({error:e.message}); }
 });
 
+// Configuration records share their table with work logs and other documents.
+async function deleteConfigOptionRecords(field, normalized) {
+  const matches = doc => normalizeUniqueValue(doc.normalized) === normalized || normalizeUniqueValue(doc.value) === normalized;
+  const exact = await selectDocsByJson(TABLES.configOptions, { field, normalized });
+  const scoped = await selectDocsByJson(TABLES.configOptions, { field });
+  const targets = [...new Map([...exact,...scoped.filter(matches)].map(doc=>[doc._id,doc])).values()];
+  await Promise.all(targets.map(doc=>deleteDoc(TABLES.configOptions,doc._id)));
+  const remaining = await selectDocsByJson(TABLES.configOptions, { field });
+  if (remaining.some(matches) || await countDocs(TABLES.configOptions,null,{field,normalized})) {
+    throw new Error('A opção ainda consta no banco de dados. Tente novamente.');
+  }
+  invalidateCache();
+  return sortDocs(remaining,{ordem:1,value:1});
+}
+
 app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
 
     const normalized = normalizeUniqueValue(decodeURIComponent(req.params.value));
-    await deleteWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized);
-    const remaining = sortDocs(await selectDocsByJson(TABLES.configOptions, { field }), { ordem: 1, value: 1 });
+    if (!normalized) return res.status(400).json({error:'Informe uma opção válida.'});
+    const remaining = await deleteConfigOptionRecords(field, normalized);
     await Promise.all(remaining.map((doc, index) => updateDoc(TABLES.configOptions, doc._id, { ordem: index + 1 })));
 
     if (field === 'origem') {
-      await deleteWhere(TABLES.operacoes, op => normalizeUniqueValue(op.origem) === normalized);
+      const operations = (await selectDocs(TABLES.operacoes)).filter(op=>normalizeUniqueValue(op.origem)===normalized);
+      await Promise.all(operations.map(op=>deleteDoc(TABLES.operacoes,op._id)));
+      if ((await selectDocs(TABLES.operacoes)).some(op=>normalizeUniqueValue(op.origem)===normalized)) throw new Error('A operação vinculada ainda consta no banco. Tente novamente.');
+      for(const op of operations) broadcast({type:'operacao_removida',payload:{_id:op._id,id:op._id}});
     }
 
+    invalidateCache();
     const grouped = await configOptionsGrouped();
+    if (grouped[field]?.some(value=>normalizeUniqueValue(value)===normalized)) return res.status(409).json({error:'A opção ainda consta no cadastro. Tente novamente.'});
     broadcast({ type: 'config_atualizada', payload: grouped });
     res.json(grouped);
   } catch (e) {
