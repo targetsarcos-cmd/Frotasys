@@ -79,16 +79,16 @@ test('somente leituras das tabelas permitidas chegam ao transporte', async () =>
   assert.equal(calls[0].opts.redirect, 'error');
 });
 
-test('a beta classifica viagens pela nota e conclusão sem depender da seção legada', () => {
+test('a beta classifica viagens por documentos, horas e conclusão sem depender da seção legada', () => {
   const { classify, hasInvoice } = require('../public/js/workspace-trip-sections');
   const pending = { secao:'arcos', status:'AGUARDANDO CARREGAMENTO', nota:'  ' };
   assert.equal(classify(pending), 'agenciando');
-  assert.equal(classify({ ...pending, secao:'agenciando', nota:'12345' }), 'arcos');
+  assert.equal(classify({ ...pending, secao:'agenciando', nota:'12345' }), 'agenciando');
   assert.equal(classify({ ...pending, status:'CONCLUÍDO', nota:'12345' }), 'concluidos');
   assert.equal(classify({ ...pending, status:'CONCLUIDO' }), 'concluidos');
-  assert.equal(classify({ ...pending, status:'PROGRAMAR', nota:'12345' }), 'arcos');
+  assert.equal(classify({ ...pending, status:'PROGRAMAR', nota:'12345' }), 'agenciando');
   assert.equal(classify({ ...pending, nota:null }), 'agenciando');
-  assert.equal(classify({ ...pending, nota:12345 }), 'arcos');
+  assert.equal(classify({ ...pending, nota:12345 }), 'agenciando');
   assert.equal(hasInvoice({ nota:'  ' }), false);
   assert.equal(hasInvoice({ nota:'00123' }), true);
 });
@@ -362,7 +362,7 @@ test('beta ordena abas pelo fluxo operacional sem filtro de concluidos', () => {
   const trips=statuses=>statuses.map(status=>({status}));
   assert.deepEqual([...build(trips(['CONCLUIDO','ADIANTAMENTO / DESCARGA',...Array(5).fill('AGUARDANDO CARREGAMENTO')]))],
     [['all',7],['AGUARDANDO CARREGAMENTO',5],['ADIANTAMENTO / DESCARGA',1]]);
-  const order=['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA','CRIAR DT / PROGRAMAR','CRIAR DT','ENVIAR PEDIDO','PROGRAMAR','AGUARDANDO CARREGAMENTO','EMITIR CTE','ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA'];
+  const order=['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA','CRIAR DT / PROGRAMAR','CRIAR DT','ENVIAR PEDIDO','PROGRAMAR','AGUARDANDO CARREGAMENTO','EMITIR CTE','HORA NF','ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA'];
   assert.deepEqual([...build(trips(['CUSTOM','CONCLUÍDO',...order.slice().reverse()])).keys()],['all',...order,'CUSTOM']);
   assert.deepEqual([...build(trips(['CONCLUÍDO']))],[['all',1]]);
   assert.deepEqual([...build([])],[['all',0]]);
@@ -1010,4 +1010,70 @@ test('dialogo beta de evento nao duplica avisos e fecha apos confirmar no banco'
   show('Outro','2');assert.equal(dialog.open,true);
   const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
   assert.match(css,/body\.workspace-beta #event-warning h2 \{[^}]*background:var\(--beta-navy/);
+});
+
+test('faturamento beta exige documentos completos e horas de todas as notas',()=>{
+  const {hasBillingDocuments,hasInvoiceHours,isBillingReady,isBilled,classify}=require('../public/js/workspace-trip-sections');
+  const {persistedSection}=require('../beta/mode');
+  const {calculateTripStatus}=require('../tripStatus');
+  const options={requireBillingCompletion:true,requireDischargeConfirmation:true,preserveLegacyCompleted:true};
+  const ready={billingRuleVersion:2,tipo:'CARRETEIRO',pamcard:'PAMCARD OK',dt:'123',programado:true,num_pedagio:'456',nota:'1.234',cte:'234',manifesto:'345',contrato:'456',hora_nf:'08:45',descarga:'09:00 28/11/2026',descargaVerde:false,adiantamentoOk:true};
+  for(const key of ['nota','cte','manifesto','contrato']){
+    const incomplete={...ready,[key]:''};
+    assert.equal(hasBillingDocuments(incomplete),false);
+    assert.equal(isBillingReady(incomplete),false);
+    assert.equal(classify(incomplete),'agenciando');
+    assert.equal(persistedSection(incomplete),'agenciando');
+    assert.notEqual(calculateTripStatus(incomplete,options),'HORA NF');
+    assert.notEqual(calculateTripStatus(incomplete,options),'CONCLUIDO');
+  }
+  const pending={...ready,hora_nf:''};
+  assert.equal(hasBillingDocuments(pending),true);
+  assert.equal(hasInvoiceHours(pending),false);
+  assert.equal(calculateTripStatus(pending,options),'HORA NF');
+  assert.equal(classify(pending),'agenciando');
+  assert.equal(persistedSection(pending),'agenciando');
+  assert.equal(isBilled(pending),false);
+  assert.equal(isBillingReady(ready),true);
+  assert.equal(classify(ready),'arcos');
+  assert.equal(persistedSection(ready),'arcos');
+  assert.equal(calculateTripStatus(ready,options),'AGENDAR DESCARGA');
+  assert.equal(calculateTripStatus({...ready,adiantamentoOk:false},options),'ADIANTAMENTO / DESCARGA');
+  assert.equal(calculateTripStatus({...ready,descargaVerde:true},options),'CONCLUIDO');
+  assert.equal(classify({...ready,descargaVerde:true,status:'CONCLUIDO'}),'concluidos');
+  assert.equal(calculateTripStatus({...pending,descargaVerde:true,status:'CONCLUIDO'},options),'HORA NF');
+  assert.equal(classify({...pending,status:'CONCLUIDO'}),'agenciando');
+  const fleet={...pending,tipo:'FROTA',contrato:''};
+  assert.equal(hasBillingDocuments(fleet),true);
+  assert.equal(calculateTripStatus(fleet,options),'HORA NF');
+  assert.equal(persistedSection({...fleet,hora_nf:'00:00'}),'arcos');
+  assert.equal(calculateTripStatus({...fleet,hora_nf:'00:00'},options),'AGENDAR DESCARGA');
+  for(const time of ['', ' ', '24:00','10:60','x']){
+    assert.equal(hasInvoiceHours({...ready,nota2:'2',hora_nf2:time}),false);
+    assert.equal(calculateTripStatus({...ready,nota2:'2',hora_nf2:time},options),'HORA NF');
+  }
+  assert.equal(hasInvoiceHours({...ready,nota2:'2',hora_nf2:'17:30'}),true);
+  assert.equal(hasInvoiceHours({...ready,nota15:'15',hora_nf15:'23:59'}),true);
+  assert.equal(hasInvoiceHours({...ready,nota15:'15'}),false);
+  assert.equal(hasInvoiceHours({...ready,hora_nf2:''}),true);
+  const legacy={...ready,billingRuleVersion:undefined,status:'CONCLUIDO',hora_nf:'',descargaVerde:undefined};
+  assert.equal(calculateTripStatus(legacy,options),'CONCLUIDO');
+  assert.equal(classify(legacy),'concluidos');
+  assert.equal(isBilled(legacy),true);
+  assert.equal(calculateTripStatus({...legacy,billingRuleVersion:2},options),'HORA NF');
+  assert.equal(calculateTripStatus({...ready,hora_nf:''}),'CONCLUIDO');
+});
+test('servidor, resumo e filtro beta compartilham regra de faturamento',()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const beta=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  assert.match(server,/requireBillingCompletion:betaWorkspace/);
+  assert.match(server,/doc\.secao = betaBilling\.isBilled\(doc\)/);
+  assert.match(server,/payload\.billingRuleVersion=2/);
+  assert.match(server,/if\(!betaBilling\.isLegacyCompleted\(current\)\|\|fiscalChanged\)/);
+  assert.match(server,/nextData\.status = patch\.status;\s*if\(betaEditable\)\{patch\.secao=betaMode\.persistedSection\(nextData\)/);
+  assert.match(app,/FrotasysBetaTripSections\.isBilled\(viagem\)/);
+  assert.match(app,/!window\.FrotasysBetaTripSections\.isBilled\(viagem\)/);
+  assert.match(app,/'HORA NF':'#0E7490'/);
+  assert.match(beta,/'EMITIR CTE', 'HORA NF', 'ADIANTAMENTO \/ DESCARGA'/);
 });
