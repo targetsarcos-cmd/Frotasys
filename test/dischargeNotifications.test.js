@@ -93,7 +93,7 @@ test('máscara contínua limita ano a quatro dígitos e valida datas e horas',()
   const start=js.indexOf('  function maskDischargeDate('),end=js.indexOf('  function attachDischargeMask(',start);
   const {maskDischargeDate:mask,parseDischargeDate:parse}=new Function(js.slice(start,end)+'return {maskDischargeDate,parseDischargeDate};')();
   assert.equal(mask('271120260830'),'27/11/2026 08:30');
-  assert.equal(mask('27112026083099'),'27/11/2026 08:30');
+  assert.equal(mask('27112026083099'),'27112026083099'); // reject overflow rather than silently truncate
   assert.equal(mask(''),'');
   assert.equal(mask('27112026'),'27/11/2026');
   assert.equal(parse('27/11/2026 08:30'),'08:30 27/11/2026');
@@ -101,7 +101,7 @@ test('máscara contínua limita ano a quatro dígitos e valida datas e horas',()
   assert.equal(parse('27/11/2026 24:30'),null);
   assert.equal(parse('29/02/2028 23:59'),'23:59 29/02/2028');
   assert.equal(parse('27/11/202666 08:30'),null);
-  assert.match(js,/input\.maxLength=16/);
+  assert.match(js,/input\.maxLength=32/);
   assert.match(js,/event\.key!=='Backspace'&&event\.key!=='Delete'/);
   assert.doesNotMatch(js,/Agendamento: '\+schedule/);
   assert.match(js,/patch=\{adiantamentoOk:true\}/);
