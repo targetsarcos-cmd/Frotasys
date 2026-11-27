@@ -1,4 +1,5 @@
 'use strict';
+const billing=require('../public/js/workspace-trip-sections');
 
 function betaMode(env) {
   return env.BETA_ENABLE_WRITES === 'true' ? 'editable' : 'readonly';
@@ -40,7 +41,7 @@ function createEditableClient(env) {
 }
 
 function persistedSection(trip) {
-  return String(trip?.nota ?? '').trim() ? 'arcos' : 'agenciando';
+  return billing.isBilled(trip) ? 'arcos' : 'agenciando';
 }
 
 module.exports = { betaMode, validateEditableConfig, createEditableClient, persistedSection };

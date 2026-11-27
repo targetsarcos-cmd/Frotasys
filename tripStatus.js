@@ -1,3 +1,5 @@
+const billing=require('./public/js/workspace-trip-sections');
+
 function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
@@ -62,7 +64,10 @@ function calculateTripStatus(trip = {}, options = {}) {
   const hasDt = hasValue(trip.dt);
   const isScheduled = trip.programado === true;
 
-  if (hasTransportDocuments(trip)) {
+  const legacyBilling=options.requireBillingCompletion && options.preserveLegacyCompleted && billing.isLegacyCompleted(trip);
+  const documentsReady=options.requireBillingCompletion && !legacyBilling ? billing.hasBillingDocuments(trip) : hasTransportDocuments(trip);
+  if (documentsReady) {
+    if(options.requireBillingCompletion && !legacyBilling && !billing.hasInvoiceHours(trip))return 'HORA NF';
     const advanceOk = hasAdvanceOk(trip);
     const legacyCompleted = options.preserveLegacyCompleted && trip.descargaVerde === undefined && normalizeText(trip.status) === 'CONCLUIDO';
     const hasDischargeTime = hasValue(trip.descarga) && (!options.requireDischargeConfirmation || trip.descargaVerde === true || legacyCompleted);
