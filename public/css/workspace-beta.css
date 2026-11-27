@@ -477,7 +477,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table thead .rate-category-title {font-size:12px;font-weight:700}
 #beta-fretes .rate-table thead .rate-agregado-title {background:#f8e8b0;color:#6b4c08;border-top-left-radius:7px;border-top-right-radius:7px;border-left:1px solid #c4d4e2}
 #beta-fretes .rate-table thead .rate-terceiros-title {background:#f6d3d4;color:#842d36;border-top-left-radius:7px;border-left:1px solid #c4d4e2}
-#beta-fretes .rate-table thead .rate-route-title {background:#e4edf4;color:#284a62;font-size:14px;font-weight:700}
+#beta-fretes .rate-table thead .rate-route-title {background:var(--beta-navy);color:#fff;font-size:14px;font-weight:700}
 #beta-fretes .rate-table thead tr:first-child th {border-top:1px solid #c4d4e2}
 #beta-fretes .rate-table thead tr:first-child th:first-child {border-left:1px solid #c4d4e2;border-radius:7px}
 #beta-fretes .rate-table thead tr:first-child th:last-child {border-top-right-radius:7px}
@@ -495,7 +495,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-fretes .rate-table .rate-gap td {height:12px;padding:0;border:0;background:transparent;line-height:0;font-size:0}
 #beta-fretes .rate-table .rate-route:first-of-type tr:first-child > * {border-top:1px solid #c4d4e2}
 #beta-fretes .rate-table thead button {color:inherit;background:none;border:0;font:inherit}
-#beta-fretes .rate-table .rate-route-title button {color:#284a62;font-size:14px;font-weight:700}
+#beta-fretes .rate-table .rate-route-title button {color:#fff;font-size:14px;font-weight:700}
 #beta-fretes .rate-table thead th.rate-category-gap,#beta-fretes .rate-table .rate-route tr > td.rate-category-gap {width:14px;min-width:14px;max-width:14px;padding:0;border:0;border-radius:0;background:#edf2f6;box-shadow:none;cursor:default}
 #beta-fretes .rate-table .rate-route td[data-group=agregado]:has(+ .rate-category-gap) {border-right-color:#c4d4e2}
 #beta-fretes .rate-table .rate-route .rate-category-gap + td {border-left:1px solid #c4d4e2}
