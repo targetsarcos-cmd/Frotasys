@@ -58,7 +58,7 @@ test('painel preserva o editor e apresenta notificações sem textos redundantes
   assert.doesNotMatch(js,/Nota compartilhada da operação|Registre pendências, agendamentos/);
   assert.match(js,/id="beta-discharge-list"/);
   assert.match(js,/reminderPanel.querySelector\('\.beta-reminder-text-slot'\).append\(reminderText\)/);
-  assert.match(js,/setInterval\(refreshDischargeNotifications,30000\)/);
+  assert.match(js,/setInterval\(refreshDischargeNotifications,120000\)/);
 });
 
 test('adiantamento usa regra existente e exclui frota, liberados e concluídos legados',()=>{
