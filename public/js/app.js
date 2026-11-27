@@ -546,7 +546,11 @@ async function apiFetch(url, opts = {}) {
       alert(data.error || 'N\u00e3o foi poss\u00edvel salvar.');
       return null;
     }
-    if (res.headers.get('X-Viagem-Evento') === '1') showEventWarning(data.frete);
+    if (res.headers.get('X-Viagem-Evento') === '1') {
+      const beta=isBetaTripWorkspace();
+      const warning=beta?[String(data.frete||'').trim(),String(data.obs||'').trim()].filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join('\n\n'):data.frete;
+      showEventWarning(warning,beta?data._id:null,beta?data.placa:'');
+    }
     return data;
   } catch (e) {
     console.error('API error:', e);
@@ -556,20 +560,49 @@ async function apiFetch(url, opts = {}) {
 
 // ─── UI INIT ──────────────────────────────────────────────────────────────────
 const pendingEventWarnings = [];
+const acknowledgedEventWarnings = new Set();
+let activeEventWarning=null;
 
-function showEventWarning(text) {
+function showEventWarning(text,id=null,plate='') {
   const dialog = document.getElementById('event-warning');
+  if(id && (acknowledgedEventWarnings.has(id)||activeEventWarning?.id===id||pendingEventWarnings.some(item=>item.id===id)))return;
   if (dialog.open) {
-    pendingEventWarnings.push(text);
+    pendingEventWarnings.push({text,id,plate});
     return;
   }
-  document.getElementById('event-warning-text').textContent = text;
+  activeEventWarning={text,id,plate};
+  document.getElementById('event-warning-text').textContent = id ? (plate?plate+'\n\n':'')+text : text;
+  document.getElementById('event-warning-error').textContent='';
   dialog.showModal();
 }
 
 function initUI() {
-  document.getElementById('event-warning').addEventListener('close', () => {
-    if (pendingEventWarnings.length) showEventWarning(pendingEventWarnings.shift());
+  const eventDialog=document.getElementById('event-warning');
+  eventDialog.addEventListener('cancel',event=>{if(activeEventWarning?.id)event.preventDefault();});
+  eventDialog.querySelector('form').addEventListener('submit',async event=>{
+    const warning=activeEventWarning;
+    if(!warning?.id)return;
+    event.preventDefault();
+    const button=eventDialog.querySelector('button');
+    if(button.disabled)return;
+    button.disabled=true;
+    const error=document.getElementById('event-warning-error');
+    error.textContent='';
+    try{
+      const saved=await apiFetch('/api/viagens/'+encodeURIComponent(warning.id)+'/evento-cte-confirmacao',{method:'POST'});
+      if(!saved?.ok){error.textContent='Não foi possível confirmar. Clique em OK novamente.';return;}
+      acknowledgedEventWarnings.add(warning.id);
+      eventDialog.close();
+    }finally{button.disabled=false;}
+  });
+  eventDialog.addEventListener('close', () => {
+    activeEventWarning=null;
+    while(pendingEventWarnings.length){
+      const next=pendingEventWarnings.shift();
+      if(next.id && acknowledgedEventWarnings.has(next.id))continue;
+      showEventWarning(next.text,next.id,next.plate);
+      break;
+    }
   });
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;

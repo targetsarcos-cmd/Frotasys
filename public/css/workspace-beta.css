@@ -780,3 +780,17 @@ body.workspace-beta #search-modal-overlay .modal-footer {background:#fff;border-
 #beta-shell .tablewrap :is(th,td)[data-field=descarga] {padding-inline:5px}
 #beta-shell .tablewrap td[data-field=descarga] .sched {white-space:nowrap;font-variant-numeric:tabular-nums}
 body.workspace-beta #agendamento-palete[hidden] {display:none!important}
+
+/* Operational event alert, shown only after the CT-e is saved. */
+body.workspace-beta #event-warning {box-sizing:border-box;width:min(440px,calc(100vw - 32px));padding:0;background:#fff;color:#173950;border:1px solid #c4d4e2;border-radius:8px;box-shadow:0 16px 50px #142b4240;font-family:'Segoe UI',Arial,sans-serif;overflow:auto}
+body.workspace-beta #event-warning::backdrop {background:#142b4266;backdrop-filter:blur(2px)}
+body.workspace-beta #event-warning[open] {animation:beta-event-warning-enter .18s ease-out}
+body.workspace-beta #event-warning h2 {margin:0;padding:16px 20px;background:var(--beta-navy,#142b42);color:white;font-size:17px;line-height:1.3}
+body.workspace-beta #event-warning-text {margin:18px 20px;padding:14px 15px;border-left:3px solid #bd8a28;background:#f9f5e9;border-radius:4px;color:#173950;font:500 14px/1.55 'Segoe UI',sans-serif;white-space:pre-wrap;overflow-wrap:anywhere}
+body.workspace-beta #event-warning-error {margin:0 20px 12px;color:#a92f37;font-size:12px}
+#event-warning-error:empty {display:none}
+body.workspace-beta #event-warning form {padding:12px 20px;border-top:1px solid #d9e4ed;background:#f3f7fb;text-align:right}
+body.workspace-beta #event-warning button {min-width:80px;padding:8px 16px;border-radius:4px;background:#135c92;color:#fff;border:1px solid #135c92;font:600 13px 'Segoe UI',sans-serif}
+body.workspace-beta #event-warning button:disabled {opacity:.55;cursor:wait}
+@keyframes beta-event-warning-enter {from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){body.workspace-beta #event-warning[open]{animation:none}}

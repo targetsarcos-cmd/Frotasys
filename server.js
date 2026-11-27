@@ -14,7 +14,10 @@ const betaMode = betaEditable && require('./beta/mode');
 const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
 const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
   betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
-const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
+const { calculateTripStatus: calculateBaseTripStatus, hasAdvanceOk } = require('./tripStatus');
+function calculateTripStatus(trip) {
+  return calculateBaseTripStatus(trip,{requireDischargeConfirmation:betaWorkspace,preserveLegacyCompleted:true});
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -132,6 +135,7 @@ const VIAGEM_FIELD_LABELS = {
   agendamento: 'AGENDAMENTO',
   descarga: 'DESCARGA',
   descargaVerde: 'CONFIRMAÇÃO DA DESCARGA',
+  eventoCteConfirmadoEm: 'AVISO DE EVENTO CONFIRMADO',
   telefone: 'TELEFONE',
   telefone2: 'TELEFONE 2',
   produto: 'PRODUTO',
@@ -312,6 +316,7 @@ app.get('/login', (req, res) => {
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
   if (doc.status === 'PROGRAMAR' && doc.dt) doc.status = calculateTripStatus(doc);
+  if (betaWorkspace && ['ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA','CONCLUIDO'].includes(doc.status)) doc.status = calculateTripStatus(doc);
   if (isViagemBloqueada(doc)) {
     doc.status = 'CONCLUIDO';
     doc.usuario = '';
@@ -2497,16 +2502,43 @@ if (betaEditable) {
   });
 }
 
+function betaEventWarningText(trip) {
+  return [String(trip.frete || '').trim(),String(trip.obs || '').trim()].filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join('\n\n');
+}
+function shouldWarnBetaEvent(previous,patch,saved) {
+  return Boolean(patch.cte && saved.cte && saved.cte !== formatDocumentNumber(previous?.cte,'cte') &&
+    !saved.eventoCteConfirmadoEm && betaEventWarningText(saved));
+}
 function sendSavedViagem(res, previous, patch, saved) {
-  if (patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
+  if (betaEditable ? shouldWarnBetaEvent(previous,patch,saved) :
+      patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
     res.set('X-Viagem-Evento', '1');
   }
   return res.json(saved);
 }
 
+app.post('/api/viagens/:id/evento-cte-confirmacao', requireViagemEditor, async(req,res)=>{
+  if(!betaEditable)return res.status(403).json({error:'Disponível somente no beta editável.'});
+  try{
+    for(let attempt=0;attempt<3;attempt++){
+      const current=await findOneById(TABLES.viagens,req.params.id);
+      if(!current)return res.status(404).json({error:'Viagem não encontrada.'});
+      if(current.eventoCteConfirmadoEm)return res.json({ok:true});
+      if(!String(current.cte||'').trim())return res.status(409).json({error:'O CT-e não está preenchido.'});
+      const patch={eventoCteConfirmadoEm:new Date().toISOString(),eventoCteConfirmadoPor:req.authUser.id};
+      const entries=buildViagemHistoryEntries(current,{eventoCteConfirmadoEm:patch.eventoCteConfirmadoEm},req.userProfile);
+      patch.historico=appendViagemHistory(current,entries);
+      const saved=await updateDoc(TABLES.viagens,req.params.id,patch,current);
+      if(saved){broadcast({type:'viagem_atualizada',payload:saved});return res.json({ok:true});}
+    }
+    return res.status(409).json({error:'A viagem foi alterada. Tente confirmar novamente.'});
+  }catch(e){return res.status(500).json({error:'Não foi possível registrar a confirmação do evento.'});}
+});
+
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
+    if(betaEditable){delete payload.eventoCteConfirmadoEm;delete payload.eventoCteConfirmadoPor;if(payload.descargaVerde===undefined)payload.descargaVerde=false;}
     if (betaEditable && (Object.hasOwn(payload, 'comentariosBeta') || Object.hasOwn(payload, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (betaEditable) {
@@ -2573,6 +2605,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
+    if(betaEditable){delete patch.eventoCteConfirmadoEm;delete patch.eventoCteConfirmadoPor;}
     if (betaEditable && (Object.hasOwn(patch, 'comentariosBeta') || Object.hasOwn(patch, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });

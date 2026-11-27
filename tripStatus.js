@@ -55,7 +55,7 @@ function hasAdvanceOk(trip = {}) {
     ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'].includes(normalizeText(trip.conclusaoContrato));
 }
 
-function calculateTripStatus(trip = {}) {
+function calculateTripStatus(trip = {}, options = {}) {
   const registrationStatus = hasRegistrationPending(trip);
   if (registrationStatus) return registrationStatus;
 
@@ -64,7 +64,8 @@ function calculateTripStatus(trip = {}) {
 
   if (hasTransportDocuments(trip)) {
     const advanceOk = hasAdvanceOk(trip);
-    const hasDischargeTime = hasValue(trip.descarga);
+    const legacyCompleted = options.preserveLegacyCompleted && trip.descargaVerde === undefined && normalizeText(trip.status) === 'CONCLUIDO';
+    const hasDischargeTime = hasValue(trip.descarga) && (!options.requireDischargeConfirmation || trip.descargaVerde === true || legacyCompleted);
     if (advanceOk && hasDischargeTime) return 'CONCLUIDO';
     if (!advanceOk && hasDischargeTime) return 'ADIANTAMENTO';
     if (advanceOk && !hasDischargeTime) return 'AGENDAR DESCARGA';
