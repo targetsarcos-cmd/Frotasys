@@ -2478,11 +2478,10 @@ function renderFreteQueryPanel() {
     <div class="frete-query-head">
       <div>
         <strong>Consulta R&aacute;pida</strong>
-        <span>Selecione origem, destino e eixo para localizar o valor cadastrado.</span>
+        <span>${isBetaTripWorkspace() ? "Selecione origem, destino e eixos para comparar Agregado e Terceiros." : "Selecione origem, destino e eixo para localizar o valor cadastrado."}</span>
       </div>
     </div>
-    <div class="frete-query-form">
-      ${isBetaTripWorkspace() ? '<label><span>Categoria</span><select id="frete-query-group" onchange="updateFreteQueryGroup()"><option value="rows">Terceiros</option><option value="agregado">Agregado</option></select></label>' : ''}
+    <div class="frete-query-form" ${isBetaTripWorkspace() ? 'onchange="document.getElementById(\'frete-query-result\').textContent=\'\'"' : ''}>
       <label>
         <span>ORIGEM</span>
         <select id="frete-query-origem" onchange="updateFreteQueryDestinations()">
@@ -2501,7 +2500,7 @@ function renderFreteQueryPanel() {
       </label>
       <button type="button" class="btn-primary" onclick="consultarFreteValor()">Consultar</button>
     </div>
-    <div class="frete-query-result" id="frete-query-result"></div>
+    <div class="frete-query-result" id="frete-query-result" aria-live="polite"></div>
   </section>`;
 }
 
@@ -2804,7 +2803,8 @@ function updateFreteQueryGroup() {
 }
 
 function freteEixosOptions() {
-  return [...new Set(freteRoutes().flatMap(route => (route[freteQueryGroup()] || []).map(row => row.eixos)).filter(Boolean))]
+  const groups = isBetaTripWorkspace() ? ['agregado', 'rows'] : [freteQueryGroup()];
+  return [...new Set(freteRoutes().flatMap(route => groups.flatMap(group => (route[group] || []).map(row => row.eixos))).filter(Boolean))]
     .sort((a, b) => a - b);
 }
 
@@ -2832,6 +2832,10 @@ function consultarFreteValor() {
 
   const eixoNumber = Number(String(eixo).replace(/\D/g, ''));
   const route = freteRoutes().find(item => item.origem === normalizeOption(origem) && item.destino === normalizeOption(destino));
+  if (isBetaTripWorkspace()) {
+    result.innerHTML = renderBetaFreteQueryResult(route, eixoNumber);
+    return;
+  }
   const row = route?.[freteQueryGroup()]?.find(item => Number(item.eixos) === eixoNumber);
 
   if (!row) {
