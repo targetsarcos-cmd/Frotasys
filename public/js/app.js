@@ -364,6 +364,7 @@ async function startApp() {
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
+  window.FrotasysVersionNotice?.start();
   applyWhiteTheme();
   loadTableColumnsPreference();
   if(isBetaTripWorkspace()) await loadBetaColumnPreference();
