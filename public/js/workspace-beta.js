@@ -473,7 +473,6 @@
     if (!counts.has(tab)) tab = 'all';
     const term = normalize(byId('tableSearch').value.trim());
     const labels = new Set();
-    let visible = 0, collapsedCompleted = 0;
     for (const [sec] of sections) {
       const table = byId('table-'+sec), body = byId('tbody-'+sec);
       let n = 0;
@@ -493,8 +492,6 @@
       if (separator) separator.hidden = tab !== 'all' || !!term;
       const empty = table.parentElement.querySelector('.beta-empty');
       empty.hidden = n > 0 || !body.querySelector('tr[data-id]');
-      if (sec === 'concluidos' && !completedExpanded) collapsedCompleted = n;
-      else visible += n;
       const cols = visibleTableFields();
       const fields = [...cols,{key:'actions'}];
       const layout = window.FrotasysBetaTableLayout.layout(fields.map(f=>f.key));
@@ -507,7 +504,6 @@
       return sample;
     }));
     syncStatusWidth();
-    byId('footCount').textContent = 'Exibindo '+visible+' de '+scope.length+' viagens'+(collapsedCompleted ? ' · '+collapsedCompleted+' concluído(s) recolhido(s)' : '');
     const tabs = byId('tabs');
     const buttons = new Map([...tabs.children].map(button => [button.dataset.tab,button]));
     for (const [key,button] of buttons) if (!counts.has(key)) button.remove();
@@ -547,9 +543,6 @@
       };
       active.append(chip);
     }
-    const name = loggedUserDisplayName();
-    shell.querySelector('.username').textContent = name;
-    shell.querySelector('.avatar').textContent = initialsFromName(name);
     byId('export').hidden = !isAdmin();
     shell.querySelector('[data-nav="Usuários"]').hidden = !isAdmin();
   }
