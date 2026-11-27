@@ -284,7 +284,17 @@ server.on('upgrade', (req, socket, head) => {
 if (betaWorkspace) {
   const {resolveVersion,stampVersion}=require('./beta/release-version');
   const releaseVersion=resolveVersion();
-  app.get('/api/version',(_req,res)=>res.set('Cache-Control','no-store, max-age=0').json({version:releaseVersion}));
+  const deployGate=require('./beta/render-deploy-gate').createDeployGate();
+  app.get('/api/version',async(req,res)=>{
+    res.set('Cache-Control','no-store, max-age=0');
+    // A browser already on this build never needs an update check against Render.
+    if(req.query.loaded===releaseVersion)return res.json({version:releaseVersion,confirmed:false});
+    if(!runtime.production||!await deployGate.verify(releaseVersion)){
+      // Old clients ignore non-200 replies, so they also won't block prematurely.
+      return res.status(503).json({confirmed:false});
+    }
+    return res.json({version:releaseVersion,confirmed:true});
+  });
   app.use((req, res, next) => {
     if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();

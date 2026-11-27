@@ -46,8 +46,8 @@
       if(tracker.pending()){showPending();return;}
       checking=true;
       try{
-        const response=await fetch('/api/version',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(10000)});
-        if(response.ok){const data=await response.json();tracker.observe(data.version);}
+        const response=await fetch('/api/version?loaded='+encodeURIComponent(loaded),{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(10000)});
+        if(response.ok){const data=await response.json();if(data.confirmed===true)tracker.observe(data.version);}
       }catch(_error){/* A transient outage is not a new release. */}
       finally{checking=false;showPending();}
     }
