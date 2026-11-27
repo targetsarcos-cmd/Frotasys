@@ -51,7 +51,7 @@ function setup() {
     }
   };
   class SocketServer {
-    clients = [{ readyState: 1, send: msg => messages.push(JSON.parse(msg)) }];
+    clients = [{ readyState: 1, authenticated:true, send: msg => messages.push(JSON.parse(msg)) }];
     on() {}
   }
   class Workbook {
@@ -61,12 +61,13 @@ function setup() {
     }
   }
   const dependencies = {
-    express, http: { createServer: () => ({ listen: noop }) }, ws: { Server: SocketServer, OPEN: 1 },
+    express, http: { createServer: () => ({ listen: noop, on: noop }) }, ws: { Server: SocketServer, OPEN: 1 },
     cors: noop, path, 'fs/promises': {}, zlib: {}, exceljs: { Workbook },
-    './supabaseClient': db, './tripStatus': require('../tripStatus')
+    './supabaseClient': db, './tripStatus': require('../tripStatus'),
+    dotenv:{config:noop}, './beta/runtime':require('../beta/runtime'), './beta/authenticated-socket':require('../beta/authenticated-socket')
   };
   const server = vm.createContext({
-    __dirname: root, process: { env: {} }, require(name) {
+    __dirname: root, process: { env: { FROTASYS_INTERFACE_BETA:'classic' } }, require(name) {
       assert.ok(Object.hasOwn(dependencies, name), name);
       return dependencies[name];
     }
