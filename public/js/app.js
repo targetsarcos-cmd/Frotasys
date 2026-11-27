@@ -1215,9 +1215,10 @@ async function submitHeaderSearch(event) {
   if (isBetaTripWorkspace()) {
     openSearchModal();
     clearAdvancedSearch({focus:false});
-    document.getElementById('beta-search-term').value = term;
+    const searchInput = document.getElementById('beta-search-term');
+    searchInput.value = term;
+    searchInput.focus();
     if (term) await searchBetaCarregamentos();
-    else document.getElementById('beta-search-term')?.focus();
     return;
   }
   if (!term) {
