@@ -397,19 +397,25 @@ test('consulta frete beta separa rotas sem desagrupar categorias e eixos',()=>{
   assert.doesNotMatch(render([routes[0]]),/class="rate-gap"/);
   assert.match(css,/\.rate-gap td\s*\{height:12px;padding:0;border:0;background:transparent/);
   assert.match(css,/\.rate-table\s*\{[^}]*border-collapse:separate;border-spacing:0/);
-  assert.equal((html.match(/<td class="rate-category-gap" aria-hidden="true">/g)||[]).length,3);
-  assert.match(html,/<th class="rate-category-gap" rowspan="2" aria-hidden="true">/);
+  assert.equal((html.match(/<td class="rate-category-gap" aria-hidden="true">/g)||[]).length,6);
+  assert.equal((html.match(/<th class="rate-category-gap" rowspan="2" aria-hidden="true">/g)||[]).length,2);
+  assert.equal((html.match(/<col(?: |>)/g)||[]).length,9);
   assert.match(html,/rate-agregado-title" scope="colgroup" colspan="3">Agregado/);
   assert.match(html,/rate-terceiros-title" scope="colgroup" colspan="3">Terceiros/);
-  assert.match(html,/class="rate-gap" aria-hidden="true"><tr><td colspan="8">/);
-  assert.match(render([]),/colspan="8">Nenhuma rota/);
+  assert.match(html,/class="rate-gap" aria-hidden="true"><tr><td colspan="9">/);
+  assert.match(render([]),/colspan="9">Nenhuma rota/);
   assert.match(js,/cell\.classList\.contains\('rate-category-gap'\)/);
   assert.match(css,/\.rate-gap-col\s*\{width:14px\}/);
   assert.match(css,/\.rate-category-gap\s*\{width:14px;min-width:14px;max-width:14px;padding:0;border:0/);
   assert.match(css,/\.rate-agregado-title\s*\{background:#f8e8b0;color:#6b4c08/);
   assert.match(css,/\.rate-terceiros-title\s*\{background:#f6d3d4;color:#842d36/);
-  assert.match(css,/\.rate-route-title button\s*\{color:#fff;font-size:14px/);
-  assert.match(css,/\.rate-route th\[scope=rowgroup\]\s*\{[^}]*background:#152e43;[^}]*color:#fff;font-size:14px/);
+  assert.match(css,/\.rate-route-title button\s*\{color:#284a62;font-size:14px/);
+  assert.match(css,/\.rate-route th\[scope=rowgroup\]\s*\{[^}]*background:#e4edf4;[^}]*border-radius:7px;color:#173950;font-size:14px/);
+  assert.match(css,/\.rate-agregado-title\s*\{[^}]*border-top-left-radius:7px/);
+  assert.match(css,/\.rate-field-first\s*\{[^}]*border-bottom-left-radius:7px/);
+  assert.match(css,/\.rate-route-title\s*\{background:#e4edf4;color:#284a62/);
+  assert.match(css,/tr:first-child \.rate-category-gap \+ td\s*\{border-top-left-radius:7px/);
+  assert.match(css,/tr:last-child \.rate-category-gap \+ td\s*\{border-bottom-left-radius:7px/);
 });
 
 test('consulta rapida beta compara PF e PJ de agregado e terceiros sem inventar valores',()=>{
