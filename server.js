@@ -303,6 +303,10 @@ const appCache = new Map();
 async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
   const cached = appCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.value;
+  if(appCache.size>=256){
+    for(const [k,v] of appCache)if(v.expires<=Date.now())appCache.delete(k);
+    if(appCache.size>=256){for(const [k,v] of appCache){if(v.expires!==Infinity){appCache.delete(k);break;}}}
+  }
   const entry = { value: Promise.resolve().then(loader), expires: Infinity };
   appCache.set(key, entry);
   try {
@@ -317,9 +321,43 @@ async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
 
 // Trip writes affect the notification list. The other cached reads use
 // configuration records, user settings or operations.
-function invalidateAfterWrite(table) {
-  if (table === TABLES.viagens) invalidateCache('pending-trips-');
-  else invalidateCache();
+function invalidateAfterWrite(table, after, before) {
+  if (table === TABLES.viagens) {
+    invalidateCache('dashboard-trips-');
+    if(!betaWorkspace)return;
+    const {localDay,dischargeNotification,advanceNotification}=require('./beta/discharge-notifications');
+    const day=localDay();
+    const signature=doc=>JSON.stringify(doc?[dischargeNotification(doc,day),advanceNotification(doc,day)]:[null,null]);
+    if((!after&&!before)||signature(after)!==signature(before)){
+      invalidateCache('pending-trips-');
+      try{broadcast({type:'pending_notifications_changed'});}catch(error){console.warn('Falha ao notificar alteração de pendências:',error.message);}
+    }
+    return;
+  }
+  if(table===TABLES.metas){invalidateCache('dashboard-metas-');return;}
+  if(table===TABLES.operacoes){invalidateCache('operacoes-list');return;}
+  if(table!==TABLES.configOptions){invalidateCache();return;}
+  const doc=after||before;
+  if(!doc?.field){invalidateCache();return;}
+  if(doc.field===WORK_EVENT_FIELD||doc.field==='__beta_table_preferences')return;
+  if(doc.field===WORK_SESSION_FIELD){
+    invalidateCache('public-work-sessions');
+    if(!after||!before||after.workTypeId!==before.workTypeId)invalidateCache('work-types-usage');
+    return;
+  }
+  if(doc.field===WORK_TYPE_FIELD){invalidateCache('work-types-');invalidateCache('public-work-sessions');return;}
+  if(doc.field===USER_PROFILE_SETTINGS_FIELD){
+    invalidateCache('profile-settings-'+doc.userId);
+    invalidateCache('public-work-sessions');
+    return;
+  }
+  const keys={
+    [WAITLIST_FIELD]:'waitlist',[FRETE_CONSULT_FIELD]:'frete-consultas',
+    [LEMBRETE_FIELD]:'lembrete-global',[OPERATION_MESSAGES_FIELD]:'operation-messages'
+  };
+  if(keys[doc.field]){invalidateCache(keys[doc.field]);return;}
+  if(CONFIG_FIELDS.includes(doc.field)||doc.field===CONFIG_SEED_MARKER_FIELD){invalidateCache('config-catalog');return;}
+  invalidateCache();
 }
 
 function invalidateCache(prefix = '') {
@@ -472,7 +510,7 @@ async function insertDoc(table, data) {
   });
   const { data: inserted, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT).single();
   if (error) throw error;
-  invalidateAfterWrite(table);
+  invalidateAfterWrite(table,{...inserted.dados,id:inserted.id,_id:inserted.id});
   return supabaseToFrontend(inserted);
 }
 
@@ -485,7 +523,7 @@ async function insertDocs(table, docs) {
   }));
   const { data, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT);
   if (error) throw error;
-  invalidateAfterWrite(table);
+  for(const row of data||[])invalidateAfterWrite(table,{...row.dados,id:row.id,_id:row.id});
   return (data || []).map(supabaseToFrontend);
 }
 
@@ -503,7 +541,7 @@ async function updateDoc(table, id, patch, snapshot) {
   const { data, error } = snapshot ? await result.maybeSingle() : await result.single();
   if (error) throw error;
   if (!data) return null;
-  invalidateAfterWrite(table);
+  invalidateAfterWrite(table,{...data.dados,id:data.id,_id:data.id},current);
   return supabaseToFrontend(data);
 }
 
@@ -516,16 +554,16 @@ async function updateWhere(table, predicate, patchFactory) {
   }));
 }
 
-async function deleteDoc(table, id) {
+async function deleteDoc(table, id, snapshot) {
   const { error } = await supabase.from(table).delete().eq('id', id);
   if (error) throw error;
-  invalidateAfterWrite(table);
+  invalidateAfterWrite(table,null,snapshot);
 }
 
 async function deleteWhere(table, predicate) {
   const docs = await selectDocs(table);
   const targets = docs.filter(predicate);
-  return Promise.all(targets.map(doc => deleteDoc(table, doc._id)));
+  return Promise.all(targets.map(doc => deleteDoc(table, doc._id,doc)));
 }
 
 function sortDocs(docs, sortSpec) {
@@ -1053,7 +1091,7 @@ function publicWorkType(type = {}, usageCount = 0) {
 }
 
 async function workTypeDocs({ includeDeleted = false } = {}) {
-  const docs = await selectDocsByJson(TABLES.configOptions, { field: WORK_TYPE_FIELD });
+  const docs = await cachedValue('work-types-list',()=>selectDocsByJson(TABLES.configOptions, { field: WORK_TYPE_FIELD }),120000);
   return docs
     .filter(doc => includeDeleted || !doc.deletedAt)
     .sort((a, b) => Number(a.displayOrder || 999) - Number(b.displayOrder || 999) || String(a.name || '').localeCompare(String(b.name || '')));
@@ -1104,12 +1142,14 @@ function expiredWorkPatch(session,now=Date.now()){
   return require('./beta/work-day-rollover').expiredWorkPatch(session,now);
 }
 
-async function activeWorkSessions() {
-  const docs = await selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD }, { in: { status: ['active', 'paused'] } });
+async function activeWorkSessions(tripId) {
+  const filters={field:WORK_SESSION_FIELD,...(tripId?{tripId}:{})};
+  const docs = await selectDocsByJson(TABLES.configOptions, filters, { in: { status: ['active', 'paused'] } });
   return docs.filter(session => !session.deletedAt && isWorkSessionOpen(session) && !expiredWorkPatch(session));
 }
 
 async function publicWorkSessions() {
+  const result=await cachedValue('public-work-sessions',async()=>{
   const [sessions, types] = await Promise.all([activeWorkSessions(), workTypeDocs({ includeDeleted: true })]);
   const typeMap = Object.fromEntries(types.map(type => [type._id, publicWorkType(type)]));
   const userIds=[...new Set(sessions.map(session=>session.userId).filter(Boolean))];
@@ -1120,10 +1160,12 @@ async function publicWorkSessions() {
     userAvatarSnapshot: avatars.get(session.userId)||'',
     workType: typeMap[session.workTypeId] || null
   }));
+  },15000);
+  return result.filter(session=>!expiredWorkPatch(session));
 }
 
 async function publicWorkSession(session = {}) {
-  const [type,settings]=await Promise.all([session.workTypeId?findOneById(TABLES.configOptions,session.workTypeId):null,userProfileSettings(session.userId)]);
+  const [type,settings]=await Promise.all([session.workTypeId?findOneById(TABLES.configOptions,session.workTypeId):null,cachedValue('profile-settings-'+session.userId,()=>userProfileSettings(session.userId),300000)]);
   return {
     ...session,
     userAvatarSnapshot: settings.avatarUrl||'',
@@ -1132,12 +1174,12 @@ async function publicWorkSession(session = {}) {
 }
 
 async function openSessionForTrip(tripId) {
-  const sessions = await activeWorkSessions();
+  const sessions = await activeWorkSessions(tripId);
   return sessions.find(session => session.tripId === tripId) || null;
 }
 
 async function completeOpenWorkSessionsForTrip(tripId, profile = {}) {
-  const sessions = (await activeWorkSessions()).filter(session => session.tripId === tripId);
+  const sessions = (await activeWorkSessions(tripId)).filter(session => session.tripId === tripId);
   if (!sessions.length) return false;
 
   const now = new Date().toISOString();
@@ -1164,6 +1206,7 @@ async function sweepExpiredWorkSessions(now=Date.now()){
     for(;;){
       let query=supabase.from(TABLES.configOptions).select('id,startedAt:dados->>startedAt,status:dados->>status')
         .eq('dados->>field',WORK_SESSION_FIELD).in('dados->>status',['active','paused'])
+        .lt('dados->>startedAt',require('./beta/work-day-rollover').dayStartISO(now))
         .order('id',{ascending:true}).limit(200);
       if(cursor!==null)query=query.gt('id',cursor);
       const {data,error}=await query;
@@ -1683,7 +1726,7 @@ async function profileForUser(userId) {
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const settings = await cachedValue('profile-settings-' + data.user_id, () => userProfileSettings(data.user_id));
+  const settings = await cachedValue('profile-settings-' + data.user_id, () => userProfileSettings(data.user_id),300000);
   return publicProfile({ ...data, ...settings });
 }
 
@@ -1779,15 +1822,8 @@ app.put('/api/auth/profile', async (req, res) => {
       ...req.userProfile,
       ...saved
     };
-    await updateWhere(TABLES.configOptions, item =>
-      item.field === WORK_SESSION_FIELD &&
-      item.userId === req.authUser.id &&
-      isWorkSessionOpen(item),
-      {
-        userNameSnapshot: profileDisplayName(profile),
-        userAvatarSnapshot: ''
-      }
-    );
+    const activeSessions=await selectDocsByJson(TABLES.configOptions,{field:WORK_SESSION_FIELD,userId:req.authUser.id},{in:{status:['active','paused']}});
+    await Promise.all(activeSessions.filter(isWorkSessionOpen).map(session=>updateDoc(TABLES.configOptions,session._id,{userNameSnapshot:profileDisplayName(profile),userAvatarSnapshot:''},session)));
     const sessions = await publicWorkSessions();
     broadcast({ type: 'perfil_atualizado', payload: { userId: req.authUser.id, profile } });
     broadcast({ type: 'work_sessions_atualizadas', payload: sessions });
@@ -1805,8 +1841,8 @@ app.get('/api/app-state', async (req, res) => {
     const metaFilters = data ? { data } : {};
 
     const [viagensRaw, metas, workSessions] = await Promise.all([
-      selectDocsByJson(TABLES.viagens, viagemFilters, data ? {} : { limit: DEFAULT_RANGE_LIMIT }),
-      selectDocsByJson(TABLES.metas, metaFilters),
+      cachedValue('dashboard-trips-'+data,()=>selectDocsByJson(TABLES.viagens, viagemFilters, data ? {} : { limit: DEFAULT_RANGE_LIMIT }),10000),
+      cachedValue('dashboard-metas-'+data,()=>selectDocsByJson(TABLES.metas, metaFilters),15000),
       publicWorkSessions()
     ]);
     const viagens = sortDocs(viagensRaw, { createdAt: 1 });
@@ -1850,7 +1886,7 @@ app.get('/api/lembretes/descargas-pendentes', async (req, res) => {
     const { localDay } = require('./beta/discharge-notifications');
     const day = localDay();
     const pending = await cachedValue('pending-trips-' + day,
-      () => pendingReader(day), 30_000);
+      () => pendingReader(day), 60_000);
     res.set('Cache-Control','no-store').json(pending);
   } catch (error) {
     console.error('Falha nas notificações de descarga:',error.message);
@@ -2036,7 +2072,7 @@ app.post('/api/lista-espera', requireViagemEditor, async (req, res) => {
       return res.status(400).json({ error: 'Informe ao menos PLACA ou NOME.' });
     }
 
-    const ordem = item.ordem || (await countDocs(TABLES.configOptions, doc => doc.field === WAITLIST_FIELD)) + 1;
+    const ordem = item.ordem || (await countDocs(TABLES.configOptions,null,{field:WAITLIST_FIELD})) + 1;
     const inserted = await insertDoc(TABLES.configOptions, {
       field: WAITLIST_FIELD,
       value: `${item.placa} ${item.nome}`.trim(),
@@ -2079,7 +2115,7 @@ app.delete('/api/lista-espera/:id', requireViagemEditor, async (req, res) => {
   try {
     const current = await findOneById(TABLES.configOptions, req.params.id);
     if (!current || current.field !== WAITLIST_FIELD) return res.status(404).json({ error: 'Item não encontrado.' });
-    await deleteDoc(TABLES.configOptions, req.params.id);
+    await deleteDoc(TABLES.configOptions, req.params.id,current);
     broadcast({ type: 'lista_espera_atualizada', payload: await waitlistDocs() });
     res.json({ ok: true });
   } catch (e) {
@@ -2112,7 +2148,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       .select(SUPABASE_DOC_SELECT);
     if (removeError) throw removeError;
     if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
-    invalidateCache();
+    invalidateAfterWrite(TABLES.configOptions,null,item);
 
     const viagem = await insertDoc(TABLES.viagens, trip);
 
@@ -2829,7 +2865,7 @@ app.delete('/api/viagens/:id', (req, res, next) => betaEditable ? requireViagemE
     if (isViagemBloqueada(current) && req.userProfile?.role !== 'admin') {
       return res.status(403).json({ error: 'Viagem concluída. Somente administrador pode excluir.' });
     }
-    await deleteDoc(TABLES.viagens, req.params.id);
+    await deleteDoc(TABLES.viagens, req.params.id,current);
     broadcast({ type: 'viagem_removida', payload: { _id: req.params.id, id: req.params.id } });
     res.json({ ok: true });
   } catch (e) {
@@ -3086,9 +3122,9 @@ app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => 
       if (!orderedNormalized.includes(doc.normalized)) orderedNormalized.push(doc.normalized);
     });
 
-    await Promise.all(orderedNormalized.map((normalized, index) =>
-      updateWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized, { ordem: index + 1 })
-    ));
+    const ranks=new Map(orderedNormalized.map((normalized,index)=>[normalized,index+1]));
+    await Promise.all(docs.filter(doc=>ranks.has(doc.normalized)&&Number(doc.ordem)!==ranks.get(doc.normalized)).map(doc=>updateDoc(TABLES.configOptions,doc._id,{ordem:ranks.get(doc.normalized)},doc).then(saved=>{if(!saved)throw Error('Configuração alterada durante a edição. Tente novamente.');})));
+
 
     if (field === 'origem') {
       await Promise.all(orderedNormalized.map((normalized, index) =>
@@ -3144,7 +3180,7 @@ async function deleteConfigOptionRecords(field, normalized) {
   const exact = await selectDocsByJson(TABLES.configOptions, { field, normalized });
   const scoped = await selectDocsByJson(TABLES.configOptions, { field });
   const targets = [...new Map([...exact,...scoped.filter(matches)].map(doc=>[doc._id,doc])).values()];
-  await Promise.all(targets.map(doc=>deleteDoc(TABLES.configOptions,doc._id)));
+  await Promise.all(targets.map(doc=>deleteDoc(TABLES.configOptions,doc._id,doc)));
   const remaining = await selectDocsByJson(TABLES.configOptions, { field });
   if (remaining.some(matches) || await countDocs(TABLES.configOptions,null,{field,normalized})) {
     throw new Error('A opção ainda consta no banco de dados. Tente novamente.');
@@ -3248,8 +3284,8 @@ async function sweepBetaTripContent(now=Date.now()){
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  if(runtime.production&&betaWorkspace){void sweepExpiredWorkSessions();setInterval(()=>void sweepExpiredWorkSessions(),15000).unref();}
-  if(betaEditable){void sweepBetaTripContent();setInterval(()=>void sweepBetaTripContent(),60_000).unref();}
+  if(runtime.production&&betaWorkspace){void sweepExpiredWorkSessions();setInterval(()=>void sweepExpiredWorkSessions(),60000).unref();}
+  if(betaEditable){void sweepBetaTripContent();setInterval(()=>void sweepBetaTripContent(),300_000).unref();}
   const os = require('os');
   const nets = os.networkInterfaces();
   console.log(`\nServidor rodando!`);

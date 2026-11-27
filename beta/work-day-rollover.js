@@ -6,6 +6,14 @@ function localDay(value){
   const parts=dayFormat.formatToParts(date);
   return ['year','month','day'].map(type=>parts.find(p=>p.type===type).value).join('-');
 }
+function dayStartISO(now=Date.now()){
+  const end=Number(new Date(now));
+  const day=localDay(end);
+  if(!day)throw Error('Data inválida');
+  let low=end-36*3600000,high=end;
+  while(high-low>1){const mid=Math.floor((low+high)/2);if(localDay(mid)===day)high=mid;else low=mid;}
+  return new Date(high).toISOString();
+}
 function expiredWorkPatch(session,now=Date.now()){
   if(!['active','paused'].includes(session.status)||!session.startedAt)return null;
   const start=Date.parse(session.startedAt),end=Number(new Date(now));
@@ -17,4 +25,4 @@ function expiredWorkPatch(session,now=Date.now()){
   while(high-low>1){const mid=Math.floor((high+low)/2);if(localDay(mid)===day)low=mid;else high=mid;}
   return {status:'completed',completedAt:new Date(high).toISOString(),completionReason:'day_rollover'};
 }
-module.exports={localDay,expiredWorkPatch};
+module.exports={localDay,dayStartISO,expiredWorkPatch};

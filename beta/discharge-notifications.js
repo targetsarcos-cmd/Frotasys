@@ -88,7 +88,7 @@ function createPendingReader(client,table) {
     const row = latest.data?.[0];
     const revision = JSON.stringify([day,total.count,row?.id,row?.updated_at]);
     if (cached?.revision === revision && cached.expires > Date.now()) return cached.value;
-    const entry = { revision, expires: Date.now() + 600_000, value: listPendingNotifications(client,table,day) };
+    const entry = { revision, expires: Date.now() + 1_800_000, value: listPendingNotifications(client,table,day) };
     cached = entry;
     try { return await entry.value; }
     catch (error) { if (cached === entry) cached = null; throw error; }

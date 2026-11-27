@@ -1152,7 +1152,7 @@ test('rotina de expiracao beta grava apenas recados, pagina e publica as alterac
   assert.equal(details,202);
   await sweep(Date.parse(recent)+betaRetention.RETENTION_MS);
   assert.equal(writes.length,201);
-  assert.match(server,/setInterval\(\(\)=>void sweepBetaTripContent\(\),60_000\)\.unref\(\)/);
+  assert.match(server,/setInterval\(\(\)=>void sweepBetaTripContent\(\),300_000\)\.unref\(\)/);
   assert.match(server,/retentionPatch\.comentariosBeta \?\? current\.comentariosBeta/);
   const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
   assert.match(app,/state\.selectedViagemDetails\.obs=payload\.obs/);

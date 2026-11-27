@@ -37,7 +37,7 @@ function validateEditableConfig(env) {
 function createEditableClient(env) {
   const { url, key } = validateEditableConfig(env);
   const { createClient } = require('@supabase/supabase-js');
-  return createClient(url, key, { auth: { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false } });
+  return createClient(url, key, { auth: { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false },global:{fetch:require('./egress-metrics').createMeasuredFetch(globalThis.fetch.bind(globalThis))} });
 }
 
 function persistedSection(trip) {
