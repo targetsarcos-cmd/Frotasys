@@ -505,3 +505,34 @@ test('menu beta agrupa atalhos operacionais entre dashboard e relatorios',()=>{
   assert.match(css,/\.nav-operation-submenu button\s*\{[^}]*min-height:32px;[^}]*font-size:11px/);
   assert.match(css,/\.nav-compact \.app-sidebar \.nav-operation-heading\s*\{display:none\}/);
 });
+
+test('Escape fecha drawer beta sem descartar edicao ativa ou salvar em andamento',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const start=app.indexOf('function shouldCloseBetaDrawerOnEscape(');
+  const end=app.indexOf('function closeTravelDrawer()',start);
+  assert.ok(start>=0 && end>start);
+  let beta=true,open=true,modal=false;
+  const state={drawerSaving:false,drawerActiveField:'',lembreteOpen:false};
+  const document={getElementById:id=>id==='travel-drawer'?{classList:{contains:key=>key==='is-open'&&open}}:null,querySelectorAll:()=>[{classList:{contains:key=>key==='hidden'&&!modal}}]};
+  const shouldClose=new Function('isBetaTripWorkspace','state','document',app.slice(start,end)+'return shouldCloseBetaDrawerOnEscape;')(()=>beta,state,document);
+  assert.equal(shouldClose({}),true);
+  assert.equal(shouldClose({defaultPrevented:true}),false);
+  assert.equal(shouldClose({repeat:true}),false);
+  open=false; assert.equal(shouldClose({}),false); open=true;
+  modal=true; assert.equal(shouldClose({}),false); modal=false;
+  state.drawerSaving=true; assert.equal(shouldClose({}),false); state.drawerSaving=false;
+  state.drawerActiveField='nota'; assert.equal(shouldClose({}),false); state.drawerActiveField='';
+  state.lembreteOpen=true; assert.equal(shouldClose({}),false); state.lembreteOpen=false;
+  beta=false; assert.equal(shouldClose({}),false); beta=true;
+  assert.equal(shouldClose({}),true);
+  assert.match(app,/const closeBetaDrawer = shouldCloseBetaDrawerOnEscape\(e\);/);
+  assert.match(app,/if \(closeBetaDrawer\) \{\s*e\.preventDefault\(\);\s*closeTravelDrawer\(\);/);
+  assert.match(app,/if \(isBetaTripWorkspace\(\)\) e\.stopPropagation\(\);\s*state\.drawerActiveField = '';/);
+});
+
+test('titulo da pagina inicial beta e Dashboard sem renomear submenu',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  assert.match(html,/<h1>Dashboard<\/h1>/);
+  assert.match(html,/<div class="shell-location">[\s\S]*?<strong>Dashboard<\/strong>/);
+  assert.match(html,/class="nav-operation-group" role="group" aria-label="Controle operacional"/);
+});

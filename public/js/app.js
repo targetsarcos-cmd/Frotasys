@@ -701,6 +701,7 @@ function initUI() {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (isBetaTripWorkspace()) e.stopPropagation();
       state.drawerActiveField = '';
       state.drawerDraft = null;
       renderTravelDrawer();
@@ -819,6 +820,7 @@ function initUI() {
     }
 
     if (e.key === 'Escape') {
+      const closeBetaDrawer = shouldCloseBetaDrawerOnEscape(e);
       closeModal();
       closeSearchModal();
       closeFreteConsultModal();
@@ -834,6 +836,10 @@ function initUI() {
       hideContratoMenu();
       hidePhoneChoiceMenu();
       cancelInlineEdit();
+      if (closeBetaDrawer) {
+        e.preventDefault();
+        closeTravelDrawer();
+      }
     }
   });
 
@@ -3149,6 +3155,13 @@ async function loadSelectedViagemDetails(id) {
   if (idx !== -1) state.viagens[idx] = detail;
   renderAll();
   focusDrawerActiveField();
+}
+
+function shouldCloseBetaDrawerOnEscape(event) {
+  if (!isBetaTripWorkspace() || event.defaultPrevented || event.repeat || state.drawerSaving || state.drawerActiveField || state.lembreteOpen) return false;
+  const drawer = document.getElementById('travel-drawer');
+  if (!drawer?.classList.contains('is-open')) return false;
+  return ![...document.querySelectorAll('.modal-overlay')].some(overlay => !overlay.classList.contains('hidden'));
 }
 
 function closeTravelDrawer() {
