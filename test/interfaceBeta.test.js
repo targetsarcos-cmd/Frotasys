@@ -446,3 +446,35 @@ test('consulta rapida beta compara PF e PJ de agregado e terceiros sem inventar 
   assert.match(css,/\.beta-rate-result-rows h4\s*\{background:#f6d3d4/);
   assert.match(css,/\.frete-query-form\s*\{display:grid;grid-template-columns:repeat\(3,/);
 });
+
+test('lembrete beta mantem editor original, salvamento e painel nao modal',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  for(const [id,variable,slot] of [['reminder-text','reminderText','text'],['reminder-status','reminderStatus','status'],['reminder-note-close','reminderClose','close']]){
+    assert.ok(js.includes("const "+variable+" = byId('"+id+"');"));
+    assert.ok(js.includes("reminderPanel.querySelector('.beta-reminder-"+slot+"-slot').append("+variable+");"));
+  }
+  assert.match(app,/if \(state\.lembreteOpen && !isBetaTripWorkspace\(\) && !e\.target\.closest\('\.header-reminder'\)\)/);
+  assert.match(app,/setTimeout\(\(\) => saveReminder\(texto\), 450\)/);
+  assert.match(app,/if \(isBetaTripWorkspace\(\) && typeof syncBetaReminderPanel === 'function'\) syncBetaReminderPanel\(\)/);
+  let hidden=true,expanded,bodyOpen;
+  const input={value:'ABC'};
+  const count={textContent:''};
+  const panel={classList:{contains:key=>key==='hidden'&&hidden}};
+  const nav={setAttribute:(key,value)=>{assert.equal(key,'aria-expanded');expanded=value;}};
+  const document={getElementById:id=>({'reminder-note':panel,'reminder-text':input,'beta-reminder-count':count}[id]),querySelector:()=>nav,body:{classList:{toggle:(key,value)=>{assert.equal(key,'beta-reminder-open');bodyOpen=value;}}}};
+  const sync=new Function('document',js.slice(js.indexOf('function syncBetaReminderPanel()'))+'return syncBetaReminderPanel;')(document);
+  sync();
+  assert.equal(expanded,'false');
+  assert.equal(bodyOpen,false);
+  assert.equal(count.textContent,'3 / 2.000 caracteres');
+  hidden=false; input.value='ABCD';
+  sync();
+  assert.equal(expanded,'true');
+  assert.equal(bodyOpen,true);
+  assert.equal(count.textContent,'4 / 2.000 caracteres');
+  assert.match(css,/#reminder-note\.hidden\s*\{display:none\}/);
+  assert.match(css,/#reminder-note\s*\{position:fixed;inset:var\(--shell,64px\) 0 0 auto;transform:none;[^}]*width:min\(420px,100vw\)/);
+  assert.match(css,/beta-reminder-open #beta-shell \.workspace\s*\{margin-right:420px\}/);
+});

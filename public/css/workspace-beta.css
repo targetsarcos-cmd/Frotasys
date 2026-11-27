@@ -48,7 +48,36 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .matrix .product-detail td:first-child {padding-inline-start:38px!important}
 #beta-shell #beta-breakdown {padding:12px 24px;color:#456078}
 #beta-shell #beta-breakdown summary {cursor:pointer}
-#beta-shell #reminder-note {position:fixed;left:50%;top:50%;right:auto;transform:translate(-50%,-50%);max-height:calc(100dvh - 24px);z-index:520}
+/* Non-modal shared note, scoped to the beta workspace. */
+#beta-shell #reminder-note {position:fixed;inset:var(--shell,64px) 0 0 auto;transform:none;z-index:520;width:min(420px,100vw);height:auto;max-height:none;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;box-sizing:border-box;background:#edf2f6;border:0;border-left:1px solid #c4d4e1;border-radius:0;box-shadow:-6px 0 22px #12324c24;font:13px/1.45 'Segoe UI',Arial,sans-serif;color:#173950}
+#beta-shell #reminder-note.hidden {display:none}
+#beta-shell .beta-reminder-head {display:flex;align-items:center;gap:11px;padding:16px 17px;background:#142b42;color:#fff}
+#beta-shell .beta-reminder-icon {width:24px;height:24px;color:#b8d9f3;flex-shrink:0}
+#beta-shell .beta-reminder-head h2 {margin:0;color:#fff;font:700 20px/1.2 'Segoe UI',sans-serif}
+#beta-shell .beta-reminder-head p {margin:3px 0 0;color:#b8ccdf;font-size:12px}
+#beta-shell .beta-reminder-close-slot {margin-left:auto;flex:none}
+#beta-shell #reminder-note-close {display:grid;place-items:center;width:30px;height:30px;border:1px solid #ffffff50;border-radius:4px;background:transparent;color:#fff;font:400 23px/1 'Segoe UI',sans-serif}
+#beta-shell #reminder-note-close:hover {background:#ffffff20}
+#beta-shell .beta-reminder-body {min-height:0;overflow:auto;display:flex;flex-direction:column;gap:14px;padding:16px}
+#beta-shell .beta-reminder-info {display:flex;align-items:center;gap:8px;padding:10px 12px;background:#e0eaf4;border:1px solid #cbdce9;border-radius:5px;color:#284f6d;font-size:12px;font-weight:600}
+#beta-shell .beta-reminder-indicator {width:7px;height:7px;flex:none;border-radius:50%;background:#3979a6}
+#beta-shell .beta-reminder-editor {display:flex;flex-direction:column;flex:1 1 auto;min-height:180px;gap:9px;padding:13px;border:1px solid #cddde9;border-radius:6px;background:#fff}
+#beta-shell .beta-reminder-editor label {font-size:12px;font-weight:700;color:#284a62}
+#beta-shell .beta-reminder-text-slot {display:flex;flex:1;min-height:0}
+#beta-shell #reminder-text {flex:1;width:100%;min-width:0;height:auto;min-height:120px;padding:12px;box-sizing:border-box;resize:none;border:1px solid #b8cbdc;border-radius:4px;background:#fff;color:#173950;caret-color:#075b9e;font:400 14px/1.65 'Segoe UI',sans-serif}
+#beta-shell #reminder-text:focus {outline:2px solid #96c5e6;outline-offset:1px;border-color:#3684be}
+#beta-shell #reminder-text::placeholder {color:#728696}
+#beta-shell .beta-reminder-count {text-align:right;font-size:11px;color:#60778a;font-variant-numeric:tabular-nums}
+#beta-shell .beta-reminder-hint {margin:0;font-size:12px;color:#526b80}
+#beta-shell .beta-reminder-footer {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 16px;border-top:1px solid #cddde9;background:#fff;color:#60778a;font-size:11px}
+#beta-shell #reminder-status {display:flex;align-items:center;gap:7px;color:#526b80;font-size:12px;font-weight:600;text-align:left}
+#beta-shell #reminder-status::before {content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+#beta-shell #reminder-status[data-state="Salvo"] {color:#16734c}
+#beta-shell #reminder-status[data-state="Salvando..."] {color:#89620c}
+#beta-shell #reminder-status[data-state="Erro ao salvar"] {color:#b52f3b}
+#beta-shell [data-nav="Lembretes"][aria-expanded=true] {background:#204866;color:#fff}
+@media(min-width:1251px){body.workspace-beta.beta-reminder-open #beta-shell .workspace {margin-right:420px}}
+@media(max-width:680px){#beta-shell #reminder-note {top:0;width:100vw}}
 #beta-shell .top .search {padding:0 8px;gap:4px;overflow:hidden}
 #beta-shell #btn-advanced-search {position:static;inset:auto;display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;box-shadow:none;transform:none}
 #beta-shell #btn-advanced-search:hover,#beta-shell #btn-advanced-search:focus-visible {background:#ffffff20}

@@ -83,8 +83,39 @@
   byId('newTrip').onclick = () => { if (canEditViagens()) byId('btn-nova-viagem').click(); };
   const reminder = document.createElement('div');
   reminder.className = 'header-reminder';
-  reminder.append(byId('reminder-note'));
+  const reminderPanel = byId('reminder-note');
+  const reminderText = byId('reminder-text');
+  const reminderStatus = byId('reminder-status');
+  const reminderClose = byId('reminder-note-close');
+  const reminderNav = shell.querySelector('[data-nav="Lembretes"]');
+  reminderNav.setAttribute('aria-controls','reminder-note');
+  reminderNav.setAttribute('aria-expanded','false');
+  reminderPanel.setAttribute('role','region');
+  reminderPanel.setAttribute('aria-labelledby','beta-reminder-title');
+  reminderPanel.innerHTML = `
+    <header class="beta-reminder-head">
+      <svg class="beta-reminder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5h12v16H4V5h4m0 0V3h8v4H8zM8 11h8m-8 4h8"/></svg>
+      <div><h2 id="beta-reminder-title">Lembretes</h2><p>Anotações operacionais</p></div>
+      <div class="beta-reminder-close-slot"></div>
+    </header>
+    <div class="beta-reminder-body">
+      <div class="beta-reminder-info"><span class="beta-reminder-indicator"></span><span>Nota compartilhada da operação</span></div>
+      <div class="beta-reminder-editor"><label for="reminder-text">Anotações</label><div class="beta-reminder-text-slot"></div><div id="beta-reminder-count" class="beta-reminder-count">0 / 2.000 caracteres</div></div>
+      <p class="beta-reminder-hint">Registre pendências, agendamentos e informações importantes para a equipe. As alterações são salvas automaticamente.</p>
+    </div>
+    <footer class="beta-reminder-footer"><div class="beta-reminder-status-slot"></div><span>Esc para fechar</span></footer>`;
+  reminderClose.textContent = '×';
+  reminderClose.title = 'Fechar lembretes';
+  reminderText.placeholder = 'Escreva aqui as pendências e os lembretes da operação...';
+  reminderStatus.setAttribute('role','status');
+  reminderStatus.setAttribute('aria-live','polite');
+  reminderPanel.querySelector('.beta-reminder-close-slot').append(reminderClose);
+  reminderPanel.querySelector('.beta-reminder-text-slot').append(reminderText);
+  reminderPanel.querySelector('.beta-reminder-status-slot').append(reminderStatus);
+  reminderText.addEventListener('input',syncBetaReminderPanel);
+  reminder.append(reminderPanel);
   shell.append(reminder, byId('travel-drawer'));
+  syncBetaReminderPanel();
   const globalSearch = adopt('globalSearch','header-search-input');
   globalSearch.setAttribute('form', 'header-search-form');
   const advanced = byId('btn-advanced-search');
@@ -339,3 +370,15 @@
   paintRows();
   paintSummary();
 })();
+
+function syncBetaReminderPanel() {
+  const panel = document.getElementById('reminder-note');
+  const input = document.getElementById('reminder-text');
+  const count = document.getElementById('beta-reminder-count');
+  const nav = document.querySelector('#beta-shell [data-nav="Lembretes"]');
+  if (!panel || !input || !count || !nav) return;
+  count.textContent = input.value.length.toLocaleString('pt-BR')+' / 2.000 caracteres';
+  const open = !panel.classList.contains('hidden');
+  nav.setAttribute('aria-expanded',String(open));
+  document.body.classList.toggle('beta-reminder-open',open);
+}
