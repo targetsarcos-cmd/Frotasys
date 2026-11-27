@@ -96,7 +96,7 @@ const UNIQUE_VIAGEM_FIELDS = [
 const DOCUMENT_NUMBER_FIELDS = ['nota', 'contrato', 'cte', 'manifesto'];
 const CONTRATO_CONCLUSAO_OPTIONS = ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'];
 const LOCKED_EDITABLE_FIELDS = ['descarga', 'marcadoAmarelo', 'trocaMotoristaConcluida'];
-const VIAGEM_MAX_FUTURE_DAYS = 3;
+const VIAGEM_MAX_FUTURE_DAYS = 5;
 const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
 const DEFAULT_RANGE_LIMIT = 200;
 const VIAGENS_SEARCH_LIMIT = 200;
@@ -1451,17 +1451,18 @@ function localDateStr(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function maxViagemDate() {
-  const date = new Date();
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() + VIAGEM_MAX_FUTURE_DAYS);
-  return localDateStr(date);
+function maxViagemDate(now=new Date()) {
+  // The operation uses Brazil time even if the Render host runs in UTC.
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const get=type=>parts.find(part=>part.type===type).value;
+  const date=new Date(get('year')+'-'+get('month')+'-'+get('day')+'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate()+VIAGEM_MAX_FUTURE_DAYS);
+  return date.toISOString().slice(0,10);
 }
 
 function viagemDateValidationError(value) {
   const data = String(value || '').trim();
-  if (!data) return '';
-  if (!isIsoDate(data)) return 'Informe uma data válida para a viagem.';
+  if (!data || !isIsoDate(data)) return 'Informe uma data válida para a viagem.';
   const maxDate = maxViagemDate();
   if (data > maxDate) {
     return `Não é permitido lançar viagem com data superior a ${VIAGEM_MAX_FUTURE_DAYS} dias do dia atual. Data máxima: ${formatDateBR(maxDate)}.`;
@@ -2795,7 +2796,8 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       payload.trocaMotoristaConcluida = false;
     }
     const dateError = viagemDateValidationError(payload.data);
-    if (dateError) return res.status(400).json({ error: dateError });
+    if (dateError) return res.status(400).json({ error: dateError, field:'data' });
+    payload.data=String(payload.data).trim();
     if (!normalizeUniqueValue(payload.produto)) {
       return res.status(400).json({ error: 'Selecione PRODUTO para salvar a viagem.', field: 'produto' });
     }
