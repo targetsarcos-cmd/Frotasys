@@ -2652,6 +2652,30 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
   }
 });
 
+// Read-only, on-demand audit. Never correct ambiguous historical dates automatically.
+app.get('/api/viagens/descarga-audit', requireAdmin, async (req,res)=>{
+  try{
+    const end=require('./beta/discharge-notifications').localDay();
+    const date=new Date(end+'T12:00:00Z');date.setUTCDate(date.getUTCDate()-2);
+    const start=date.toISOString().slice(0,10);
+    const invalid=[];let checked=0,cursor=null;
+    for(;;){
+      let query=supabase.from(TABLES.viagens).select('id,data:dados->>data,placa:dados->>placa,descarga:dados->>descarga,descargaVerde:dados->descargaVerde')
+        .gte('dados->>data',start).lte('dados->>data',end).order('id',{ascending:true}).limit(200);
+      if(cursor!==null)query=query.gt('id',cursor);
+      const {data,error}=await query;if(error)throw error;
+      for(const row of data||[]){
+        checked++;
+        const raw=String(row.descarga??'').trim();
+        if(!validDescargaDateTime(raw)||(!raw&&row.descargaVerde===true))invalid.push({...row,reason:raw?'DATA_HORA_INVALIDA':'CONFIRMADA_SEM_DATA'});
+      }
+      if(!data||data.length<200)break;
+      cursor=data[data.length-1].id;
+    }
+    res.set('Cache-Control','no-store').json({start,end,checked,invalid});
+  }catch(e){res.status(500).json({error:'Não foi possível auditar as descargas.'});}
+});
+
 app.get('/api/viagens/:id', async (req, res) => {
   try {
     const {data,error}=await supabase.from(TABLES.viagens).select(tripProjection()).eq('id',req.params.id).maybeSingle();
