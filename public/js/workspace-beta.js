@@ -300,7 +300,7 @@
               async function persistDischarge(confirm){
                 if(!canEditViagens()||mark.disabled)return;
                 const patch=dischargeEditPatch(input.value,confirm);
-                if(!patch){dischargeDrafts.set(item.id,input.value);input.focus();input.setAttribute('aria-invalid','true');error.textContent='Informe uma data e hora válidas.';return;}
+                if(!patch){dischargeDrafts.set(item.id,input.value);input.focus();input.setAttribute('aria-invalid','true');return;}
                 mark.disabled=save.disabled=cancel.disabled=input.disabled=true;
                 dischargeWrites++;
                 error.textContent='';
