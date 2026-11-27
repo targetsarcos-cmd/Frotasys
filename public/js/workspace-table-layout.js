@@ -2,7 +2,7 @@
 (function(root){
   'use strict';
   const fixed={tipo:104,trabalho:132,actions:72};
-  const flexible={placa:85,nome:120,origem:112,destino:98,produto:78,peso:68,agendamento:94,frete:100};
+  const flexible={placa:85,nome:120,origem:112,destino:98,produto:78,peso:68,agendamento:94,descarga:154,frete:100};
   function layout(keys){
     const hasStatus=keys.includes('status');
     const fixedWidth=keys.reduce((sum,key)=>sum+(fixed[key]||0),0);
@@ -18,7 +18,7 @@
   }
 
   const keys=['placa','nome','tipo','origem','destino','produto','peso','agendamento','frete','eixos','carroceria','pamcard','telefone','telefone2','descarga','dt','cte','manifesto','contrato','nota','hora_nf','num_pedagio','vlr_pedagio','valor_adiantamento','horas','usuario','data','obs','status','trabalho'];
-  const extraKeys=keys.filter(k=>!['placa','nome','tipo','origem','destino','produto','peso','agendamento','status','trabalho'].includes(k));
+  const extraKeys=keys.filter(k=>!['placa','nome','tipo','origem','destino','produto','peso','agendamento','descarga','status','trabalho'].includes(k));
   function normalizePreference(value){
     const input=value&&typeof value==='object'?value:{};
     const order=[...new Set(Array.isArray(input.order)?input.order.filter(k=>keys.includes(k)):[])];
@@ -32,12 +32,22 @@
   }
   function orderFields(fields,preference){
     const rank=new Map(normalizePreference(preference).order.map((key,i)=>[key,i]));
-    return fields.slice().sort((a,b)=>(rank.get(a.key)??Infinity)-(rank.get(b.key)??Infinity));
+    const ordered=fields.slice().sort((a,b)=>(rank.get(a.key)??Infinity)-(rank.get(b.key)??Infinity));
+    const descarga=ordered.find(field=>field.key==='descarga');
+    if(!descarga||!ordered.some(field=>field.key==='agendamento'))return ordered;
+    const next=ordered.filter(field=>field.key!=='descarga');
+    next.splice(next.findIndex(field=>field.key==='agendamento')+1,0,descarga);
+    return next;
   }
   function moveField(order,key,target){
-    if(key===target||!order.includes(key)||!order.includes(target))return order.slice();
-    const next=order.filter(k=>k!==key);
-    next.splice(order.indexOf(target),0,key);
+    if(key==='descarga'||key===target||!order.includes(key)||!order.includes(target))return order.slice();
+    const paired=order.includes('agendamento')&&order.includes('descarga');
+    const base=paired?order.filter(k=>k!=='descarga'):order;
+    if(paired&&target==='descarga')target='agendamento';
+    if(key===target)return order.slice();
+    const next=base.filter(k=>k!==key);
+    next.splice(base.indexOf(target),0,key);
+    if(paired)next.splice(next.indexOf('agendamento')+1,0,'descarga');
     return next;
   }
   const api={layout,normalizePreference,orderFields,moveField};
