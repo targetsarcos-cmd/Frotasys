@@ -558,7 +558,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 
 
 /* Beta global search: dense workspace table, independent scrolling, full detail on demand. */
-body.workspace-beta #search-modal-overlay {background:#142b4266;backdrop-filter:blur(2px)}
+body.workspace-beta #search-modal-overlay {z-index:650;background:#142b4266;backdrop-filter:blur(2px)}
 body.workspace-beta #search-modal-overlay .search-modal {width:min(1440px,94vw);max-width:94vw;height:min(820px,92dvh);max-height:92dvh;background:#edf2f6;border:1px solid #c4d4e2;border-radius:8px;overflow:hidden;color:#173950;font-family:'Segoe UI',Arial,sans-serif}
 body.workspace-beta #search-modal-overlay .modal-header {background:#142b42;color:#fff;padding:14px 20px;font-size:18px;font-weight:700;flex:none}
 body.workspace-beta #search-modal-overlay .modal-close {background:transparent;border:1px solid #ffffff50;color:#fff;border-radius:4px}
