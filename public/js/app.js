@@ -376,6 +376,7 @@ async function startApp() {
   }
   initUI();
   applyPermissions();
+  if(isBetaTripWorkspace() && location.hash==='#usuarios'){if(isAdmin())loadUsers();else location.hash='';}
   loadAll();
 }
 
@@ -1128,8 +1129,152 @@ async function undoLastAction() {
   if (!undone) setUndoAction(action);
 }
 
+
+let betaUsers=[], betaUserSelected=null, betaUsersRequest=0, betaUsersBusy=false;
+const betaUserRoles={admin:'Administrador',operador:'Operador',visualizador:'Visualizador'};
+
+function prepareBetaUsersPage(){
+  const page=document.getElementById('beta-users');
+  if(!page)return;
+  const el=id=>document.getElementById(id);
+  const create=el('user-create-form');
+  el('beta-users-create').append(create);
+  create.autocomplete='off';
+  el('user-create-email').autocomplete='off';
+  el('user-create-password').autocomplete='new-password';
+  el('beta-users-new').onclick=()=>{
+    if(!isAdmin()||isBetaReadOnly())return;
+    const panel=el('beta-users-create');panel.hidden=!panel.hidden;
+    if(!panel.hidden){create.reset();el('user-create-message').textContent='';el('user-create-nome').focus();}
+    else{create.reset();el('user-create-password').value='';}
+  };
+  el('beta-users-refresh').onclick=()=>loadUsers();
+  for(const id of ['beta-users-search','beta-users-role','beta-users-status'])el(id).addEventListener('input',renderBetaUsers);
+  el('beta-users-table').addEventListener('click',e=>{
+    const button=e.target.closest('[data-beta-user-index]');
+    if(button)openBetaUserEditor(betaUsers[Number(button.dataset.betaUserIndex)]);
+  });
+  el('beta-users-edit-close').onclick=closeBetaUserEditor;
+  el('beta-users-edit-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const user=betaUserSelected;
+    if(!user)return;
+    const patch={nome:el('beta-user-edit-name').value.trim(),email:el('beta-user-edit-email').value.trim()};
+    if(!betaUserProtected(user)){patch.role=el('beta-user-edit-role').value;patch.ativo=el('beta-user-edit-status').value==='active';}
+    if(patch.email!==user.email&&!confirm('Alterar o e-mail de login desta conta no Supabase?'))return;
+    await mutateBetaUser('/api/users/'+encodeURIComponent(user.id),'PUT',patch,'Usuário atualizado com sucesso.',updated=>{
+      if(updated.user_id===state.userProfile?.user_id){state.userProfile={...state.userProfile,...updated};applyPermissions();}
+      openBetaUserEditor(updated,false);
+    });
+  });
+  el('beta-users-password-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const user=betaUserSelected,password=el('beta-user-password').value;
+    if(!user)return;
+    if(password!==el('beta-user-password-confirm').value){betaUserEditMessage('As senhas não coincidem.',true);return;}
+    if(!confirm('Redefinir a senha de '+user.nome+'?'))return;
+    await mutateBetaUser('/api/users/'+encodeURIComponent(user.id)+'/password','PUT',{password},'Senha redefinida no Supabase Auth.',()=>e.target.reset());
+  });
+  el('beta-users-delete-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const user=betaUserSelected;
+    if(!user||betaUserProtected(user))return;
+    const confirmEmail=el('beta-user-delete-email').value.trim();
+    if(confirmEmail!==user.email){betaUserEditMessage('Digite o e-mail exato da conta.',true);return;}
+    if(!confirm('Excluir definitivamente '+user.nome+' do Supabase Auth e do sistema compartilhado? Esta ação não pode ser desfeita.'))return;
+    await mutateBetaUser('/api/users/'+encodeURIComponent(user.id),'DELETE',{confirmEmail},'Usuário excluído do Supabase Auth e do cadastro.',()=>{
+      closeBetaUserEditor();
+      el('beta-users-message').textContent='Usuário excluído do Supabase Auth e do cadastro.';
+    });
+  });
+  window.addEventListener('hashchange',()=>{
+    if(location.hash!=='#usuarios'){
+      closeBetaUserEditor();create.reset();el('beta-users-create').hidden=true;
+    }
+  });
+}
+
+function betaUserProtected(user){
+  return !!user && user.user_id===state.userProfile?.user_id;
+}
+function betaUserEditMessage(message,error=false){
+  const el=document.getElementById('beta-users-edit-message');
+  el.textContent=message;el.classList.toggle('is-error',error);
+}
+function closeBetaUserEditor(){
+  betaUserSelected=null;
+  const panel=document.getElementById('beta-users-editor');
+  if(!panel)return;
+  panel.hidden=true;
+  panel.querySelectorAll('form').forEach(form=>form.reset());
+  betaUserEditMessage('');
+}
+function openBetaUserEditor(user,scroll=true){
+  if(!user||!isAdmin()||isBetaReadOnly()||betaUsersBusy&&scroll)return;
+  const el=id=>document.getElementById(id);
+  betaUserSelected=user;
+  el('beta-users-editor').hidden=false;
+  el('beta-users-edit-title').textContent='Editar usuário · '+user.nome;
+  el('beta-users-edit-email').textContent=user.email;
+  el('beta-user-edit-name').value=user.nome;
+  el('beta-user-edit-email').value=user.email;
+  el('beta-user-edit-role').value=user.role;
+  el('beta-user-edit-status').value=user.ativo?'active':'inactive';
+  const protectedUser=betaUserProtected(user);
+  el('beta-user-edit-role').disabled=protectedUser;
+  el('beta-user-edit-status').disabled=protectedUser;
+  el('beta-users-delete-form').hidden=protectedUser;
+  el('beta-users-password-form').reset();
+  el('beta-users-delete-form').reset();
+  betaUserEditMessage(protectedUser?'Sua conta está protegida contra desativação, exclusão e alteração de perfil.':'');
+  if(scroll){el('beta-users-editor').scrollIntoView({block:'start',behavior:'smooth'});el('beta-user-edit-name').focus({preventScroll:true});}
+}
+async function mutateBetaUser(url,method,body,success,after){
+  if(betaUsersBusy||!isAdmin()||isBetaReadOnly())return;
+  betaUsersBusy=true;
+  const editor=document.getElementById('beta-users-editor');
+  const buttons=[...editor.querySelectorAll('button')];
+  buttons.forEach(button=>button.disabled=true);
+  betaUserEditMessage('Salvando...');
+  try{
+    const result=await apiFetch(url,{method,body:JSON.stringify(body)});
+    if(!result){betaUserEditMessage('A operação não foi confirmada. Verifique a mensagem de erro.',true);return;}
+    after?.(result);
+    await loadUsers();
+    if(!editor.hidden)betaUserEditMessage(success);
+    else document.getElementById('beta-users-message').textContent=success;
+  }finally{betaUsersBusy=false;buttons.forEach(button=>button.disabled=false);}
+}
+async function loadBetaUsers(){
+  if(!isAdmin())return;
+  const request=++betaUsersRequest;
+  const message=document.getElementById('beta-users-message');
+  message.textContent='Carregando usuários...';
+  document.getElementById('beta-users-new').disabled=isBetaReadOnly();
+  const users=await apiFetch('/api/users');
+  if(request!==betaUsersRequest)return;
+  if(!Array.isArray(users)){betaUsers=[];renderBetaUsers();message.textContent='Não foi possível carregar os usuários. Clique em Atualizar.';return;}
+  betaUsers=users;
+  message.textContent=isBetaReadOnly()?'Modo somente leitura.':'';
+  renderBetaUsers();
+}
+function renderBetaUsers(){
+  const el=id=>document.getElementById(id);
+  const query=normalizeOption(el('beta-users-search').value.trim()),role=el('beta-users-role').value,status=el('beta-users-status').value;
+  const stats=[['Total de usuários',betaUsers.length],['Contas ativas',betaUsers.filter(u=>u.ativo).length],['Administradores',betaUsers.filter(u=>u.ativo&&u.role==='admin').length],['Contas inativas',betaUsers.filter(u=>!u.ativo).length]];
+  el('beta-users-overview').innerHTML=stats.map(([label,value])=>'<div class="beta-users-kpi"><span>'+label+'</span><strong>'+value+'</strong></div>').join('');
+  const filtered=betaUsers.map((user,index)=>({user,index})).filter(({user})=>(!query||normalizeOption(user.nome+' '+user.email).includes(query))&&(!role||role===user.role)&&(!status||(status==='active')===!!user.ativo));
+  el('beta-users-count').textContent=filtered.length+' de '+betaUsers.length+' usuários';
+  el('beta-users-table').innerHTML='<div class="beta-users-table-wrap"><table class="beta-users-table"><thead><tr><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Perfil</th><th scope="col">Status</th><th scope="col">Ações</th></tr></thead><tbody>'+
+    (filtered.length?filtered.map(({user,index})=>{
+      const initials=String(user.nome||'?').trim().split(/\s+/).slice(0,2).map(n=>n[0]||'').join('').toUpperCase();
+      return '<tr><td><div class="beta-users-person"><span class="beta-users-avatar">'+escapeHtml(initials)+'</span><span>'+escapeHtml(user.nome||'—')+(betaUserProtected(user)?'<small>Minha conta</small>':'')+'</span></div></td><td>'+escapeHtml(user.email||'—')+'</td><td>'+escapeHtml(betaUserRoles[user.role]||user.role||'—')+'</td><td><span class="beta-users-state '+(user.ativo?'is-active':'is-inactive')+'">'+(user.ativo?'Ativo':'Inativo')+'</span></td><td><button type="button" data-beta-user-index="'+index+'"'+(isBetaReadOnly()?' disabled':'')+'>Gerenciar</button></td></tr>';
+    }).join(''):'<tr><td colspan="5" class="beta-users-empty">Nenhum usuário encontrado.</td></tr>')+'</tbody></table></div>';
+}
+
 async function openUsersModal() {
   if (!isAdmin()) return;
+  if(isBetaTripWorkspace()) {if(location.hash!=='#usuarios')location.hash='usuarios';else await loadUsers();return;}
   document.getElementById('users-modal-overlay').classList.remove('hidden');
   await loadUsers();
 }
@@ -1139,6 +1284,7 @@ function closeUsersModal() {
 }
 
 async function loadUsers() {
+  if(isBetaTripWorkspace())return loadBetaUsers();
   const users = await apiFetch('/api/users');
   const tbody = document.getElementById('users-table-body');
   if (!users) {
@@ -1166,7 +1312,7 @@ async function loadUsers() {
 
 async function createUserProfile(event) {
   event.preventDefault();
-  if (!isAdmin()) return;
+  if (!isAdmin() || isBetaReadOnly()) return;
 
   const form = document.getElementById('user-create-form');
   const button = document.getElementById('user-create-submit');
@@ -1192,11 +1338,12 @@ async function createUserProfile(event) {
   button.disabled = false;
   button.textContent = 'Criar usu\u00e1rio';
 
-  if (!created) return;
+  if (!created) {message.textContent='Não foi possível criar o usuário.';return;}
   form.reset();
   document.getElementById('user-create-ativo').checked = true;
   message.textContent = 'Usu\u00e1rio criado com sucesso.';
   message.classList.add('success');
+  if(isBetaTripWorkspace())document.getElementById('user-create-password').value='';
   await loadUsers();
 }
 
