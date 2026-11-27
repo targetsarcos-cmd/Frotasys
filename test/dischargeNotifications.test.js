@@ -122,3 +122,15 @@ test('editor carrega a data existente, salva sem confirmar e confirma com os val
   assert.match(js,/if\(confirm\)card.remove\(\)/);
   assert.match(js,/if\(dischargeWrites\|\|document.activeElement\?\.matches\('\.beta-discharge-schedule'\)\)return/);
 });
+
+test('cartão de descarga oculta texto de cópia, conserva ação e amplia data',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.doesNotMatch(js,/beta-discharge-copy-value/);
+  assert.match(js,/await copyDischarge\(item\.copiar\)/);
+  assert.match(js,/copyRow\.append\(copy\)/);
+  assert.match(js,/dateRow\.append\(input\)/);
+  assert.match(css,/\.beta-discharge-card-schedule \{min-height:116px/);
+  assert.match(css,/\.beta-discharge-card-schedule \.beta-discharge-date \{font-size:15px/);
+  assert.match(css,/\.beta-discharge-card-schedule \.beta-discharge-date-row \.beta-discharge-schedule \{font-size:15px/);
+});
