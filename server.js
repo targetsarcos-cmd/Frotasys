@@ -315,6 +315,13 @@ async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
   }
 }
 
+// Trip writes affect the notification list. The other cached reads use
+// configuration records, user settings or operations.
+function invalidateAfterWrite(table) {
+  if (table === TABLES.viagens) invalidateCache('pending-trips-');
+  else invalidateCache();
+}
+
 function invalidateCache(prefix = '') {
   for (const key of appCache.keys()) {
     if (!prefix || key.startsWith(prefix)) appCache.delete(key);
@@ -465,7 +472,7 @@ async function insertDoc(table, data) {
   });
   const { data: inserted, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT).single();
   if (error) throw error;
-  invalidateCache();
+  invalidateAfterWrite(table);
   return supabaseToFrontend(inserted);
 }
 
@@ -478,7 +485,7 @@ async function insertDocs(table, docs) {
   }));
   const { data, error } = await supabase.from(table).insert(payload).select(SUPABASE_DOC_SELECT);
   if (error) throw error;
-  invalidateCache();
+  invalidateAfterWrite(table);
   return (data || []).map(supabaseToFrontend);
 }
 
@@ -496,7 +503,7 @@ async function updateDoc(table, id, patch, snapshot) {
   const { data, error } = snapshot ? await result.maybeSingle() : await result.single();
   if (error) throw error;
   if (!data) return null;
-  invalidateCache();
+  invalidateAfterWrite(table);
   return supabaseToFrontend(data);
 }
 
@@ -512,7 +519,7 @@ async function updateWhere(table, predicate, patchFactory) {
 async function deleteDoc(table, id) {
   const { error } = await supabase.from(table).delete().eq('id', id);
   if (error) throw error;
-  invalidateCache();
+  invalidateAfterWrite(table);
 }
 
 async function deleteWhere(table, predicate) {
@@ -554,12 +561,11 @@ async function ensureDefaultOperacoes() {
   await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
-async function ensureDefaultConfigOptions() {
-  if (runtime.pilot) return;
-  const existing = await selectDocs(TABLES.configOptions);
+async function ensureDefaultConfigOptions(existing) {
+  if (runtime.pilot) return [];
 
   const docs = [];
-  if (existing.length === 0) {
+  if (existing.length === 0 && await countDocs(TABLES.configOptions) === 0) {
     for (const field of CONFIG_FIELDS) {
       DEFAULT_CONFIG_OPTIONS[field].forEach((value, index) => {
         docs.push({
@@ -623,7 +629,7 @@ async function ensureDefaultConfigOptions() {
     }
   }
 
-  if (docs.length) await insertDocs(TABLES.configOptions, docs);
+  return docs.length ? insertDocs(TABLES.configOptions, docs) : [];
 }
 
 function seedMarkerDoc(marker) {
@@ -756,31 +762,39 @@ function waitlistPositionValue(item = {}) {
   return `${date} ${time}`;
 }
 
-async function configOptionsGrouped() {
-  return cachedValue('config-options-grouped', async () => {
-  await ensureDefaultConfigOptions();
-  const docs = sortDocs(await selectDocsByJson(TABLES.configOptions, {}, { in: { field: CONFIG_FIELDS } }), { field: 1, ordem: 1, value: 1 });
-  return CONFIG_FIELDS.reduce((acc, field) => {
-    acc[field] = docs.filter(doc => doc.field === field).map(doc => doc.value);
-    return acc;
-  }, {});
+async function configCatalog() {
+  return cachedValue('config-catalog', async () => {
+    const rows = [];
+    const fields = [...CONFIG_FIELDS, CONFIG_SEED_MARKER_FIELD];
+    const columns = 'id,field:dados->field,value:dados->value,normalized:dados->normalized,ordem:dados->ordem,color:dados->color';
+    let cursor;
+    for (;;) {
+      let query = supabase.from(TABLES.configOptions).select(columns).in('dados->>field', fields)
+        .order('id', { ascending: true }).limit(250);
+      if (cursor) query = query.gt('id', cursor);
+      const { data, error } = await query;
+      if (error) throw error;
+      rows.push(...data);
+      if (data.length < 250) break;
+      cursor = data[data.length - 1].id;
+    }
+    rows.push(...await ensureDefaultConfigOptions(rows));
+    const options = Object.fromEntries(CONFIG_FIELDS.map(field => [field, []]));
+    const colors = Object.fromEntries(CONFIG_COLOR_FIELDS.map(field => [field, {}]));
+    for (const row of sortDocs(rows, { field: 1, ordem: 1, value: 1 })) {
+      if (options[row.field]) options[row.field].push(row.value);
+      if (colors[row.field] && isHexColor(row.color)) colors[row.field][normalizeUniqueValue(row.value)] = row.color;
+    }
+    return { options, colors };
   });
 }
 
+async function configOptionsGrouped() {
+  return (await configCatalog()).options;
+}
+
 async function configColorsGrouped() {
-  return cachedValue('config-colors-grouped', async () => {
-  await ensureDefaultConfigOptions();
-  const docs = await selectDocsByJson(TABLES.configOptions, {}, { in: { field: CONFIG_COLOR_FIELDS } });
-  return CONFIG_COLOR_FIELDS.reduce((acc, field) => {
-    acc[field] = {};
-    docs
-      .filter(doc => doc.field === field && isHexColor(doc.color))
-      .forEach(doc => {
-        acc[field][normalizeUniqueValue(doc.value)] = doc.color;
-      });
-    return acc;
-  }, {});
-  });
+  return (await configCatalog()).colors;
 }
 
 function normalizeFreteRouteName(value = '') {
@@ -1045,28 +1059,19 @@ async function workTypeDocs({ includeDeleted = false } = {}) {
     .sort((a, b) => Number(a.displayOrder || 999) - Number(b.displayOrder || 999) || String(a.name || '').localeCompare(String(b.name || '')));
 }
 
-async function ensureDefaultWorkTypes() {
-  if (runtime.pilot) return;
-  const existing = await workTypeDocs({ includeDeleted: true });
-  if (existing.length) return existing.filter(doc => !doc.deletedAt);
-  const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
-    ...normalizeWorkType(item),
-    createdBy: 'sistema'
-  })));
-  return created;
-}
-
 async function workTypesWithUsage() {
-  await ensureDefaultWorkTypes();
-  const [types, sessions] = await Promise.all([
-    workTypeDocs({ includeDeleted: false }),
-    selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD })
-  ]);
-  const counts = sessions.reduce((acc, session) => {
-    if (session.workTypeId) acc[session.workTypeId] = (acc[session.workTypeId] || 0) + 1;
-    return acc;
-  }, {});
-  return types.map(type => publicWorkType(type, counts[type._id] || 0));
+  return cachedValue('work-types-usage', async () => {
+    let types = await workTypeDocs({ includeDeleted: true });
+    if (!types.length && !runtime.pilot) {
+      types = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
+        ...normalizeWorkType(item), createdBy: 'sistema'
+      })));
+    }
+    return Promise.all(types.filter(type => !type.deletedAt).map(async type => {
+      const count = await countDocs(TABLES.configOptions, null, { field: WORK_SESSION_FIELD, workTypeId: type._id });
+      return publicWorkType(type, count);
+    }));
+  });
 }
 
 function normalizeWorkSession(data = {}, profile = {}, existing = {}) {
