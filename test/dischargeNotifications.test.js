@@ -23,14 +23,35 @@ test('só a confirmação verde elimina o alerta; múltiplas notas são copiadas
   const result=dischargeNotification({...trip,nota2:'450824'},'2026-11-27');
   assert.equal(result.copiar,'AYB5I98 CPIIF NF 450.823\nAYB5I98 CPIIF NF 450.824');
 });
-test('paginação inclusiva do leitor beta não duplica registros e não perde pendências',async()=>{
-  const all=Array.from({length:401},(_,i)=>({id:String(i).padStart(4,'0'),dados:{...trip,descargaVerde:i===400?false:true}}));
+test('consultas de cartões filtram no banco, paginam e preservam tipos JSON',async()=>{
+  const {listPendingNotifications}=require('../beta/discharge-notifications');
+  const day='2026-11-27';
+  const all=Array.from({length:401},(_,i)=>({...trip,id:String(i).padStart(4,'0'),nota:'',nota15:123,
+    historico:'x'.repeat(5000),descargaVerde:false}));
+  all.push({...trip,id:'legacy',status:'CONCLUIDO',descargaVerde:undefined},
+    {...trip,id:'explicit-null',status:'CONCLUIDO',descargaVerde:null},
+    {...trip,id:'today',data:day},{...trip,id:'paid',descargaVerde:true,adiantamentoOk:true},
+    {...trip,id:'advance-only',descargaVerde:true},{...trip,id:'closed',descargaVerde:true,tipo:'FROTA'});
   let pages=0;
-  const client={from(){let cursor=null,limit=200;const q={select:()=>q,lte:()=>q,not:()=>q,order:()=>q,limit:n=>{limit=n;return q;},gte:(_key,value)=>{cursor=value;return q;},then(resolve){pages++;resolve({data:all.filter(r=>cursor===null||r.id>=cursor).slice(0,limit)});}};return q;}};
-  const result=await listDischargeNotifications(client,'viagens','2026-11-27');
-  assert.equal(pages,3);
-  assert.equal(result.length,1);
-  assert.equal(result[0].id,'0400');
+  const client={from(){let rows=all, keys;const q={
+    select(columns){assert.ok(!columns.split(',').includes('dados'));keys=columns.split(',').map(x=>x.split(':')[0]);return q;},
+    lt(_,value){rows=rows.filter(r=>r.data<value);return q;},
+    gt(_,id){rows=rows.filter(r=>r.id>id);return q;},
+    is(){rows=rows.filter(r=>r.descargaVerde===undefined);return q;},
+    not(_,op,value){
+      if(op==='is')rows=rows.filter(r=>r.descargaVerde!==undefined);
+      else{const pairs=Object.entries(JSON.parse(value));rows=rows.filter(r=>!pairs.every(([k,v])=>r[k]===v));}
+      return q;
+    },
+    order(){rows=[...rows].sort((a,b)=>a.id<b.id?-1:1);return q;},
+    limit(n){pages++;return {data:rows.slice(0,n).map(r=>Object.fromEntries(keys.map(k=>[k,r[k]??null])))};}
+  };return q;}};
+  const result=await listPendingNotifications(client,'viagens',day);
+  const sorted=cards=>cards.sort((a,b)=>a.data.localeCompare(b.data)||a.placa.localeCompare(b.placa)||a.id.localeCompare(b.id));
+  assert.deepEqual(result.items,sorted(all.map(t=>dischargeNotification(t,day)).filter(Boolean)));
+  const {advanceNotification}=require('../beta/discharge-notifications');
+  assert.deepEqual(result.advances,sorted(all.map(t=>advanceNotification(t,day)).filter(Boolean)));
+  assert.equal(pages,4);
 });
 test('painel preserva o editor e apresenta notificações sem textos redundantes',()=>{
   const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
@@ -133,4 +154,39 @@ test('cartão de descarga oculta texto de cópia, conserva ação e amplia data'
   assert.match(css,/\.beta-discharge-card-schedule \{min-height:116px/);
   assert.match(css,/\.beta-discharge-card-schedule \.beta-discharge-date \{font-size:15px/);
   assert.match(css,/\.beta-discharge-card-schedule \.beta-discharge-date-row \.beta-discharge-schedule \{font-size:15px/);
+});
+
+test('sondagens sem mudanças só consultam a revisão; exclusão, edição e virada recalculam',async()=>{
+  const {createPendingReader}=require('../beta/discharge-notifications');
+  let count=3,version='v1',scans=0,fail=false;
+  const client={from(){let mode;const q={
+    select(cols,opt){mode=opt?.head?'count':cols==='id,updated_at'?'latest':'cards';return q;},
+    lt(){return q;},not(){return q;},is(){return q;},order(){return q;},limit(){return q;},
+    then(ok){if(mode==='count')return ok({count});
+      if(mode==='latest')return ok({data:[{id:'last',updated_at:version}]});
+      scans++;return ok(fail?{error:new Error('indisponível')}:{data:[]});
+    }
+  };return q;}};
+  const read=createPendingReader(client,'viagens');
+  const day='2026-11-27';
+  await Promise.all([read(day),read(day),read(day)]);
+  await read(day);
+  assert.equal(scans,2);
+  count--;await read(day);assert.equal(scans,4);
+  version='v2';await read(day);assert.equal(scans,6);
+  fail=true;await assert.rejects(read('2026-11-28'),/indisponível/);
+  fail=false;await read('2026-11-28');assert.equal(scans,9);
+});
+
+test('o leitor SQL da beta preserva os predicados e os tipos do PostgREST',async()=>{
+  const {fromTable}=require('../beta/pg-reader');
+  const queries=[];
+  const pool={async query(sql,args){queries.push({sql,args});return {rows:[]};}};
+  await require('../beta/discharge-notifications').listPendingNotifications({from:t=>fromTable(pool,t)},'viagens','2026-11-27');
+  assert.equal(queries.length,2);
+  assert.ok(queries[0].sql.includes("(dados->'descargaVerde') IS NULL"));
+  assert.ok(queries[1].sql.includes("(dados->'descargaVerde') IS NOT NULL"));
+  assert.ok(queries[1].sql.includes("(dados->'nota15') AS \"nota15\""));
+  assert.ok(queries[1].sql.includes('NOT ("dados" @> $'));
+  assert.ok(queries[0].args.includes('{"status":"CONCLUIDO"}'));
 });

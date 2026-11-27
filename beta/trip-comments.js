@@ -91,4 +91,12 @@ function expiredTripContentPatch(trip,now=Date.now()){
   }
   return patch;
 }
-module.exports = { CommentError, applyCommentAction, RETENTION_MS, observationWritePatch, expiredTripContentPatch };
+// Called only after the normalized record has no expired content.
+function nextContentExpiry(trip,now) {
+  let first = nonempty(trip.obs) ? observationStart(trip,now) : Infinity;
+  for (const thread of Array.isArray(trip.comentariosBeta) ? trip.comentariosBeta : []) {
+    for (const msg of thread.messages) first = Math.min(first,timestamp(msg.createdAt) ?? now);
+  }
+  return first + RETENTION_MS;
+}
+module.exports = { nextContentExpiry, CommentError, applyCommentAction, RETENTION_MS, observationWritePatch, expiredTripContentPatch };
