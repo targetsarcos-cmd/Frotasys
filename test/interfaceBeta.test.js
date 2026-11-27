@@ -612,3 +612,60 @@ test('interface beta abre busca pelo Enter, preserva termo e exibe tabela com de
   assert.match(css,/\.beta-search-table th \{position:sticky;top:0/);
   assert.match(css,/\.beta-search-detail-row\[hidden\] \{display:none!important\}/);
 });
+
+test('configuracoes beta reutiliza controles reais em pagina e preserva navegacao',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const nav=fs.readFileSync(path.join(__dirname,'../public/js/workspace-fretes.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(html,/<main class="workspace" id="beta-settings"[^>]*hidden>/);
+  assert.match(html,/id="beta-settings-search"/);
+  assert.deepEqual([...html.matchAll(/data-settings-tab="([^"]+)"/g)].map(m=>m[1]),['all','catalog','messages','operational']);
+  assert.match(nav,/const settingsActive = location.hash === '#configuracoes'/);
+  assert.match(nav,/settings.hidden = !settingsActive/);
+  assert.match(nav,/active \|\| queueActive \|\| settingsActive/);
+  assert.match(nav,/\[settingsNav,settingsActive\]/);
+  assert.match(app,/target.append\(body\)/);
+  assert.match(app,/primary.append\(profile,body.querySelector\('\.settings-export-section'\),document.getElementById\('settings-operations'\),extra\)/);
+  assert.match(app,/if \(document.getElementById\('beta-settings'\)\?\.hidden === false\) renderSettingsModal\(\)/);
+  assert.match(app,/if \(location.hash !== '#configuracoes'\) location.hash = 'configuracoes'/);
+  assert.match(app,/if\(!isAdmin\(\)\|\|isBetaReadOnly\(\)\)return/);
+  assert.match(app,/if\(isBetaReadOnly\(\)\)\{/);
+  assert.match(app,/renderBetaStatusSettings\(\)/);
+  assert.match(app,/if \(isBetaTripWorkspace\(\)\) return configColor\('status',status \|\| 'STATUS'\)/);
+  assert.match(css,/\.beta-settings-overview \{display:grid;grid-template-columns:repeat\(4,/);
+  assert.match(css,/\.beta-settings-body \{display:grid;grid-template-columns:repeat\(2,/);
+  assert.match(css,/\.settings-list \{max-height:none;overflow:visible/);
+  assert.match(app,/data-settings-delete/);
+});
+test('beta renomeia somente cadastros livres, mantendo id e cor e bloqueando vinculos',async()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const start=server.indexOf("app.put('/api/config-options/:field/rename'");
+  const end=server.indexOf("app.delete('/api/config-options/:field/:value'",start);
+  assert.ok(start>=0&&end>start);
+  let handler,editable=true,used=false,linked=false,duplicate=false,conflict=false,missing=false,patch=null;
+  const current={_id:'cfg',field:'produto',value:'ANTIGO',normalized:'ANTIGO',ordem:2,color:'#123456',updatedAt:'t'};
+  const app={put:(route,guard,fn)=>{assert.equal(route,'/api/config-options/:field/rename');assert.equal(guard,'admin');handler=fn;}};
+  const normalize=v=>String(v||'').trim().toUpperCase();
+  const run=new Function('app','requireAdmin','TABLES','normalizeUniqueValue','DEFAULT_CONFIG_OPTIONS','findOneByJson','countDocs','selectDocs','updateDoc','configOptionsGrouped','configColorsGrouped','broadcast','editable','return (async function(){const betaEditable=editable();'+server.slice(start,end)+'})()');
+  await run(app,'admin',{configOptions:'options',viagens:'trips',operacoes:'ops'},normalize,{tipo:['FROTA'],pamcard:['PAMCARD OK']},async(t,q)=>q.normalized==='ANTIGO'&&!missing?current:q.normalized==='NOVO'&&duplicate?{_id:'other'}:null,async()=>used?1:0,async()=>linked?[{produtos:['ANTIGO']}]:[],async(t,id,value,snapshot)=>{patch={t,id,value,snapshot};return conflict?null:{...current,...value};},async()=>({produto:['NOVO']}),async()=>({produto:{}}),()=>{},()=>editable);
+  async function request(field='produto',previous='ANTIGO',value='NOVO'){
+    let status=200,data;const res={status(n){status=n;return this},json(v){data=v;return this}};
+    await handler({params:{field},body:{previous,value}},res);
+    return {status,data};
+  }
+  assert.equal((await request('status')).status,400);
+  assert.equal((await request('origem')).status,400);
+  assert.equal((await request('tipo','FROTA')).status,409);
+  assert.equal((await request('produto','ANTIGO','')).status,400);
+  duplicate=true;assert.equal((await request()).status,409);duplicate=false;
+  used=true;assert.equal((await request()).status,409);used=false;
+  linked=true;assert.equal((await request()).status,409);linked=false;
+  missing=true;assert.equal((await request()).status,404);missing=false;
+  conflict=true;assert.equal((await request()).status,409);conflict=false;
+  assert.equal((await request()).status,200);
+  assert.deepEqual(patch.value,{value:'NOVO',normalized:'NOVO'});
+  assert.equal(patch.id,'cfg');
+  assert.equal(patch.snapshot.color,'#123456');
+  assert.equal(patch.snapshot.ordem,2);
+});
