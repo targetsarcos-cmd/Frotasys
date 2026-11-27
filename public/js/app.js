@@ -364,6 +364,7 @@ async function startApp() {
   const auth = await FrotasysAuth.init({ requireAuth: true });
   if (!auth.profile) return;
   state.userProfile = auth.profile;
+  window.FrotasysVersionNotice?.start();
   applyWhiteTheme();
   loadTableColumnsPreference();
   if(isBetaTripWorkspace()) await loadBetaColumnPreference();
@@ -4662,8 +4663,10 @@ function openWorkPopover(event, tripId, sessionId = '') {
   if (!session && isViagemConcluida(viagem)) return;
   const popover = document.createElement('div');
   popover.className = 'work-popover';
+  popover.setAttribute('role','dialog');popover.setAttribute('aria-label','Atividades da viagem');
   popover.addEventListener('click', e => e.stopPropagation());
-  popover.innerHTML = session ? renderWorkManagePopover(viagem, session) : renderWorkStartPopover(viagem);
+  popover.innerHTML = (session ? renderWorkManagePopover(viagem, session) : renderWorkStartPopover(viagem));
+  const close=document.createElement('button');close.type='button';close.className='work-popover-close';close.textContent='×';close.setAttribute('aria-label','Fechar atividades');close.onclick=closeWorkPopover;popover.querySelector('.work-popover-head').append(close);
   document.body.appendChild(popover);
   positionWorkPopover(popover, event.currentTarget);
   state.workPopover = { tripId, sessionId: session?._id || '' };
@@ -4674,8 +4677,9 @@ function renderWorkStartPopover(viagem) {
   const types = state.workTypes.filter(type => type.isActive);
   return `<div class="work-popover-head">
       <strong>Iniciar trabalho</strong>
-      <span>${escapeHtml(viagem.placa || '')}</span>
+      <span>${escapeHtml(viagem.placa || '')} · ${escapeHtml(viagem.nome || '')}</span>
     </div>
+    <div class="work-popover-subtitle">Selecione a atividade</div>
     <div class="work-type-list">
       ${types.length ? types.map(type => renderWorkTypeOption(type, `startWorkSession('${escapeAttr(viagem._id)}','${escapeAttr(type._id)}')`)).join('') : '<div class="work-empty">Nenhuma atividade ativa cadastrada.</div>'}
     </div>`;
@@ -4687,7 +4691,7 @@ function renderWorkManagePopover(viagem, session) {
   const paused = session.status === 'paused';
   const details = `<div class="work-popover-head">
       <strong>${escapeHtml(type.name || 'Trabalho')}</strong>
-      <span>${escapeHtml(session.userNameSnapshot || '')}</span>
+      <span>${escapeHtml(session.userNameSnapshot || '')} · ${escapeHtml(viagem.placa || '')}</span>
     </div>
     <div class="work-detail">
       <span>Iniciado \u00e0s ${escapeHtml(formatTimeFromIso(session.startedAt))}</span>
@@ -4701,7 +4705,7 @@ function renderWorkManagePopover(viagem, session) {
   return `${details}
     <div class="work-actions">
       ${paused ? `<button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','resume')">Retomar</button>` : `<button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','pause')">Pausar</button>`}
-      <button type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','complete')">Finalizar</button>
+      <button class="work-finish" type="button" onclick="updateWorkSession('${escapeAttr(session._id)}','complete')">Finalizar</button>
     </div>
     <div class="work-popover-subtitle">Trocar atividade</div>
     <div class="work-type-list">
@@ -4712,8 +4716,8 @@ function renderWorkManagePopover(viagem, session) {
 function renderWorkTypeOption(type, action) {
   const color = isHexColor(type.color) ? type.color : '#2563eb';
   return `<button type="button" class="work-type-option" onclick="${action}" style="--work-color:${escapeAttr(color)}">
-    <span style="background:${escapeAttr(color)}"></span>
-    <strong>${escapeHtml(type.name)}</strong>
+    <span class="work-type-color" style="background:${escapeAttr(color)}"></span>
+    <strong>${escapeHtml(type.name)}</strong><span class="work-type-chevron" aria-hidden="true">›</span>
   </button>`;
 }
 

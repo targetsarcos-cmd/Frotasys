@@ -64,7 +64,7 @@ function setup() {
     express, http: { createServer: () => ({ listen: noop, on: noop }) }, ws: { Server: SocketServer, OPEN: 1 },
     cors: noop, path, 'fs/promises': {}, zlib: {}, exceljs: { Workbook },
     './supabaseClient': db, './tripStatus': require('../tripStatus'),
-    dotenv:{config:noop}, './beta/runtime':require('../beta/runtime'), './beta/authenticated-socket':require('../beta/authenticated-socket')
+    dotenv:{config:noop}, './beta/runtime':require('../beta/runtime'), './beta/authenticated-socket':require('../beta/authenticated-socket'), './beta/work-day-rollover':require('../beta/work-day-rollover')
   };
   const server = vm.createContext({
     __dirname: root, process: { env: { FROTASYS_INTERFACE_BETA:'classic' } }, require(name) {

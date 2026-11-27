@@ -260,13 +260,16 @@ server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
 });
 if (betaWorkspace) {
+  const {resolveVersion,stampVersion}=require('./beta/release-version');
+  const releaseVersion=resolveVersion();
+  app.get('/api/version',(_req,res)=>res.set('Cache-Control','no-store, max-age=0').json({version:releaseVersion}));
   app.use((req, res, next) => {
     if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();
   });
   app.get(['/', '/index.html'], async (_req, res) => {
     const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
-    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable, production: runtime.production }));
+    res.set('Cache-Control', 'no-store').send(stampVersion(require('./beta/workspace')(source, { editable: betaEditable, production: runtime.production }),releaseVersion));
   });
   // Serve the reference report as a browser document, never as an attachment.
   app.get(['/beta/relatorios', '/beta-reports.html'], async (_req, res) => {
@@ -1086,9 +1089,13 @@ function isWorkSessionOpen(session = {}) {
   return ['active', 'paused'].includes(String(session.status || ''));
 }
 
+function expiredWorkPatch(session,now=Date.now()){
+  return require('./beta/work-day-rollover').expiredWorkPatch(session,now);
+}
+
 async function activeWorkSessions() {
   const docs = await selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD }, { in: { status: ['active', 'paused'] } });
-  return docs.filter(session => !session.deletedAt && isWorkSessionOpen(session));
+  return docs.filter(session => !session.deletedAt && isWorkSessionOpen(session) && !expiredWorkPatch(session));
 }
 
 async function publicWorkSessions() {
@@ -1134,6 +1141,42 @@ async function completeOpenWorkSessionsForTrip(tripId, profile = {}) {
     });
   }));
   return true;
+}
+
+let workRolloverRunning=false;
+async function sweepExpiredWorkSessions(now=Date.now()){
+  if(!runtime.production||!betaWorkspace||workRolloverRunning)return;
+  workRolloverRunning=true;
+  let changed=false;
+  try{
+    let cursor=null;
+    for(;;){
+      let query=supabase.from(TABLES.configOptions).select(SUPABASE_DOC_SELECT)
+        .eq('dados->>field',WORK_SESSION_FIELD).in('dados->>status',['active','paused'])
+        .order('id',{ascending:true}).limit(200);
+      if(cursor!==null)query=query.gt('id',cursor);
+      const {data,error}=await query;
+      if(error)throw error;
+      if(!data?.length)break;
+      for(const record of data){
+        const session=supabaseToFrontend(record);
+        const patch=expiredWorkPatch(session,now);
+        if(!patch||session.deletedAt)continue;
+        try{
+          const saved=await updateDoc(TABLES.configOptions,session._id,patch,session);
+          if(!saved)continue;
+          changed=true;
+          await createWorkEvent(saved,'auto_completed_by_day',{nome:'Sistema'},{previousValue:session.status,newValue:'completed',completedAt:patch.completedAt,reason:'day_rollover'});
+        }catch(error){console.error('Falha ao encerrar trabalho:',session._id,error.message);}
+      }
+      cursor=data[data.length-1].id;
+      if(data.length<200)break;
+    }
+  }catch(error){console.error('Falha no encerramento diário de trabalhos:',error.message);}
+  finally{
+    workRolloverRunning=false;
+    if(changed){try{broadcast({type:'work_sessions_atualizadas',payload:await publicWorkSessions()});}catch(error){console.error('Falha ao atualizar trabalhos:',error.message);}}
+  }
 }
 
 function canManageWorkSession(session = {}, profile = {}, authUser = {}) {
@@ -1918,6 +1961,7 @@ app.put('/api/work-sessions/:id', requireViagemEditor, async (req, res) => {
       return res.status(403).json({ error: 'Você não pode alterar o trabalho de outro usuário.' });
     }
 
+    if(!isWorkSessionOpen(current)||expiredWorkPatch(current))return res.status(409).json({error:'Este trabalho já foi encerrado. Inicie uma nova atividade.'});
     const action = String(req.body?.action || '').trim();
     const now = new Date().toISOString();
     const patch = {};
@@ -1947,7 +1991,8 @@ app.put('/api/work-sessions/:id', requireViagemEditor, async (req, res) => {
       return res.status(400).json({ error: 'Ação inválida.' });
     }
 
-    const updated = await updateDoc(TABLES.configOptions, req.params.id, patch);
+    const updated = await updateDoc(TABLES.configOptions, req.params.id, patch,current);
+    if(!updated)return res.status(409).json({error:'Trabalho atualizado por outra operação. Atualize a página.'});
     await createWorkEvent(updated, eventType, req.userProfile, { previousValue: current.status, newValue: updated.status });
     const publicSession = await publicWorkSession(updated);
     broadcast({ type: 'work_session_atualizada', payload: publicSession });
@@ -3167,6 +3212,7 @@ async function sweepBetaTripContent(now=Date.now()){
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
+  if(runtime.production&&betaWorkspace){void sweepExpiredWorkSessions();setInterval(()=>void sweepExpiredWorkSessions(),15000).unref();}
   if(betaEditable){void sweepBetaTripContent();setInterval(()=>void sweepBetaTripContent(),60_000).unref();}
   const os = require('os');
   const nets = os.networkInterfaces();
