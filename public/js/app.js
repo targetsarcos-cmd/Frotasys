@@ -417,6 +417,11 @@ function handleWsMessage(msg) {
   } else if (type === 'viagem_atualizada') {
     if (state.selectedViagemDetails?._id === payload._id) {
       state.selectedViagemDetails.frete = payload.frete;
+      if(isBetaTripWorkspace()){
+        state.selectedViagemDetails.obs=payload.obs;
+        state.selectedViagemDetails.obsCriadaEm=payload.obsCriadaEm;
+        state.selectedViagemDetails.comentariosBeta=payload.comentariosBeta;
+      }
     }
     const idx = state.viagens.findIndex(v => v._id === payload._id);
     if (idx !== -1) {
@@ -425,6 +430,7 @@ function handleWsMessage(msg) {
       state.viagens.push(payload);
     }
     renderAllUnlessInlineEditing();
+    if(isBetaTripWorkspace())window.FrotasysBetaComments?.refreshTrip(payload._id);
   } else if (type === 'viagem_removida') {
     state.viagens = state.viagens.filter(v => v._id !== payload._id);
     renderAllUnlessInlineEditing();
