@@ -865,8 +865,13 @@ test('balao beta mostra placa e motorista sem titulos redundantes',()=>{
   assert.match(js,/el\('small', 'beta-comment-driver', String\(trip\.nome/);
   assert.doesNotMatch(js,/'Observacoes e comentarios'|'Observacao da viagem'/);
   assert.match(js,/section\.append\(el\('p', '', obs\)\)/);
-  assert.match(js,/section\.replaceChildren\(editor,controls\)/);
+  assert.match(js,/section\.replaceChildren\(editor\);\s*actions\.replaceWith\(controls\)/);
+  assert.match(js,/group\.append\(section\)/);
+  assert.match(js,/group\.append\(actions\)/);
+  assert.match(js,/content\.append\(group\)/);
+  assert.doesNotMatch(js,/section\.append\(actions\)/);
   assert.match(js,/button\('Editar observação'/);
   assert.match(js,/button\('Excluir observação'/);
-  assert.match(css,/\.beta-comment-observation \.beta-comment-actions \{margin-top:15px;gap:15px\}/);
+  assert.match(css,/\.beta-comment-observation-group \{display:grid;gap:12px;min-width:0\}/);
+  assert.match(css,/\.beta-comment-observation-group > \.beta-comment-actions \{margin:0;padding:0 2px;gap:15px\}/);
 });
