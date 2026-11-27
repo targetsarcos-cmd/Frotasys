@@ -78,9 +78,12 @@ function expiredTripContentPatch(trip,now=Date.now()){
   if(Array.isArray(trip.comentariosBeta)){
     const next=trip.comentariosBeta.flatMap(thread=>{
       if(!thread||!Array.isArray(thread.messages))return [];
-      const messages=thread.messages.filter(msg=>{
-        const start=timestamp(msg?.createdAt);
-        return msg&&(start===null||now-start<RETENTION_MS);
+      const messages=thread.messages.flatMap(msg=>{
+        if(!msg)return [];
+        const explicit=timestamp(msg.createdAt);
+        const start=explicit??timestamp(trip.createdAt)??now;
+        if(now-start>=RETENTION_MS)return [];
+        return [explicit===null?{...msg,createdAt:new Date(start).toISOString()}:msg];
       });
       return messages.length?[{...thread,messages}]:[];
     });
