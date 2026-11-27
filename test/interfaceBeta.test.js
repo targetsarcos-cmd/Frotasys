@@ -286,12 +286,13 @@ test('drawer beta renderiza nota e hora juntas para as 15 posicoes',()=>{
   assert.match(api.renderBetaInvoiceRow(14),/nota15:Nota Fiscal 15:undefined;hora_nf15:Hora NF:time/);
 });
 
-test('secoes beta nao exibem contadores nos titulos e preservam totais do rodape',()=>{
+test('secoes beta nao exibem contadores nos titulos nem rodape de contagem',()=>{
   const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
   const shell=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
   assert.doesNotMatch(shell,/id="count(?:Booked|Billed|Completed)"/);
   assert.doesNotMatch(js,/countBooked|countBilled|countCompleted|countId/);
-  assert.match(js,/byId\('footCount'\)\.textContent/);
+  assert.doesNotMatch(js,/footCount|collapsedCompleted/);
+  assert.doesNotMatch(shell,/id="footCount"|<div class="footer">/);
   assert.match(shell,/id="toggleCompleted"/);
 });
 
