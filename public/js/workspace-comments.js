@@ -109,8 +109,10 @@
     const content = el('div', 'beta-comment-content');
     const obs = observation(trip);
     if (obs) {
+      const group = el('div', 'beta-comment-observation-group');
       const section = el('div', 'beta-comment-observation');
       section.append(el('p', '', obs));
+      group.append(section);
       if (canWrite() && canEditViagemField(trip,'obs')) {
         const actions = el('div','beta-comment-actions');
         actions.append(button('Editar observação', () => {
@@ -122,16 +124,17 @@
           const controls = el('div','beta-comment-actions');
           controls.append(button('Cancelar', () => render(), 'beta-comment-link'),
             button('Salvar', () => saveObservation(editor.value), 'beta-comment-primary'));
-          section.replaceChildren(editor,controls);
+          section.replaceChildren(editor);
+          actions.replaceWith(controls);
           editor.focus();
           position();
         },'beta-comment-link'), button('Excluir observação', async () => {
           pin();
           if (!pending && window.confirm('Excluir a observacao desta viagem?')) await saveObservation('');
         },'beta-comment-link beta-comment-danger'));
-        section.append(actions);
+        group.append(actions);
       }
-      content.append(section);
+      content.append(group);
     }
     const list = threads(trip);
     if (!list.length && !obs) content.append(el('p', 'beta-comment-empty', 'Nenhum comentario registrado.'));
