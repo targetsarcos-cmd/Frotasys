@@ -63,6 +63,7 @@ function setup() {
   const dependencies = {
     express, http: { createServer: () => ({ listen: noop, on: noop }) }, ws: { Server: SocketServer, OPEN: 1 },
     cors: noop, path, 'fs/promises': {}, zlib: {}, exceljs: { Workbook },
+    './public/js/workspace-table-layout': require('../public/js/workspace-table-layout'),
     './supabaseClient': db, './tripStatus': require('../tripStatus'),
     dotenv:{config:noop}, './beta/runtime':require('../beta/runtime'), './beta/authenticated-socket':require('../beta/authenticated-socket'), './beta/work-day-rollover':require('../beta/work-day-rollover')
   };

@@ -301,12 +301,18 @@ app.use('/api', (req, res, next) => {
 const appCache = new Map();
 
 async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
-  const now = Date.now();
   const cached = appCache.get(key);
-  if (cached && cached.expires > now) return cached.value;
-  const value = await loader();
-  appCache.set(key, { value, expires: now + ttl });
-  return value;
+  if (cached && cached.expires > Date.now()) return cached.value;
+  const entry = { value: Promise.resolve().then(loader), expires: Infinity };
+  appCache.set(key, entry);
+  try {
+    const value = await entry.value;
+    entry.expires = Date.now() + ttl;
+    return value;
+  } catch (error) {
+    if (appCache.get(key) === entry) appCache.delete(key);
+    throw error;
+  }
 }
 
 function invalidateCache(prefix = '') {
@@ -1151,7 +1157,7 @@ async function sweepExpiredWorkSessions(now=Date.now()){
   try{
     let cursor=null;
     for(;;){
-      let query=supabase.from(TABLES.configOptions).select(SUPABASE_DOC_SELECT)
+      let query=supabase.from(TABLES.configOptions).select('id,startedAt:dados->>startedAt,status:dados->>status')
         .eq('dados->>field',WORK_SESSION_FIELD).in('dados->>status',['active','paused'])
         .order('id',{ascending:true}).limit(200);
       if(cursor!==null)query=query.gt('id',cursor);
@@ -1159,7 +1165,9 @@ async function sweepExpiredWorkSessions(now=Date.now()){
       if(error)throw error;
       if(!data?.length)break;
       for(const record of data){
-        const session=supabaseToFrontend(record);
+        if (!expiredWorkPatch(record,now)) continue;
+        const session = await findOneById(TABLES.configOptions,record.id);
+        if (!session || session.field !== WORK_SESSION_FIELD) continue;
         const patch=expiredWorkPatch(session,now);
         if(!patch||session.deletedAt)continue;
         try{
@@ -1670,7 +1678,7 @@ async function profileForUser(userId) {
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const settings = await userProfileSettings(data.user_id);
+  const settings = await cachedValue('profile-settings-' + data.user_id, () => userProfileSettings(data.user_id));
   return publicProfile({ ...data, ...settings });
 }
 
@@ -1830,11 +1838,14 @@ app.get('/api/lembretes', async (req, res) => {
   }
 });
 
+const pendingReader = betaWorkspace && require('./beta/discharge-notifications').createPendingReader(supabase,TABLES.viagens);
 app.get('/api/lembretes/descargas-pendentes', async (req, res) => {
   if (!betaWorkspace) return res.status(404).json({error:'Recurso exclusivo do beta.'});
   try {
-    const { listPendingNotifications } = require('./beta/discharge-notifications');
-    const pending = await listPendingNotifications(supabase,TABLES.viagens);
+    const { localDay } = require('./beta/discharge-notifications');
+    const day = localDay();
+    const pending = await cachedValue('pending-trips-' + day,
+      () => pendingReader(day), 30_000);
     res.set('Cache-Control','no-store').json(pending);
   } catch (error) {
     console.error('Falha nas notificações de descarga:',error.message);
@@ -3179,33 +3190,53 @@ app.get('/api/datas', async (req, res) => {
 /* Only the editable beta runs the automatic cleanup. Use raw snapshots so the
  * maintenance task never changes fiscal fields or recalculates stored statuses. */
 let betaRetentionRunning=false;
+let retentionDeadlines = new Map();
 async function sweepBetaTripContent(now=Date.now()){
   if(!betaEditable||betaRetentionRunning)return;
   betaRetentionRunning=true;
   try{
+    const nextDeadlines = new Map();
     for(const [field,empty] of [['obs',''],['comentariosBeta','[]']]){
       let cursor=null;
       for(;;){
-        let query=supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT)
+        let query=supabase.from(TABLES.viagens).select('id,updated_at')
           .not('dados->>'+field,'is',null).neq('dados->>'+field,empty)
           .order('id',{ascending:true}).limit(200);
         if(cursor!==null)query=query.gt('id',cursor);
         const {data,error}=await query;
         if(error)throw error;
         if(!data?.length)break;
-        for(const record of data){
-          const raw={...record.dados,_id:record.id,id:record.id,createdAt:record.dados?.createdAt||record.created_at,updatedAt:record.updated_at};
-          const patch=betaRetention.expiredTripContentPatch(raw,now);
-          if(!Object.keys(patch).length)continue;
-          try{
-            const saved=await updateDoc(TABLES.viagens,record.id,patch,raw);
-            if(saved)broadcast({type:'viagem_atualizada',payload:saved});
-          }catch(error){console.error('Falha na limpeza de recado da viagem:',record.id,error.message);}
+        const dueIds = [];
+        for (const row of data) {
+          const known = nextDeadlines.get(row.id) || retentionDeadlines.get(row.id);
+          if (row.updated_at && known?.version === row.updated_at && known.due > now) {
+            nextDeadlines.set(row.id,known);
+          } else {
+            dueIds.push(row.id);
+          }
+        }
+        // Bound the PostgREST URL size even when a whole page is new.
+        for (let offset = 0; offset < dueIds.length; offset += 50) {
+          const batch = await supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT).in('id',dueIds.slice(offset,offset + 50));
+          if (batch.error) throw batch.error;
+          for (const record of batch.data || []) {
+            const raw={...record.dados,_id:record.id,id:record.id,createdAt:record.dados?.createdAt||record.created_at,updatedAt:record.updated_at};
+            const patch=betaRetention.expiredTripContentPatch(raw,now);
+            if (!Object.keys(patch).length) {
+              nextDeadlines.set(record.id,{version:record.updated_at,due:betaRetention.nextContentExpiry(raw,now)});
+              continue;
+            }
+            try {
+              const saved=await updateDoc(TABLES.viagens,record.id,patch,raw);
+              if(saved)broadcast({type:'viagem_atualizada',payload:saved});
+            } catch(error){console.error('Falha na limpeza de recado da viagem:',record.id,error.message);}
+          }
         }
         cursor=data[data.length-1].id;
         if(data.length<200)break;
       }
     }
+    retentionDeadlines = nextDeadlines;
   }catch(error){console.error('Falha na rotina de expiracao de recados:',error.message);}
   finally{betaRetentionRunning=false;}
 }

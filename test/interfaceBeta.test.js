@@ -1126,13 +1126,15 @@ test('recados beta expiram individualmente em 72 horas sem renovar ao editar',()
 });
 test('rotina de expiracao beta grava apenas recados, pagina e publica as alteracoes',async()=>{
   const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
-  const {expiredTripContentPatch}=require('../beta/trip-comments');
+  const betaRetention=require('../beta/trip-comments');
   const now=Date.parse('2026-11-27T12:00:00Z'),old='2026-11-24T12:00:00Z',recent='2026-11-27T11:00:00Z';
   const records=Array.from({length:201},(_,i)=>({id:String(i).padStart(4,'0'),created_at:old,updated_at:recent,dados:{obs:i===200?'Apagar':'Manter',obsCriadaEm:i===200?old:recent,cte:'123',status:'PROGRAMAR'}}));
   const writes=[],events=[],pages=[];
-  const supabase={from:()=>{let field='',cursor=null,limit=200;const q={select(){return q},not(key){field=key.split('->>')[1];return q},neq(){return q},order(){return q},limit(n){limit=n;return q},gt(key,value){cursor=value;return q},then(resolve){pages.push([field,cursor]);return resolve({data:records.filter(r=>(cursor===null||r.id>cursor)&&r.dados[field]&&r.dados[field].length).slice(0,limit),error:null});}};return q;}};
+  let details=0;
+  const supabase={from:()=>{let field='',cursor=null,limit=200;const q={select(columns){assert.ok(['*','id,updated_at'].includes(columns));return q},
+    in(key,ids){assert.equal(key,'id');details+=ids.length;return {data:records.filter(r=>ids.includes(r.id))};},not(key){field=key.split('->>')[1];return q},neq(){return q},order(){return q},limit(n){limit=n;return q},gt(key,value){cursor=value;return q},then(resolve){pages.push([field,cursor]);return resolve({data:records.filter(r=>(cursor===null||r.id>cursor)&&r.dados[field]&&r.dados[field].length).slice(0,limit).map(({id,updated_at})=>({id,updated_at})),error:null});}};return q;}};
   const start=server.indexOf('let betaRetentionRunning=false;'),end=server.indexOf('const PORT =',start);
-  const sweep=new Function('betaEditable','supabase','TABLES','SUPABASE_DOC_SELECT','betaRetention','updateDoc','broadcast',server.slice(start,end)+'return sweepBetaTripContent;')(true,supabase,{viagens:'viagens'},'*',{expiredTripContentPatch},async(table,id,patch,snapshot)=>{writes.push({id,patch,snapshot});return {...snapshot,...patch};},msg=>events.push(msg));
+  const sweep=new Function('betaEditable','supabase','TABLES','SUPABASE_DOC_SELECT','betaRetention','updateDoc','broadcast',server.slice(start,end)+'return sweepBetaTripContent;')(true,supabase,{viagens:'viagens'},'*',betaRetention,async(table,id,patch,snapshot)=>{writes.push({id,patch,snapshot});Object.assign(records.find(r=>r.id===id).dados,patch);return {...snapshot,...patch};},msg=>events.push(msg));
   await sweep(now);
   assert.equal(writes.length,1);
   assert.equal(writes[0].id,'0200');
@@ -1141,6 +1143,14 @@ test('rotina de expiracao beta grava apenas recados, pagina e publica as alterac
   assert.equal(writes[0].snapshot.updatedAt,recent);
   assert.equal(events[0].payload.cte,'123');
   assert.deepEqual(pages,[['obs',null],['obs','0199'],['comentariosBeta',null]]);
+  assert.equal(details,201);
+  await sweep(now+60_000);
+  assert.equal(details,201);
+  records[0].updated_at=new Date(now).toISOString();
+  await sweep(now+120_000);
+  assert.equal(details,202);
+  await sweep(Date.parse(recent)+betaRetention.RETENTION_MS);
+  assert.equal(writes.length,201);
   assert.match(server,/setInterval\(\(\)=>void sweepBetaTripContent\(\),60_000\)\.unref\(\)/);
   assert.match(server,/retentionPatch\.comentariosBeta \?\? current\.comentariosBeta/);
   const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');

@@ -9,15 +9,15 @@ const columns = new Set(['id', 'dados', 'created_at', 'updated_at', 'user_id', '
 
 function field(name) {
   if (columns.has(name)) return '"' + name + '"';
-  const json = /^dados->>([a-zA-Z_][a-zA-Z_0-9]*)$/.exec(name);
-  if (json) return "(dados->>'" + json[1] + "')";
+  const json = /^dados(->>?)([a-zA-Z_][a-zA-Z_0-9]*)$/.exec(name);
+  if (json) return "(dados" + json[1] + "'" + json[2] + "')";
   throw Error('Campo de leitura inválido.');
 }
 
 function projection(name) {
-  const alias = /^([a-zA-Z_][a-zA-Z_0-9]*):dados->>([a-zA-Z_][a-zA-Z_0-9]*)$/.exec(name);
+  const alias = /^([a-zA-Z_][a-zA-Z_0-9]*):(dados->>?[a-zA-Z_][a-zA-Z_0-9]*)$/.exec(name);
   if (!alias) return field(name);
-  return field('dados->>' + alias[2]) + ' AS "' + alias[1] + '"';
+  return field(alias[2]) + ' AS "' + alias[1] + '"';
 }
 
 // API de consulta usada pelas rotas existentes. Somente SELECT é gerado.
@@ -48,11 +48,23 @@ function fromTable(pool, table) {
     }
     const query = {
       eq: (name, value) => filter(name, '=', value),
+      gt: (name, value) => filter(name, '>', value),
+      lt: (name, value) => filter(name, '<', value),
       gte: (name, value) => filter(name, '>=', value),
       lte: (name, value) => filter(name, '<=', value),
       ilike: (name, value) => filter(name, 'ILIKE', value),
       in: (name, values) => filter(name, 'ANY', values),
+      is(name, value) {
+        if (value !== null) throw Error('Filtro inválido.');
+        where.push(field(name) + ' IS NULL');
+        return query;
+      },
       not(name, op, value) {
+        if (op === 'cs' && name === 'dados') {
+          values.push(value);
+          where.push('NOT ("dados" @> $' + values.length + '::jsonb)');
+          return query;
+        }
         if (op !== 'is' || value !== null) throw Error('Filtro inválido.');
         where.push(field(name) + ' IS NOT NULL');
         return query;
