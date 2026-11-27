@@ -871,3 +871,27 @@ body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,t
 body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,th):has([data-frete-field]):hover {box-shadow:inset 0 0 0 1px #8aaeca}
 #beta-fretes .rate-route [data-frete-field] {display:block;width:100%;min-height:1.3em;box-sizing:border-box;white-space:normal}
 #beta-fretes .rate-route [data-frete-field][contenteditable=true] {display:block;width:100%;min-width:0;border:0;border-radius:2px}
+
+/* Ordered status palette and responsive operational process diagram. */
+#beta-settings .beta-status-settings .settings-list {align-items:start;overflow:hidden}
+#beta-settings .beta-status-column {min-width:0}
+#beta-settings .beta-status-column .settings-item {border-radius:0;min-height:39px;gap:8px}
+#beta-settings .beta-status-column .settings-item:last-child {border-bottom:0}
+#beta-settings .beta-status-column:last-child .settings-item {border-right:0}
+#beta-settings .beta-status-column .settings-item>span.beta-status-number {flex:0 0 25px;color:#60778a;font-size:11px;font-variant-numeric:tabular-nums;font-weight:600}
+#beta-settings .beta-status-name {flex:1;min-width:0;overflow-wrap:anywhere;font-size:12px;font-weight:600}
+#beta-settings .beta-status-flow {grid-column:1/-1}
+#beta-settings .beta-flow-content {display:flex;flex-direction:column;align-items:stretch;gap:5px;max-width:1260px;margin:auto}
+#beta-settings .beta-flow-stage {border:1px solid #d5e2ec;border-radius:6px;background:#f8fafc;padding:13px 16px}
+#beta-settings .beta-flow-stage h4,#beta-settings .beta-flow-legacy h4 {font-size:12px;color:#284a62;margin:0 0 12px;font-weight:700}
+#beta-settings .beta-flow-row,#beta-settings .beta-flow-option-nodes {display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+#beta-settings .beta-flow-node {display:inline-flex;align-items:center;justify-content:center;min-height:38px;max-width:100%;box-sizing:border-box;border:1px solid #a9bdcf;border-radius:5px;background:#e4edf4;padding:8px 13px;text-align:center;font-size:12px;font-weight:700;line-height:1.35}
+#beta-settings .beta-flow-options {text-align:center;padding:8px;border:1px dashed #c4d4e2;border-radius:5px;background:white}
+#beta-settings .beta-flow-option-label {display:block;font-size:11px;font-weight:600;color:#526b80;margin:0 0 9px}
+#beta-settings .beta-flow-arrow,#beta-settings .beta-flow-down {color:#526b80;font-weight:700;font-size:21px;line-height:1.35;text-align:center}
+#beta-settings .beta-flow-options p,#beta-settings .beta-flow-note,#beta-settings .beta-flow-branches p,#beta-settings .beta-flow-legacy p {margin:7px 0 0;color:#526b80;text-align:center;font-size:11px;line-height:1.5}
+#beta-settings .beta-flow-branches {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-width:620px;margin:auto;gap:16px;position:relative}
+#beta-settings .beta-flow-branches>div {text-align:center}
+#beta-settings .beta-flow-legacy {padding:12px;border:1px dashed #c4d4e2;border-radius:5px;margin-top:10px}
+@media(max-width:1000px){#beta-settings .beta-status-column:first-child .settings-item:last-child {border-bottom:1px solid #d9e4ed}#beta-settings .beta-status-column .settings-item {border-right:0}}
+@media(max-width:600px){#beta-settings .beta-flow-stage {padding:10px}#beta-settings .beta-flow-branches {gap:6px}#beta-settings .beta-flow-node {font-size:11px;padding:7px}}
