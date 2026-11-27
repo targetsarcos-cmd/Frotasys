@@ -677,3 +677,64 @@ body.workspace-beta #search-modal-overlay .modal-footer {background:#fff;border-
 #beta-settings #beta-settings-empty {background:#fff;border:1px solid #cddde9;border-radius:6px;padding:20px;text-align:center;color:#60778a}
 @media(max-width:1350px){#beta-settings .beta-settings-overview{grid-template-columns:repeat(2,minmax(0,1fr))}#beta-settings .settings-export-form{grid-template-columns:repeat(2,minmax(0,1fr))}#beta-settings .settings-export-btn{grid-column:1/-1}}
 @media(max-width:1000px){#beta-settings .beta-settings-body{grid-template-columns:1fr}#beta-settings .operation-message-grid,#beta-settings .beta-status-settings .settings-list{grid-template-columns:1fr}}
+
+
+/* User administration workspace */
+#beta-users {font:400 13px/1.45 'Segoe UI',Arial,sans-serif;color:#173950}
+#beta-users .beta-users-head {display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 16px}
+#beta-users h1 {margin:0;font-size:26px;line-height:1.2;color:#17354c}
+#beta-users p {margin:5px 0 0;color:#526b80;font-size:12px}
+#beta-users .beta-users-actions {display:flex;gap:8px;flex-shrink:0}
+#beta-users button {height:34px;padding:0 12px;border:1px solid #b5c9db;border-radius:4px;background:white;color:#135c92;font:600 12px 'Segoe UI',sans-serif;cursor:pointer}
+#beta-users button:hover:not(:disabled) {background:#eaf3fa}
+#beta-users button:disabled {opacity:.5;cursor:default}
+#beta-users :is(.beta-users-primary,#user-create-submit) {background:#135c92;color:#fff;border-color:#135c92}
+#beta-users :is(.beta-users-primary,#user-create-submit):hover:not(:disabled) {background:#0e4875}
+#beta-users .beta-users-danger {color:#a92f37;border-color:#d9a5a9}
+#beta-users .beta-users-danger:hover:not(:disabled) {background:#fff0f0}
+#beta-users .beta-users-overview {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+#beta-users .beta-users-kpi {display:grid;gap:6px;border:1px solid #cddde9;border-radius:7px;background:#fff;padding:15px 17px}
+#beta-users .beta-users-kpi span {font-size:12px;color:#526b80;font-weight:600}
+#beta-users .beta-users-kpi strong {font-size:27px;color:#173950;font-variant-numeric:tabular-nums;line-height:1.2}
+#beta-users .beta-users-card {background:#fff;border:1px solid #cddde9;border-radius:7px;padding:16px;margin:0 0 16px;min-width:0}
+#beta-users .beta-users-card-head {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+#beta-users h2 {margin:0;font-size:16px;font-weight:700;color:#173950}
+#beta-users h3 {margin:0;font-size:14px;font-weight:700;color:#173950}
+#beta-users #beta-users-count {font-size:12px;color:#526b80;font-weight:600}
+#beta-users .beta-users-filters {display:grid;grid-template-columns:minmax(220px,2fr) minmax(120px,1fr) minmax(120px,1fr);gap:10px;margin:0 0 12px}
+#beta-users label {display:grid;gap:5px;min-width:0;font:600 12px 'Segoe UI',sans-serif;color:#526b80}
+#beta-users :is(input:not([type=checkbox]),select) {box-sizing:border-box;height:35px;width:100%;min-width:0;border:1px solid #b5c9db;border-radius:4px;background:white;color:#173950;padding:7px 9px;font:400 13px 'Segoe UI',sans-serif;box-shadow:none}
+#beta-users :is(input,select,button):focus-visible {outline:2px solid #3684be;outline-offset:1px}
+#beta-users #beta-users-message {margin-bottom:9px;color:#526b80;font-weight:600}
+#beta-users #beta-users-message:empty {display:none}
+#beta-users .beta-users-table-wrap {overflow:auto;border:1px solid #cddde9;border-radius:5px}
+#beta-users .beta-users-table {width:100%;min-width:650px;border-collapse:separate;border-spacing:0;text-align:left;color:#173950}
+#beta-users .beta-users-table th {padding:11px 12px;background:var(--beta-navy,#142b42);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.2px}
+#beta-users .beta-users-table td {padding:9px 12px;border-bottom:1px solid #d9e4ed;background:#fff;vertical-align:middle}
+#beta-users .beta-users-table tr:nth-child(even) td {background:#f5f8fb}
+#beta-users .beta-users-table tr:hover td {background:#edf5fb}
+#beta-users .beta-users-table tr:last-child td {border-bottom:0}
+#beta-users .beta-users-table th:last-child,#beta-users .beta-users-table td:last-child {text-align:right}
+#beta-users .beta-users-person {display:flex;align-items:center;gap:10px;font-weight:600}
+#beta-users .beta-users-person small {display:block;font-size:10px;color:#60778a;font-weight:400}
+#beta-users .beta-users-avatar {display:grid;place-items:center;flex:0 0 32px;height:32px;background:#e4edf7;border-radius:50%;color:#135c92;font-size:12px;font-weight:700}
+#beta-users .beta-users-state {display:inline-flex;align-items:center;gap:5px;border:1px solid #cbdce9;border-radius:4px;padding:3px 7px;font-size:11px;font-weight:600;background:#edf2f6;color:#526b80}
+#beta-users .beta-users-state::before {content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+#beta-users .beta-users-state.is-active {background:#e8f5ee;border-color:#bbdfcc;color:#16734c}
+#beta-users .beta-users-empty {text-align:center!important;color:#60778a;padding:20px!important}
+#beta-users .user-create-form {display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto auto;gap:10px;align-items:end;margin:0;padding:0;border:0;background:#fff}
+#beta-users .user-create-title,#beta-users .user-create-message {grid-column:1/-1}
+#beta-users .user-create-title {font:700 16px 'Segoe UI',sans-serif;color:#173950}
+#beta-users .user-create-active {display:flex;align-items:center;height:35px}
+#beta-users #beta-users-editor {scroll-margin-top:80px}
+#beta-users #beta-users-edit-form {display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;padding-bottom:16px;border-bottom:1px solid #d9e4ed}
+#beta-users .beta-users-security {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px}
+#beta-users .beta-users-security form {display:grid;align-content:start;gap:10px;border:1px solid #cddde9;border-radius:6px;background:#f5f8fb;padding:14px}
+#beta-users .beta-users-security form p {margin:0;line-height:1.5}
+#beta-users .beta-users-security form button {justify-self:start}
+#beta-users #beta-users-delete-form {border-color:#e3c3c5;background:#fffafa}
+#beta-users #beta-users-delete-form h3 {color:#a92f37}
+#beta-users #beta-users-edit-message {margin-top:12px;color:#135c92;font-weight:600}
+#beta-users #beta-users-edit-message.is-error {color:#a92f37}
+@media(max-width:1250px){#beta-users :is(.user-create-form,#beta-users-edit-form){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){#beta-users .beta-users-head{align-items:flex-start;flex-wrap:wrap}#beta-users .beta-users-overview{grid-template-columns:repeat(2,minmax(0,1fr))}#beta-users :is(.beta-users-security,.beta-users-filters){grid-template-columns:1fr}}
