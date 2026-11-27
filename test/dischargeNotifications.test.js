@@ -62,8 +62,8 @@ test('grupos recolhíveis, sino no topo e ação agendado mantêm a edição aut
   assert.match(js,/id="beta-advance-list"/);
   assert.match(js,/id="beta-discharge-list"/);
   assert.match(js,/const total=items\.length\+advances\.length;/);
-  assert.match(js,/patch=\{descargaVerde:true\}/);
-  assert.match(js,/parseDischargeDate\(input\.value\)/);
+  assert.match(js,/confirm\?\{descarga:parsed,descargaVerde:true\}:\{descarga:parsed\}/);
+  assert.match(js,/dischargeEditPatch\(input\.value,confirm\)/);
   assert.match(css,/#reminder-text \{height:175px;min-height:175px/);
 });
 
@@ -97,4 +97,25 @@ test('data de carregamento no cabeçalho e validação sem aviso textual',()=>{
   assert.doesNotMatch(js,/Informe uma data e hora válidas/);
   assert.match(js,/if\(!parsed\)/);
   assert.match(js,/input\.setAttribute\('aria-invalid','true'\)/);
+});
+
+test('editor carrega a data existente, salva sem confirmar e confirma com os valores novos',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const normalizer=app.slice(app.indexOf('function normalizeDescargaDateTime('),app.indexOf('function descargaToInputValue('));
+  const helpers=js.slice(js.indexOf('  function dischargeEditorValue('),js.indexOf('  function attachDischargeMask('));
+  const {dischargeEditorValue,dischargeEditPatch}=new Function(normalizer+helpers+'return {dischargeEditorValue,dischargeEditPatch};')();
+  assert.equal(dischargeEditorValue('08:30 27/11/2026'),'27/11/2026 08:30');
+  assert.equal(dischargeEditorValue('2026-11-27T08:30'),'27/11/2026 08:30');
+  assert.equal(dischargeEditorValue('27/11/2026 08:30'),'27/11/2026 08:30');
+  assert.equal(dischargeEditorValue(''),'');
+  assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',false),{descarga:'09:45 28/11/2026'});
+  assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',true),{descarga:'09:45 28/11/2026',descargaVerde:true});
+  assert.equal(dischargeEditPatch('31/02/2026 09:45',true),null);
+  assert.equal(dischargeEditPatch('',false),null);
+  assert.match(js,/edit.addEventListener\('click',openEditor\)/);
+  assert.match(js,/save.addEventListener\('click',\(\)=>persistDischarge\(false\)\)/);
+  assert.match(js,/cancel.addEventListener\('click',closeEditor\)/);
+  assert.match(js,/if\(confirm\)card.remove\(\)/);
+  assert.match(js,/if\(dischargeWrites\|\|document.activeElement\?\.matches\('\.beta-discharge-schedule'\)\)return/);
 });
