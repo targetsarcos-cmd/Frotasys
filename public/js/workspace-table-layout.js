@@ -1,8 +1,8 @@
 /* Minimum column widths keep controls readable when the trip drawer is open. */
 (function(root){
   'use strict';
-  const fixed={tipo:104,trabalho:132,actions:72};
-  const flexible={placa:85,nome:120,origem:112,destino:98,produto:78,peso:68,agendamento:94,descarga:154,frete:100};
+  const fixed={tipo:104,produto:64,peso:60,trabalho:132,actions:72};
+  const flexible={placa:85,nome:120,origem:112,destino:98,agendamento:94,descarga:154,frete:100};
   function layout(keys){
     const hasStatus=keys.includes('status');
     const fixedWidth=keys.reduce((sum,key)=>sum+(fixed[key]||0),0);
