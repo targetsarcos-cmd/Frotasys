@@ -4864,6 +4864,13 @@ function prepareBetaSettingsPage() {
   if(!page||!target||!body)return;
   body.classList.add('beta-settings-body');
   target.append(body);
+  const primary=document.createElement('div');
+  primary.className='beta-settings-primary';
+  const profile=document.createElement('div');
+  profile.id='settings-profile-top';profile.className='settings-profile-top';
+  const extra=document.createElement('div');extra.id='beta-settings-extra';
+  primary.append(profile,body.querySelector('.settings-export-section'),document.getElementById('settings-operations'),extra);
+  body.prepend(primary);
   document.getElementById('beta-settings-search').addEventListener('input',filterBetaSettingsPage);
   page.addEventListener('click',event=>{
     const tab=event.target.closest('[data-settings-tab]');
@@ -4877,13 +4884,24 @@ function prepareBetaSettingsPage() {
       return;
     }
     const edit=event.target.closest('[data-settings-edit]');
-    if(edit) editBetaSettingsName(edit);
+    if(edit){editBetaSettingsName(edit);return;}
+    const remove=event.target.closest('[data-settings-delete]');
+    if(remove){
+      const field=remove.dataset.settingsDelete;
+      const value=configOptionList(field)[Number(remove.dataset.settingsIndex)];
+      if(value)deleteConfigOption(field,value);
+    }
   });
 }
 
 function syncBetaSettingsPage() {
   const page=document.getElementById('beta-settings');
   if(!page)return;
+  const extra=document.getElementById('beta-settings-extra');
+  const destination=page.querySelector('#settings-grid [data-field="destino"]');
+  const work=page.querySelector('#settings-grid .settings-work-section');
+  if(destination)extra.append(destination);
+  if(work)extra.append(work);
   const cards=page.querySelectorAll('.settings-section');
   for(const card of cards){
     card.dataset.settingsCategory=card.matches('.settings-operation-messages-section')?'messages':
@@ -4900,7 +4918,7 @@ function syncBetaSettingsPage() {
   ]:[['Perfil',loggedUserDisplayName(),'Preferências pessoais','.settings-profile-section','#beta-icon-users']];
   overview.innerHTML=entries.map(([label,value,description,selector,icon])=>'<button type="button" class="beta-settings-kpi" data-settings-jump="'+escapeAttr(selector)+'"><span class="beta-settings-kpi-icon"><svg aria-hidden="true"><use href="'+icon+'"/></svg></span><span><small>'+escapeHtml(label)+'</small><strong>'+escapeHtml(String(value))+'</strong><span>'+escapeHtml(description)+'</span></span><svg class="beta-settings-chevron" aria-hidden="true"><use href="#beta-icon-right"/></svg></button>').join('');
   if(isBetaReadOnly()){
-    page.querySelectorAll('#beta-settings-content input,#beta-settings-content textarea,#beta-settings-content select,#beta-settings-content button').forEach(el=>el.disabled=true);
+    page.querySelectorAll('#beta-settings-content input,#beta-settings-content textarea,#beta-settings-content select,#beta-settings-content button').forEach(el=>{if(!el.closest('.settings-export-section'))el.disabled=true;});
     document.getElementById('beta-settings-notice').textContent='Modo somente leitura. As configurações não podem ser alteradas.';
   }
   page.querySelectorAll('[data-settings-tab]:not([data-settings-tab="all"])').forEach(btn=>btn.hidden=!admin);
@@ -4994,6 +5012,7 @@ function closeSettingsModal() {
 
 function renderSettingsModal() {
   const body = document.querySelector(isBetaTripWorkspace() ? '#beta-settings-content .beta-settings-body' : '#settings-modal-overlay .modal-body');
+  if(isBetaTripWorkspace()) document.getElementById('beta-settings-extra')?.replaceChildren();
   let profileTop = document.getElementById('settings-profile-top');
   if (body && !profileTop) {
     body.insertAdjacentHTML('afterbegin', '<div id="settings-profile-top" class="settings-profile-top"></div>');
@@ -5032,7 +5051,7 @@ function renderSettingsModal() {
             <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
           </div>
           ${isBetaTripWorkspace() ? renderBetaConfigEditButton(field.key, value, index) : ''}
-          <button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>
+          ${isBetaTripWorkspace() ? `<button type="button" data-settings-delete="${field.key}" data-settings-index="${index}" title="Excluir">Excluir</button>` : `<button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>`}
         </div>`).join('')}
       </div>
     </section>`;
@@ -5414,6 +5433,13 @@ function renderConfigColorPicker(field, value) {
 
 async function setConfigColor(field, value, color) {
   if (!CONFIG_COLOR_FIELDS.includes(field) || !isHexColor(color)) return;
+  if (isBetaTripWorkspace()) {
+    if(!isAdmin()||isBetaReadOnly())return;
+    const saved=await apiFetch(`/api/config-colors/${encodeURIComponent(field)}/${encodeURIComponent(value)}`,{method:'PUT',body:JSON.stringify({color})});
+    if(saved){state.configColors=mergeConfigColors(saved);renderAll();showSummaryToast('Cor salva');}
+    renderSettingsModal();
+    return;
+  }
   const normalized = normalizeOption(value);
   state.configColors[field] = { ...(state.configColors[field] || {}), [normalized]: color };
   renderAll();
