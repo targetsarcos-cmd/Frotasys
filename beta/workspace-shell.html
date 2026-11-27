@@ -378,3 +378,46 @@
   <div id="beta-settings-content"></div>
   <div id="beta-settings-empty" hidden>Nenhuma configuração encontrada.</div>
 </main>
+
+<main class="workspace" id="beta-users" aria-labelledby="beta-users-title" hidden>
+  <header class="pagehead beta-users-head">
+    <div><h1 id="beta-users-title">Usuários</h1><p>Gerencie contas, perfis de acesso e segurança do sistema.</p></div>
+    <div class="beta-users-actions"><button type="button" id="beta-users-refresh">Atualizar</button><button type="button" id="beta-users-new" class="beta-users-primary">+ Novo usuário</button></div>
+  </header>
+  <div class="beta-users-overview" id="beta-users-overview" aria-label="Visão geral dos usuários"></div>
+  <section id="beta-users-create" class="beta-users-card" hidden></section>
+  <section class="beta-users-card" aria-labelledby="beta-users-list-title">
+    <div class="beta-users-card-head"><div><h2 id="beta-users-list-title">Gerenciamento de usuários</h2><p>Contas cadastradas no sistema</p></div><span id="beta-users-count" aria-live="polite"></span></div>
+    <div class="beta-users-filters">
+      <label>Pesquisar<input type="search" id="beta-users-search" placeholder="Nome ou e-mail"></label>
+      <label>Perfil<select id="beta-users-role"><option value="">Todos</option><option value="admin">Administrador</option><option value="operador">Operador</option><option value="visualizador">Visualizador</option></select></label>
+      <label>Status<select id="beta-users-status"><option value="">Todos</option><option value="active">Ativos</option><option value="inactive">Inativos</option></select></label>
+    </div>
+    <div id="beta-users-message" role="status" aria-live="polite"></div>
+    <div id="beta-users-table"></div>
+  </section>
+  <section class="beta-users-card beta-users-editor" id="beta-users-editor" hidden aria-labelledby="beta-users-edit-title">
+    <div class="beta-users-card-head"><div><h2 id="beta-users-edit-title">Editar usuário</h2><p id="beta-users-edit-email"></p></div><button type="button" id="beta-users-edit-close">Fechar</button></div>
+    <form id="beta-users-edit-form">
+      <label>Nome<input id="beta-user-edit-name" required maxlength="100" autocomplete="off"></label>
+      <label>E-mail<input id="beta-user-edit-email" type="email" required maxlength="254" autocomplete="off"></label>
+      <label>Perfil<select id="beta-user-edit-role"><option value="admin">Administrador</option><option value="operador">Operador</option><option value="visualizador">Visualizador</option></select></label>
+      <label>Status<select id="beta-user-edit-status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label>
+      <button type="submit" class="beta-users-primary">Salvar alterações</button>
+    </form>
+    <div class="beta-users-security">
+      <form id="beta-users-password-form" autocomplete="off">
+        <h3>Redefinir senha</h3><p>A senha atual não é exibida. A nova senha substitui a anterior no Supabase Auth.</p>
+        <label>Nova senha<input id="beta-user-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+        <label>Confirmar nova senha<input id="beta-user-password-confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+        <button type="submit" class="beta-users-primary">Redefinir senha</button>
+      </form>
+      <form id="beta-users-delete-form" autocomplete="off">
+        <h3>Excluir conta definitivamente</h3><p>Remove o login do Supabase Auth e o perfil do sistema compartilhado com a produção. Não apaga viagens.</p>
+        <label>Confirme digitando o e-mail da conta<input id="beta-user-delete-email" type="email" autocomplete="off" required></label>
+        <button type="submit" class="beta-users-danger">Excluir usuário</button>
+      </form>
+    </div>
+    <div id="beta-users-edit-message" role="status" aria-live="polite"></div>
+  </section>
+</main>
