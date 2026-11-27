@@ -840,7 +840,7 @@ body.workspace-beta #event-warning button:disabled {opacity:.55;cursor:wait}
 #beta-shell .beta-notice-group summary::before {content:'›';display:inline-block;font-size:17px;line-height:1}
 #beta-shell .beta-notice-group[open] summary::before {transform:rotate(90deg)}
 #beta-shell .beta-notice-group summary span {margin-left:auto;background:#d0dfeb;color:#244967;padding:1px 6px;border-radius:4px;font-size:11px}
-#beta-shell #beta-discharge-list,#beta-shell #beta-advance-list,#beta-shell #beta-program-list {display:grid;gap:6px;padding:6px}
+#beta-shell #beta-discharge-list,#beta-shell #beta-advance-list {display:grid;gap:6px;padding:6px}
 #beta-shell .beta-notice-group:not([open])>div {display:none!important}
 #beta-shell .beta-discharge-card-top {justify-content:flex-start;align-items:baseline;gap:8px;flex-wrap:wrap}
 #beta-shell .beta-discharge-driver {font-size:12px;font-weight:600}
