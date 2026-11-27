@@ -5259,7 +5259,7 @@ function syncBetaSettingsPage() {
   const cards=page.querySelectorAll('.settings-section');
   for(const card of cards){
     card.dataset.settingsCategory=card.matches('.settings-operation-messages-section')?'messages':
-      card.matches('.settings-work-section,.settings-operations-section,[data-field="tipo"],[data-field="status"]')?'operational':
+      card.matches('.settings-work-section,.settings-operations-section,.beta-status-flow,[data-field="tipo"],[data-field="status"]')?'operational':
       card.hasAttribute('data-field')?'catalog':'general';
   }
   const admin=isAdmin();
@@ -5295,9 +5295,43 @@ function filterBetaSettingsPage() {
   document.getElementById('beta-settings-empty').hidden=shown>0;
 }
 
+function orderedBetaStatuses() {
+  const order=['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA','CADASTRANDO','CRIANDO DT','CRIAR DT / PROGRAMAR','CRIAR DT','PROGRAMAR','ENVIAR PEDIDO','AGUARDANDO CARREGAMENTO','EMITIR CTE','MANIFESTO','HORA NF','ADIANTAMENTO / DESCARGA','FALTA ADIANTAMENTO','ADIANTAMENTO','AGENDAR DESCARGA','CONCLUIDO'];
+  const available=[...new Set([...STATUS,...Object.keys(DEFAULT_CONFIG_COLORS.status)])];
+  return [...order.filter(value=>available.includes(value)),...available.filter(value=>!order.includes(value))];
+}
+
 function renderBetaStatusSettings() {
-  const statuses=[...new Set([...STATUS,...Object.keys(DEFAULT_CONFIG_COLORS.status)])];
-  return '<section class="settings-section has-colors beta-status-settings" data-field="status"><div class="settings-section-head"><strong>STATUS OPERACIONAIS</strong><span>'+statuses.length+' status</span></div><p class="beta-settings-section-help">Cores personalizáveis. Os nomes e a sequência são definidos pelo fluxo da viagem.</p><div class="settings-list">'+statuses.map(value=>'<div class="settings-item"><span>'+escapeHtml(value)+'</span>'+renderConfigColorPicker('status',value)+'</div>').join('')+'</div></section>';
+  const statuses=orderedBetaStatuses();
+  const middle=Math.ceil(statuses.length/2);
+  const column=(values,offset)=>'<div class="beta-status-column">'+values.map((value,i)=>'<div class="settings-item"><span class="beta-status-number">'+String(offset+i+1).padStart(2,'0')+'.</span><span class="beta-status-name">'+escapeHtml(value)+'</span>'+renderConfigColorPicker('status',value)+'</div>').join('')+'</div>';
+  return '<section class="settings-section has-colors beta-status-settings" data-field="status"><div class="settings-section-head"><strong>STATUS OPERACIONAIS</strong><span>'+statuses.length+' status</span></div><p class="beta-settings-section-help">Cores personalizáveis. Status organizados conforme o fluxo operacional.</p><div class="settings-list">'+column(statuses.slice(0,middle),0)+column(statuses.slice(middle),middle)+'</div></section>';
+}
+
+function renderBetaStatusFlow() {
+  const node=(status)=>'<span class="beta-flow-node" style="'+escapeAttr(colorPreviewStyle(configColor('status',status)))+'">'+escapeHtml(status)+'</span>';
+  const arrow='<span class="beta-flow-arrow" aria-hidden="true">→</span>';
+  const down='<div class="beta-flow-down" aria-hidden="true">↓</div>';
+  const row=(items)=>'<div class="beta-flow-row">'+items.map(node).join(arrow)+'</div>';
+  const options=(label,items,description)=>'<div class="beta-flow-options"><span class="beta-flow-option-label">'+escapeHtml(label)+'</span><div class="beta-flow-option-nodes">'+items.map(node).join('')+'</div><p>'+escapeHtml(description)+'</p></div>';
+  return '<section class="settings-section beta-status-flow" aria-labelledby="beta-status-flow-title">'+
+    '<div class="settings-section-head"><strong id="beta-status-flow-title">FLUXOGRAMA DOS STATUS</strong><span>Fluxo operacional</span></div>'+
+    '<p class="beta-settings-section-help">As cores acompanham as configurações acima. A viagem avança conforme as confirmações e os documentos preenchidos.</p>'+
+    '<div class="beta-flow-content">'+
+    '<div class="beta-flow-stage"><h4>01 · Cadastro e preparação</h4>'+
+    options('Pendências cadastrais, quando aplicáveis',['CONFERIR MOTORISTA','SEM CADASTRO','SEM CADASTRO / DT CRIADA'],'Resolver a pendência cadastral para prosseguir.')+
+    down+options('DT e programação',['CRIAR DT / PROGRAMAR','CRIAR DT','PROGRAMAR'],'Criar a DT e confirmar a programação. As três situações dependem dos campos já preenchidos.')+
+    down+row(['ENVIAR PEDIDO','AGUARDANDO CARREGAMENTO'])+
+    '<p class="beta-flow-note">O envio do pedido é registrado após a programação.</p></div>'+
+    down+'<div class="beta-flow-stage"><h4>02 · Carregamento e faturamento</h4>'+row(['EMITIR CTE','HORA NF'])+
+    '<p class="beta-flow-note">Nota fiscal, pedágio e documentos obrigatórios; depois, registrar a hora da NF. Frota não exige contrato.</p></div>'+
+    down+'<div class="beta-flow-stage"><h4>03 · Pendências finais</h4>'+
+    '<div class="beta-flow-row">'+node('ADIANTAMENTO / DESCARGA')+'</div>'+
+    '<div class="beta-flow-branches"><div>'+down+node('ADIANTAMENTO')+'<p>Somente adiantamento pendente</p></div><div>'+down+node('AGENDAR DESCARGA')+'<p>Somente descarga pendente</p></div></div>'+
+    '<div class="beta-flow-down" aria-hidden="true">↓</div><div class="beta-flow-row">'+node('CONCLUIDO')+'</div>'+
+    '<p class="beta-flow-note">Concluído quando as duas pendências forem resolvidas. A frota é dispensada do adiantamento. Uma viagem sem pendências pode avançar diretamente.</p></div>'+
+    '<div class="beta-flow-legacy"><h4>Status complementares</h4><div class="beta-flow-option-nodes">'+['CADASTRANDO','CRIANDO DT','MANIFESTO','FALTA ADIANTAMENTO'].map(node).join('')+'</div><p>Rótulos mantidos na configuração de cores; não são etapas obrigatórias do cálculo automático atual.</p></div>'+
+    '</div></section>';
 }
 
 function renderBetaConfigEditButton(field,value,index) {
@@ -5366,7 +5400,10 @@ function closeSettingsModal() {
 
 function renderSettingsModal() {
   const body = document.querySelector(isBetaTripWorkspace() ? '#beta-settings-content .beta-settings-body' : '#settings-modal-overlay .modal-body');
-  if(isBetaTripWorkspace()) document.getElementById('beta-settings-extra')?.replaceChildren();
+  if(isBetaTripWorkspace()) {
+    document.getElementById('beta-settings-extra')?.replaceChildren();
+    body?.querySelector('.beta-status-flow')?.remove();
+  }
   let profileTop = document.getElementById('settings-profile-top');
   if (body && !profileTop) {
     body.insertAdjacentHTML('afterbegin', '<div id="settings-profile-top" class="settings-profile-top"></div>');
@@ -5410,7 +5447,11 @@ function renderSettingsModal() {
       </div>
     </section>`;
   }).join('');
-  if (isBetaTripWorkspace()) { grid.insertAdjacentHTML('beforeend',renderBetaStatusSettings()); syncBetaSettingsPage(); }
+  if (isBetaTripWorkspace()) {
+    grid.insertAdjacentHTML('beforeend',renderBetaStatusSettings());
+    body?.insertAdjacentHTML('beforeend',renderBetaStatusFlow());
+    syncBetaSettingsPage();
+  }
 }
 
 function renderProfileSettingsSection() {
