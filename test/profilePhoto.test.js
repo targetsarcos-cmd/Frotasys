@@ -47,3 +47,24 @@ test('miniaturas aparecem no perfil e nas sessões individuais e múltiplas',()=
   assert.match(server,/saveUserProfileSettings\(req.authUser.id/);
   assert.match(app,/canvas.width=128;canvas.height=128/);
 });
+
+test('cabecalho principal usa a foto persistida e volta às iniciais quando removida',()=>{
+  const start=app.indexOf('function safeProfilePhoto('),end=app.indexOf('function loggedUserBadgeHtml()',start);
+  const avatar={innerHTML:''},username={textContent:''};
+  const document={querySelector:selector=>selector.endsWith('.avatar')?avatar:username};
+  const state={userProfile:{avatarUrl:photo}};
+  const sync=new Function('escapeHtml','escapeAttr','initialsFromName','loggedUserDisplayName','document','state',app.slice(start,end)+'return syncWorkspaceProfileHeader;')(String,String,()=> 'AM',()=> 'Ana Maria',document,state);
+  sync();
+  assert.equal(username.textContent,'Ana Maria');
+  assert.match(avatar.innerHTML,/<img class="profile-avatar-image"/);
+  assert.ok(avatar.innerHTML.includes(photo));
+  state.userProfile.avatarUrl='';
+  sync();
+  assert.equal(avatar.innerHTML,'AM');
+  state.userProfile.avatarUrl='https://example.com/photo.jpg';
+  sync();
+  assert.equal(avatar.innerHTML,'AM');
+  const workspace=read('public/js/workspace-beta.js');
+  assert.doesNotMatch(workspace,/querySelector\('\.avatar'\)\.textContent/);
+  assert.match(app,/function applyPermissions\(\)[\s\S]*?syncWorkspaceProfileHeader\(\);/);
+});
