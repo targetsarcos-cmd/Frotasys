@@ -228,7 +228,7 @@
       function appendBatch(){
         const next=rows.slice(shown,shown+50);
         for(const item of next){
-          const card=makeElement('article','beta-discharge-card');
+          const card=makeElement('article','beta-discharge-card'+(kind==='discharge'?' beta-discharge-card-schedule':''));
           const top=makeElement('div','beta-discharge-card-top');
           const identity=makeElement('div','beta-notice-identity');
           identity.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-driver',item.nome||'Motorista não informado'));
@@ -243,7 +243,6 @@
           const draft=dischargeDrafts.get(item.id);
           const copyRow=makeElement('div','beta-discharge-copy-row');
           if(kind==='discharge'){
-            const value=makeElement('span','beta-discharge-copy-value',item.copiar);
             const copy=makeElement('button','beta-discharge-copy','Copiar');
             copy.type='button';copy.title='Copiar placa, produto e nota fiscal';
             copy.addEventListener('click',async()=>{
@@ -251,7 +250,7 @@
               catch(_error){copy.textContent='Falha ao copiar';}
               setTimeout(()=>{copy.textContent='Copiar';},1700);
             });
-            copyRow.append(value,copy);
+            copyRow.append(copy);
           }
           if(canEditViagens()){
             const mark=makeElement('button','beta-discharge-mark',kind==='discharge'?'Agendado':'Adiantamento OK');
