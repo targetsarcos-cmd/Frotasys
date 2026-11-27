@@ -857,3 +857,11 @@ body.workspace-beta #event-warning button:disabled {opacity:.55;cursor:wait}
 #beta-shell .beta-discharge-copy-row:has(>button:only-child) {justify-content:flex-end;background:transparent;padding:2px 0}
 #beta-shell .beta-discharge-schedule {font-variant-numeric:tabular-nums;font-size:13px;height:32px}
 #beta-shell .beta-discharge-mark:disabled {cursor:not-allowed}
+
+/* Data de carregamento alinhada à direita dos cartões de notificação. */
+#beta-shell .beta-discharge-card-top {justify-content:space-between;align-items:baseline;flex-wrap:nowrap;gap:6px}
+#beta-shell .beta-notice-identity {display:flex;align-items:baseline;gap:7px;flex:1;min-width:0}
+#beta-shell .beta-notice-identity strong {flex:none}
+#beta-shell .beta-notice-identity .beta-discharge-driver {min-width:0;overflow-wrap:anywhere}
+#beta-shell .beta-notice-loading-date {flex:none;margin-left:auto;text-align:right;font-size:12px;font-weight:600;color:#526b80;white-space:nowrap;font-variant-numeric:tabular-nums}
+#beta-shell .beta-discharge-schedule[aria-invalid=true] {border-color:#b52f3b}
