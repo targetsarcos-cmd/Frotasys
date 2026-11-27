@@ -77,6 +77,7 @@
     const label = compact ? 'Expandir menu' : 'Recolher menu';
     event.currentTarget.setAttribute('aria-expanded', String(!compact));
     event.currentTarget.setAttribute('aria-label', label);
+    event.currentTarget.title=label;
     event.currentTarget.querySelector('span').textContent = label;
   };
   byId('logout').onclick = () => byId('btn-logout').click();
