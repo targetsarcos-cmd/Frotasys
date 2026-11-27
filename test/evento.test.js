@@ -16,17 +16,22 @@ function setup() {
   }
   const express = Object.assign(() => app, { static: noop, json: noop });
   const records = new Map();
+  const config = [];
+  const traffic = { bytes: 0, reads: 0 };
   let revision = 0;
   const messages = [];
   const db = {
     from(table) {
-      let rows = table === 'viagens' ? [...records.values()] : [];
+      let rows = table === 'viagens' ? [...records.values()] : table === 'config_options' ? [...config] : [];
+      let columns, head, limit = Infinity;
       let patch;
       const value = (row, key) => key.startsWith('dados->>') ? row.dados[key.slice(8)] : row[key];
       return {
-        select() { return this; },
+        select(fields, options = {}) { columns = fields.split(','); head = options.head; return this; },
+        gt(key, v) { rows = rows.filter(row => value(row, key) > v); return this; },
+        order(key) { rows.sort((a,b) => String(value(a,key)).localeCompare(String(value(b,key)))); return this; },
         in(key, values) { rows = rows.filter(row => values.includes(value(row, key))); return this; },
-        limit(n) { rows = rows.slice(0, n); return this; },
+        limit(n) { limit = n; return this; },
         eq(key, v) { rows = rows.filter(row => value(row, key) === v); return this; },
         ilike(key, v) {
           rows = rows.filter(row => String(value(row, key) || '').toLowerCase().includes(v.slice(1, -1).toLowerCase()));
@@ -46,7 +51,16 @@ function setup() {
           return { data: row ? structuredClone(row) : null };
         },
         single() { return this.maybeSingle(); },
-        then(resolve) { resolve({ data: structuredClone(rows) }); }
+        then(resolve) {
+          traffic.reads++;
+          if (head) return resolve({ count: rows.length });
+          const data = rows.slice(0,limit).map(row => Object.fromEntries((columns || Object.keys(row)).map(col => {
+            const [alias,key] = col.split(':dados->');
+            return [alias,key ? row.dados[key] ?? null : row[alias]];
+          })));
+          traffic.bytes += Buffer.byteLength(JSON.stringify(data));
+          resolve({ data: structuredClone(data) });
+        }
       };
     }
   };
@@ -86,7 +100,7 @@ function setup() {
     }
     return res;
   }
-  return { server, records, messages, request };
+  return { server, records, messages, request, config, traffic };
 }
 
 const collection = '/api/viagens';
@@ -409,4 +423,33 @@ test('tabela, painel, formulario, recarga e WebSocket com evento historico', asy
   await ui.saveViagem();
   assert.equal(writes.at(-1).frete, 'Nova viagem');
   assert.match(source('public/index.html'), /<form method="dialog"><button[^>]*>OK<\/button>/);
+});
+
+test('painel compartilha o catálogo paginado, preserva cores e conta sessões sem baixar o histórico', async () => {
+  const { server, request, config, traffic } = setup();
+  const add = dados => config.push({id:String(config.length + 1).padStart(5,'0'),dados});
+  const markers = vm.runInContext('Object.values(CONFIG_SEED_MARKERS)',server);
+  for (const marker of markers) add({field:'__system_seed',value:marker,normalized:marker});
+  for (let i=1;i<=260;i++) add({field:'origem',value:'LOCAL '+i,ordem:i,color:'#123456'});
+  const typeField = vm.runInContext('WORK_TYPE_FIELD',server);
+  const sessionField = vm.runInContext('WORK_SESSION_FIELD',server);
+  add({field:typeField,name:'Conferência',displayOrder:1});
+  const typeId=config.at(-1).id;
+  for(let i=0;i<500;i++) add({field:sessionField,workTypeId:typeId,note:'x'.repeat(1024)});
+  const [options,colors]=await Promise.all([request('get','/api/config-options'),request('get','/api/config-colors')]);
+  assert.equal(options.data.origem.length,260);
+  assert.equal(options.data.origem.at(-1),'LOCAL 260');
+  assert.equal(colors.data.origem['LOCAL 260'],'#123456');
+  assert.equal(traffic.reads,2);
+  const types=await request('get','/api/work-types');
+  assert.equal(types.data[0].usageCount,500);
+  const before=traffic.reads;
+  vm.runInContext('invalidateAfterWrite(TABLES.viagens)',server);
+  await request('get','/api/config-options');
+  await request('get','/api/work-types');
+  assert.equal(traffic.reads,before);
+  assert.ok(traffic.bytes<60000);
+  vm.runInContext('invalidateAfterWrite(TABLES.configOptions)',server);
+  config.find(row=>row.dados.value==='LOCAL 260').dados.color='#abcdef';
+  assert.equal((await request('get','/api/config-colors')).data.origem['LOCAL 260'],'#abcdef');
 });
