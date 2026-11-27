@@ -559,12 +559,13 @@ async function updateDoc(table, id, patch, snapshot) {
   };
   let query = supabase.from(table).update(frontendToSupabase(next)).eq('id', id);
   if (snapshot) query = query.eq('updated_at', snapshot.updatedAt);
-  const result = query.select(SUPABASE_DOC_SELECT);
+  const result = query.select(table===TABLES.viagens?tripProjection():SUPABASE_DOC_SELECT);
   const { data, error } = snapshot ? await result.maybeSingle() : await result.single();
   if (error) throw error;
   if (!data) return null;
-  invalidateAfterWrite(table,{...data.dados,id:data.id,_id:data.id},current);
-  return supabaseToFrontend(data);
+  const saved=table===TABLES.viagens?projectedTrip(data):supabaseToFrontend(data);
+  invalidateAfterWrite(table,saved,current);
+  return saved;
 }
 
 async function updateWhere(table, predicate, patchFactory) {
@@ -1716,13 +1717,25 @@ async function profileForUser(userId) {
   return publicProfile({ ...data, ...settings });
 }
 
+// Share only concurrent validations of the same token. Never cache an accepted
+// identity beyond the in-flight request, so revocation checks remain unchanged.
+const authInFlight=new Map();
+function verifyAuthUser(token){
+  if(authInFlight.has(token))return authInFlight.get(token);
+  const pending=Promise.resolve().then(()=>supabase.auth.getUser(token));
+  if(authInFlight.size>=128)return pending;
+  authInFlight.set(token,pending);
+  const clear=()=>{if(authInFlight.get(token)===pending)authInFlight.delete(token);};
+  pending.then(clear,clear);
+  return pending;
+}
 function requireAuth(req, res, next) {
   Promise.resolve().then(async () => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     if (!token) return res.status(401).json({ error: 'Login necessário.' });
 
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await verifyAuthUser(token);
     if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
 
     if (!canAccessUser(runtime,data.user.id,process.env)) return res.status(403).json({ error: 'Acesso restrito a beta.' });
@@ -2331,7 +2344,7 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
 
 wss.on('connection', ws => {
   bindAuthenticatedSocket(ws,{authenticate:async token=>{
-    const {data,error}=await supabase.auth.getUser(token);
+    const {data,error}=await verifyAuthUser(token);
     if(error||!data?.user||!canAccessUser(runtime,data.user.id,process.env))return null;
     const profile=await profileForUser(data.user.id);
     const claims=JSON.parse(Buffer.from(token.split('.')[1]||'','base64url').toString());
