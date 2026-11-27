@@ -766,6 +766,7 @@ body.workspace-beta #search-modal-overlay .modal-footer {background:#fff;border-
 .beta-comment-header .beta-comment-driver {margin-top:3px;font-size:12px;font-weight:600;color:#526b80;overflow-wrap:anywhere}
 .beta-comment-observation {padding:11px 10px}
 .beta-comment-observation p {margin:0;line-height:1.55}
-.beta-comment-observation .beta-comment-actions {margin-top:15px;gap:15px}
+.beta-comment-observation-group {display:grid;gap:12px;min-width:0}
+.beta-comment-observation-group > .beta-comment-actions {margin:0;padding:0 2px;gap:15px}
 .beta-comment-message-main > .beta-comment-actions {margin-top:14px}
-.beta-comment-observation .beta-comment-link,.beta-comment-message-main .beta-comment-link {margin-top:0}
+.beta-comment-observation-group > .beta-comment-actions .beta-comment-link,.beta-comment-message-main .beta-comment-link {margin-top:0}
