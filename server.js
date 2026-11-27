@@ -101,6 +101,8 @@ const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
 const DEFAULT_RANGE_LIMIT = 200;
 const VIAGENS_SEARCH_LIMIT = 200;
 const APP_CACHE_TTL_MS = 45 * 1000;
+// Enable only after installing and validating sql/egress-phase3.sql.
+const EGRESS_V3_RPC = runtime.production && process.env.FROTASYS_EGRESS_V3_RPC === '1';
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -579,6 +581,18 @@ async function updateDoc(table, id, patch, snapshot) {
     ...patch,
     updatedAt: new Date().toISOString()
   };
+  if(EGRESS_V3_RPC && table===TABLES.viagens && snapshot?.updatedAt){
+    // Keep all validation in the existing routes. The RPC merges only the
+    // validated fields into the raw document, under the same version check.
+    const delta=frontendToSupabase({...patch,createdAt:next.createdAt,status:next.status,secao:next.secao,usuario:next.usuario}).dados;
+    delete delta.updatedAt;
+    const {data,error}=await supabase.rpc('frotasys_trip_patch_v3',{p_id:String(id),p_expected:snapshot.updatedAt,p_patch:delta,p_fields:TRIP_READ_FIELDS});
+    if(error)throw error; // Never retry a potentially committed write.
+    if(!data?.row)return null;
+    const saved=projectedTrip(data.row);
+    if(data.changed)invalidateAfterWrite(table,saved,current);
+    return saved;
+  }
   let query = supabase.from(table).update(frontendToSupabase(next)).eq('id', id);
   if (snapshot) query = query.eq('updated_at', snapshot.updatedAt);
   const result = query.select(table===TABLES.viagens?tripProjection():SUPABASE_DOC_SELECT);
@@ -751,17 +765,14 @@ async function latestViagemByPlaca(placa) {
   if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
   return cachedValue('plate-lookup-'+normalizedPlaca,async()=>{
     // Preserve legacy JS status rules. Read the newest candidates first, stop
-    // as soon as the first eligible trip is found, and fetch contact data once.
+    // as soon as the first eligible trip is found; avoid a second, racy read.
     const pageSize=10;
-    const fields=[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt'])];
+    const fields=[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt','nome','carroceria','telefone','telefone2'])];
     const order=[{key:'data',ascending:false},{key:'createdAt',ascending:false},{key:'id',ascending:false,json:false}];
     for(let offset=0;offset<DEFAULT_RANGE_LIMIT;offset+=pageSize){
       const docs=await selectDocsByJson(TABLES.viagens,{placa:normalizedPlaca},{limit:pageSize,offset,fields,order});
       const match=docs.find(doc=>normalizeUniqueValue(doc.placa)===normalizedPlaca&&(isViagemBloqueada(doc)||normalizeUniqueValue(doc.status)==='CONCLUIDO'));
-      if(match){
-        const detail=await selectDocsByJson(TABLES.viagens,{placa:normalizedPlaca},{limit:1,fields:[...fields,'nome','carroceria','telefone','telefone2'],id:match._id});
-        return detail[0]||null;
-      }
+      if(match)return match;
       if(docs.length<pageSize)break;
     }
     return null;
@@ -3257,7 +3268,15 @@ app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) =
 
 app.get('/api/datas', async (req, res) => {
   try {
-    const datas = await cachedValue('available-trip-dates',async()=>[...new Set(await selectJsonTextValues(TABLES.viagens, 'data'))].sort(),30000);
+    const datas = await cachedValue('available-trip-dates',async()=>{
+      if(EGRESS_V3_RPC){
+        const {data,error}=await supabase.rpc('frotasys_trip_dates_v3');
+        if(error)throw error;
+        if(!Array.isArray(data))throw Error('Invalid dates response');
+        return data;
+      }
+      return [...new Set(await selectJsonTextValues(TABLES.viagens, 'data'))].sort();
+    },30000);
     res.json(datas);
   } catch (e) {
     res.status(500).json({ error: e.message });
