@@ -409,11 +409,11 @@ test('consulta frete beta separa rotas sem desagrupar categorias e eixos',()=>{
   assert.match(css,/\.rate-category-gap\s*\{width:14px;min-width:14px;max-width:14px;padding:0;border:0/);
   assert.match(css,/\.rate-agregado-title\s*\{background:#f8e8b0;color:#6b4c08/);
   assert.match(css,/\.rate-terceiros-title\s*\{background:#f6d3d4;color:#842d36/);
-  assert.match(css,/\.rate-route-title button\s*\{color:#284a62;font-size:14px/);
+  assert.match(css,/\.rate-route-title button\s*\{color:#fff;font-size:14px/);
   assert.match(css,/\.rate-route th\[scope=rowgroup\]\s*\{[^}]*background:#e4edf4;[^}]*border-radius:7px;color:#173950;font-size:14px/);
   assert.match(css,/\.rate-agregado-title\s*\{[^}]*border-top-left-radius:7px/);
   assert.match(css,/\.rate-field-first\s*\{[^}]*border-bottom-left-radius:7px/);
-  assert.match(css,/\.rate-route-title\s*\{background:#e4edf4;color:#284a62/);
+  assert.match(css,/\.rate-route-title\s*\{background:var\(--beta-navy\);color:#fff/);
   assert.match(css,/tr:first-child \.rate-category-gap \+ td\s*\{border-top-left-radius:7px/);
   assert.match(css,/tr:last-child \.rate-category-gap \+ td\s*\{border-bottom-left-radius:7px/);
 });
