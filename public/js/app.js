@@ -407,7 +407,7 @@ function initWS() {
   state.ws = socket;
   let authenticated=false;
   const status=document.getElementById('ws-status');
-  socket.onopen = async () => {
+  const authenticateSocket = async () => {
     try {
       const token=await FrotasysAuth.getAccessToken();
       if(socket.readyState!==WebSocket.OPEN)return;
@@ -415,6 +415,7 @@ function initWS() {
       socket.send(JSON.stringify({type:'authenticate',token}));
     } catch(_error){socket.close();}
   };
+  socket.onopen = authenticateSocket;
   socket.onclose = () => {
     if(state.ws!==socket)return;
     status.className='ws-status offline';
@@ -425,12 +426,14 @@ function initWS() {
   socket.onmessage = (event) => {
     let msg;
     try{msg=JSON.parse(event.data);}catch(_error){return;}
+    if(msg.type==='auth_renew'){if(authenticated)void authenticateSocket();return;}
     if(msg.type==='auth_ok'){
+      const firstAuthentication=!authenticated;
       authenticated=true;
       status.className='ws-status online';
       status.textContent='Conectado';
       if(msg.payload){state.userProfile=msg.payload;applyPermissions();}
-      if(wsWasAuthenticated&&!wsRefreshPending){wsRefreshPending=true;refreshProductionAfterReconnect();}
+      if(firstAuthentication&&wsWasAuthenticated&&!wsRefreshPending){wsRefreshPending=true;refreshProductionAfterReconnect();}
       wsWasAuthenticated=true;
       return;
     }
@@ -440,7 +443,9 @@ function initWS() {
 
 function handleWsMessage(msg) {
   const { type, payload } = msg;
-  if (type === 'viagem_criada') {
+  if (type === 'pending_notifications_changed') {
+    document.dispatchEvent(new Event('beta-discharge-changed'));
+  } else if (type === 'viagem_criada') {
     if (payload.data === state.currentDate && !state.viagens.some(v => v._id === payload._id)) {
       state.viagens.push(payload);
       renderAllUnlessInlineEditing();
