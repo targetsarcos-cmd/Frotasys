@@ -738,3 +738,48 @@ body.workspace-beta #search-modal-overlay .modal-footer {background:#fff;border-
 #beta-users #beta-users-edit-message.is-error {color:#a92f37}
 @media(max-width:1250px){#beta-users :is(.user-create-form,#beta-users-edit-form){grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:800px){#beta-users .beta-users-head{align-items:flex-start;flex-wrap:wrap}#beta-users .beta-users-overview{grid-template-columns:repeat(2,minmax(0,1fr))}#beta-users :is(.beta-users-security,.beta-users-filters){grid-template-columns:1fr}}
+
+
+/* Personal operational column layout, independently of the visibility picker. */
+#beta-shell #beta-column-layout-btn {width:36px;min-width:36px;padding:0;justify-content:center;transition:background-color .18s,border-color .18s,color .18s}
+#beta-shell #beta-column-layout-btn svg {width:18px;height:18px;flex:none}
+#beta-shell #beta-column-layout-btn[aria-expanded=true] {background:#e1eef9;border-color:#79a9d0;color:#075b9e}
+#beta-shell #beta-column-layout {width:min(440px,calc(100vw - 24px));max-height:min(590px,calc(100dvh - 170px));padding:0;overflow:hidden;background:#fff;border:1px solid #c4d4e2;border-radius:8px;box-shadow:0 10px 30px #142b4226;color:#173950;z-index:65;font:400 12px/1.4 'Segoe UI',sans-serif}
+#beta-shell #beta-column-layout:not(.hidden) {display:flex;flex-direction:column;animation:beta-layout-enter .18s cubic-bezier(.2,.7,.2,1)}
+@keyframes beta-layout-enter {from{opacity:0;transform:translateY(-5px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+#beta-shell .beta-layout-head {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;background:var(--beta-navy,#142b42);color:#fff}
+#beta-shell .beta-layout-head strong {display:block;font-size:15px;color:#fff}
+#beta-shell .beta-layout-head small {display:block;margin-top:2px;color:#b9cde0;font-size:11px}
+#beta-shell .beta-layout-head button {width:27px;height:27px;color:#fff;background:transparent;border:1px solid #ffffff50;border-radius:4px;font-size:19px;line-height:1}
+#beta-shell .beta-layout-help {padding:10px 14px;color:#526b80;background:#f3f7fb;border-bottom:1px solid #d9e4ed}
+#beta-shell .beta-layout-list {overflow:auto;min-height:0;overscroll-behavior:contain;padding:5px 8px}
+#beta-shell .beta-layout-row {display:grid;grid-template-columns:18px minmax(80px,1fr) auto auto;align-items:center;gap:7px;padding:6px 5px;border-bottom:1px solid #e4ebf1;border-radius:4px;transition:background-color .16s,opacity .16s,box-shadow .16s}
+#beta-shell .beta-layout-row:hover {background:#f5f9fc}
+#beta-shell .beta-layout-row.is-dragging {opacity:.4}
+#beta-shell .beta-layout-row.is-drop-target {background:#e1eef9;box-shadow:inset 0 2px #3684be}
+#beta-shell .beta-layout-grip {font-size:21px;line-height:1;color:#8196a8;cursor:grab;text-align:center;user-select:none}
+#beta-shell .beta-layout-grip:active {cursor:grabbing}
+#beta-shell .beta-layout-label {min-width:0;overflow-wrap:anywhere;font-weight:600;color:#173950;font-size:11px}
+#beta-shell .beta-layout-align,#beta-shell .beta-layout-move {display:flex;align-items:center;gap:2px}
+#beta-shell .beta-layout-align {border:1px solid #cbdce9;border-radius:5px;padding:2px;background:#f5f8fb}
+#beta-shell :is(.beta-layout-align,.beta-layout-move) button {display:grid;place-items:center;width:27px;height:26px;border:1px solid transparent;background:transparent;border-radius:3px;color:#365a75;font:600 13px 'Segoe UI',sans-serif;cursor:pointer;transition:background-color .16s,color .16s,border-color .16s}
+#beta-shell .beta-layout-align button[data-layout-align=default] {width:35px;font-size:10px}
+#beta-shell .beta-layout-align button svg {width:17px;height:17px}
+#beta-shell .beta-layout-align button[aria-pressed=true] {background:#dcecf9;color:#075b9e;border-color:#9cbfdb}
+#beta-shell :is(.beta-layout-align,.beta-layout-move) button:hover:not(:disabled) {background:#e1eef9;color:#075b9e}
+#beta-shell .beta-layout-move button {border-color:#d6e1eb;background:#fff;width:24px}
+#beta-shell .beta-layout-move button:disabled {opacity:.35;cursor:default}
+#beta-shell .beta-layout-footer {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#f5f8fb;border-top:1px solid #d9e4ed}
+#beta-shell #beta-column-save-status {font-size:11px;color:#526b80;min-width:0}
+#beta-shell .beta-layout-footer button {flex:none;padding:6px 9px;border:1px solid #b5c9db;border-radius:4px;background:#fff;color:#135c92;font:600 11px 'Segoe UI',sans-serif;cursor:pointer}
+#beta-shell #beta-column-layout button:focus-visible {outline:2px solid #3684be;outline-offset:1px}
+#beta-shell .trip-section .tablewrap :is(th,td)[data-beta-align=left] {text-align:left}
+#beta-shell .trip-section .tablewrap :is(th,td)[data-beta-align=center] {text-align:center}
+#beta-shell .trip-section .tablewrap :is(th,td)[data-beta-align=right] {text-align:right}
+#beta-shell .trip-section .tablewrap td[data-beta-align=left] :is(.driver-cell,.route-cell) {justify-items:start;justify-content:start;text-align:left}
+#beta-shell .trip-section .tablewrap td[data-beta-align=center] :is(.driver-cell,.route-cell) {justify-items:center;justify-content:center;text-align:center}
+#beta-shell .trip-section .tablewrap td[data-beta-align=right] :is(.driver-cell,.route-cell) {justify-items:end;justify-content:end;text-align:right}
+#beta-shell .trip-section .tablewrap td[data-beta-align=left] :is(.work-start-btn,.work-session-card,.work-avatar-stack) {margin-left:0;margin-right:auto}
+#beta-shell .trip-section .tablewrap td[data-beta-align=center] :is(.work-start-btn,.work-session-card,.work-avatar-stack) {margin-inline:auto}
+#beta-shell .trip-section .tablewrap td[data-beta-align=right] :is(.work-start-btn,.work-session-card,.work-avatar-stack) {margin-left:auto;margin-right:0}
+@media(prefers-reduced-motion:reduce){#beta-shell #beta-column-layout:not(.hidden){animation:none}#beta-shell :is(#beta-column-layout-btn,.beta-layout-row,.beta-layout-align button,.beta-layout-move button){transition:none}}
