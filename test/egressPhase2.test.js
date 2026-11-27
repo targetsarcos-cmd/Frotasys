@@ -1,0 +1,64 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const betaInvoices=require('../beta/trip-invoices');
+const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
+const server=read('server.js'),app=read('public/js/app.js');
+const extract=(start,end)=>server.slice(server.indexOf(start),server.indexOf(end,server.indexOf(start)));
+test('projection includes typed fiscal and operational data but excludes change history',()=>{
+  const block=extract('const VIAGENS_EXPORT_COLUMNS =','const COMPRESSIBLE_TYPES');
+  const api=new Function('betaInvoices','supabaseToFrontend',block+'return {tripProjection,projectedTrip,publicTrip,TRIP_READ_FIELDS,TRIP_REPORT_FIELDS,TRIP_EXPORT_FIELDS};')(betaInvoices,r=>({...r.dados,_id:r.id}));
+  assert.match(api.tripProjection(),/descargaVerde:dados->descargaVerde/);
+  assert.match(api.tripProjection(),/nota15:dados->nota15/);
+  assert.match(api.tripProjection(),/hora_nf15:dados->hora_nf15/);
+  assert.match(api.tripProjection(),/comentariosBeta:dados->comentariosBeta/);
+  assert.doesNotMatch(api.tripProjection(),/historico/);
+  assert.ok(!api.TRIP_REPORT_FIELDS.includes('comentariosBeta'));
+  assert.ok(!api.TRIP_REPORT_FIELDS.includes('telefone'));
+  assert.ok(api.TRIP_REPORT_FIELDS.includes('hora_nf15'));
+  assert.ok(api.TRIP_EXPORT_FIELDS.includes('vlr_pedagio'));
+  const row=api.projectedTrip({id:'1',placa:'ABC1234',programado:false,peso:32000,comentariosBeta:[{id:'a'}],descargaVerde:null,nota15:'123'});
+  assert.equal(row.programado,false);assert.equal(row.peso,32000);
+  assert.deepEqual(row.comentariosBeta,[{id:'a'}]);assert.equal(row.descargaVerde,undefined);
+  assert.equal(row.nota15,'123');
+  assert.deepEqual(api.publicTrip({placa:'ABC1234',historico:[1]}),{placa:'ABC1234'});
+});
+test('invoice search performs a single query across all 15 slots in production',async()=>{
+  let calls=[];
+  const search=new Function('betaInvoices','betaReadOnly','TABLES','selectDocsByJson',extract('async function searchBetaInvoices(','async function selectJsonTextValues(')+'return searchBetaInvoices;')(betaInvoices,false,{viagens:'viagens'},async(...args)=>{calls.push(args);return [{_id:'a'}];});
+  assert.deepEqual(await search('1.234',{},{}),[{_id:'a'}]);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][2].or.split('.in.').length-1,15);
+  assert.match(calls[0][2].or,/dados->>nota15\.in\.\(1\.234,1234\)/);
+  assert.deepEqual(await search('x,or()',{},{}),[]);
+  assert.equal(calls.length,1);
+});
+test('unchanged fiscal fields do not query the database; new duplicates are still blocked',async()=>{
+  let reads=0;
+  const select=async(table,filter)=>{reads++;return [{_id:'other',...filter}];};
+  const fn=new Function('betaEditable','betaInvoices','UNIQUE_VIAGEM_FIELDS','comparableUniqueValue','TABLES','selectDocsByJson','supabase','tripProjection','projectedTrip',extract('async function findDuplicateViagemFields(','function broadcast(')+'return findDuplicateViagemFields;')(true,betaInvoices,[{key:'nota',label:'NOTA'},{key:'dt',label:'DT'}],(k,v)=>String(v||''),{viagens:'viagens'},select,{from(){reads++;return {select(){return this;},or(){return this;},neq(){return this;},limit(){return {data:[{nota2:'999'}]};}};}},()=>'',r=>r);
+  const old={nota:'123',dt:'456'};
+  assert.equal(await fn({...old,descarga:'09:00'},'self',old),null);assert.equal(reads,0);
+  assert.equal((await fn({...old,dt:'777'},'self',old)).key,'dt');assert.equal(reads,1);
+  assert.equal((await fn({...old,nota2:'999'},'self',old)).key,'nota2');assert.equal(reads,2);
+});
+test('authentication only coalesces concurrent checks, without caching access',async()=>{
+  let calls=0,resolve;
+  const verify=new Function('supabase',extract('const authInFlight=','function requireAuth(')+'return verifyAuthUser;')({auth:{getUser:()=>{calls++;return new Promise(r=>resolve=r);}}});
+  const a=verify('token'),b=verify('token');
+  assert.equal(a,b);await Promise.resolve();assert.equal(calls,1);
+  resolve({data:{user:{id:'u'}}});await a;
+  const next=verify('token');await Promise.resolve();assert.equal(calls,2);
+  resolve({error:'revoked'});assert.deepEqual(await next,{error:'revoked'});
+});
+test('history removed from UI and creation, reporting uses compact projection',()=>{
+  assert.doesNotMatch(app,/openHistoryModal|renderViagemHistory|renderDrawerHistorico|history-overlay/);
+  assert.doesNotMatch(read('public/index.html'),/id="history-overlay"/);
+  assert.doesNotMatch(server,/buildViagemHistoryEntries|appendViagemHistory/);
+  assert.match(server,/delete payload\.historico/);
+  assert.match(app,/report:'1'/);
+  assert.match(server,/reportOnly\?\{fields:TRIP_REPORT_FIELDS\}/);
+  assert.match(server,/fields:TRIP_EXPORT_FIELDS/);
+});

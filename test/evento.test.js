@@ -48,7 +48,8 @@ function setup() {
         maybeSingle() {
           const row = rows[0];
           if (row && patch) Object.assign(row, patch, { updated_at: String(++revision) });
-          return { data: row ? structuredClone(row) : null };
+          const selected=row&&columns?Object.fromEntries(columns.map(col=>{const [alias,key]=col.split(':dados->');return [alias,key?row.dados[key]??null:row[alias]];})):row;
+          return { data: selected ? structuredClone(selected) : null };
         },
         single() { return this.maybeSingle(); },
         then(resolve) {
@@ -176,11 +177,14 @@ test('editar Evento em viagem com DT historica repetida preserva os documentos',
   assert.equal(records.get('a').dados.frete, 'Conferir descarga');
   assert.equal(records.get('a').dados.dt, '123');
   assert.equal(records.get('b').dados.frete, undefined);
-  const conflict = await request('put', item, { frete: 'Outro', dt: '123' }, 'operador', 'a');
+  const unchanged = await request('put', item, { frete: 'Outro', dt: '123' }, 'operador', 'a');
+  assert.equal(unchanged.code, 200);
+  records.get('b').dados.dt='456';
+  const conflict = await request('put', item, { dt: '456' }, 'operador', 'a');
   assert.equal(conflict.code, 409);
 });
 
-test('JSONB, pesquisa, historico, planilha e atualizacoes concorrentes', async () => {
+test('JSONB, pesquisa, planilha e atualizacoes concorrentes', async () => {
   const { server, records, request } = setup();
   const created = await request('post', collection, { ...trip, frete: eventText });
   assert.equal(created.code, 200, created.data?.error);
@@ -190,8 +194,7 @@ test('JSONB, pesquisa, historico, planilha e atualizacoes concorrentes', async (
   assert.equal((await request('put', item, { nome: 'MARIA' }, 'operador', id)).data.frete, eventText);
   const snapshot = await server.findOneById('viagens', id);
   const edit = await request('put', item, { frete: 'Conferir nota' }, 'admin', id);
-  assert.equal(edit.data.historico.at(-1).label, 'EVENTO');
-  assert.equal(edit.data.historico.at(-1).anterior, eventText);
+  assert.equal(edit.data.historico, undefined);
   assert.equal(await server.updateDoc('viagens', id, { nome: 'ABC' }, snapshot), null);
   const found = await request('get', collection + '/search', {}, 'visualizador', null, { evento: 'nFeRiR' });
   assert.equal(found.data[0].frete, 'Conferir nota');
@@ -452,4 +455,20 @@ test('painel compartilha o catálogo paginado, preserva cores e conta sessões s
   vm.runInContext('invalidateAfterWrite(TABLES.configOptions)',server);
   config.find(row=>row.dados.value==='LOCAL 260').dados.color='#abcdef';
   assert.equal((await request('get','/api/config-colors')).data.origem['LOCAL 260'],'#abcdef');
+});
+
+test('listagem não transfere histórico legado e gravação preserva os dados antigos',async()=>{
+  const {records,request,traffic}=setup();
+  const historico=Array.from({length:500},()=>({campo:'obs',atual:'x'.repeat(200)}));
+  records.set('old',{id:'old',updated_at:'1',dados:{...trip,placa:'ABC1234',nome:'ANA',historico}});
+  const before=traffic.bytes;
+  const listed=await request('get',collection,{},'visualizador',null,{data:trip.data});
+  assert.equal(listed.code,200);
+  assert.equal(listed.data[0].historico,undefined);
+  assert.equal(listed.data[0].nome,'ANA');
+  assert.ok(traffic.bytes-before<5000);
+  const saved=await request('put',item,{nome:'MARIA'},'operador','old');
+  assert.equal(saved.code,200);
+  assert.equal(saved.data.historico,undefined);
+  assert.equal(records.get('old').dados.historico.length,500);
 });

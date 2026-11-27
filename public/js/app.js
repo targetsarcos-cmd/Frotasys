@@ -696,11 +696,6 @@ function initUI() {
   document.getElementById('reports-overlay').addEventListener('click', e => {
     if (!document.body.classList.contains('reports-page-active') && e.target === document.getElementById('reports-overlay')) closeReportsModal();
   });
-  document.getElementById('history-close')?.addEventListener('click', closeHistoryModal);
-  document.getElementById('history-btn-close')?.addEventListener('click', closeHistoryModal);
-  document.getElementById('history-overlay')?.addEventListener('click', e => {
-    if (e.target === document.getElementById('history-overlay')) closeHistoryModal();
-  });
   document.getElementById('btn-lista-espera').addEventListener('click', openListaEsperaModal);
   document.getElementById('waitlist-close').addEventListener('click', closeListaEsperaModal);
   document.getElementById('waitlist-btn-close').addEventListener('click', closeListaEsperaModal);
@@ -913,7 +908,6 @@ function initUI() {
       closeSearchModal();
       closeFreteConsultModal();
       closeReportsModal();
-      closeHistoryModal();
       closeListaEsperaModal();
       closeMetaGoalDialog();
       closeSettingsModal();
@@ -1575,61 +1569,6 @@ function closeReportsModal() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function openHistoryModal(id) {
-  if (!isAdmin()) return;
-  const viagem = state.viagens.find(item => item._id === id);
-  if (!viagem) return;
-  const title = document.getElementById('history-title');
-  if (title) title.textContent = `Hist\u00f3rico da Viagem - ${viagem.placa || 'Sem placa'}`;
-  renderViagemHistory(viagem);
-  document.getElementById('history-overlay')?.classList.remove('hidden');
-}
-
-function closeHistoryModal() {
-  document.getElementById('history-overlay')?.classList.add('hidden');
-}
-
-function renderViagemHistory(viagem) {
-  const container = document.getElementById('history-list');
-  if (!container) return;
-  const history = Array.isArray(viagem.historico) ? [...viagem.historico] : [];
-  if (!history.length) {
-    container.innerHTML = '<div class="history-empty">Nenhuma altera\u00e7\u00e3o registrada para esta viagem.</div>';
-    return;
-  }
-
-  container.innerHTML = history
-    .sort((a, b) => String(b.dataHora || '').localeCompare(String(a.dataHora || '')))
-    .map(item => {
-      const isCreate = item.tipo === 'CRIACAO';
-      const when = formatHistoryDateTime(item.dataHora);
-      const user = item.usuario || item.email || 'Usu\u00e1rio';
-      return `<article class="history-item ${isCreate ? 'is-create' : ''}">
-        <div class="history-item-head">
-          <strong>${escapeHtml(isCreate ? 'Cadastro criado' : (item.label || item.campo || 'ALTERA\u00c7\u00c3O'))}</strong>
-          <span>${escapeHtml(when)}</span>
-        </div>
-        <div class="history-user">${escapeHtml(user)}</div>
-        ${isCreate ? '' : `<div class="history-values">
-          <div><span>Antes</span><strong>${escapeHtml(item.anterior || '-')}</strong></div>
-          <div><span>Depois</span><strong>${escapeHtml(item.atual || '-')}</strong></div>
-        </div>`}
-      </article>`;
-    }).join('');
-}
-
-function formatHistoryDateTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value || '');
-  return date.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
-
 async function updateReports() {
   const start = document.getElementById('report-start-date')?.value;
   const end = document.getElementById('report-end-date')?.value;
@@ -1649,7 +1588,7 @@ async function updateReports() {
   setReportsStatus('Carregando dados do per\u00edodo...');
 
   try {
-    const params = new URLSearchParams({ dataInicio: start, dataFim: end });
+    const params = new URLSearchParams({ dataInicio: start, dataFim: end, report:'1' });
     const metaParams = new URLSearchParams({ dataInicio: start, dataFim: end });
     if (operation) {
       params.set('origem', operation);
@@ -3816,12 +3755,6 @@ function normalizeFretePlaceAlias(value) {
   return aliases[normalized] || normalized;
 }
 
-function renderDrawerHistorico(viagem) {
-  const items = Array.isArray(viagem.historico) ? viagem.historico.slice().reverse() : [];
-  if (!items.length) return '<div class="drawer-empty">Nenhum historico registrado.</div>';
-  return `<div class="drawer-history">${items.map(item => `<div><strong>${escapeHtml(item.label || item.campo || item.field || 'Alteracao')}</strong><span>${escapeHtml(formatDateTimeBR(item.dataHora || item.data || item.at || ''))}</span><p>${escapeHtml(item.usuario || '')} ${escapeHtml(item.atual || item.valorNovo || item.nextValue || '')}</p></div>`).join('')}</div>`;
-}
-
 function renderDrawerObservacoes() {
   return `<div class="drawer-card-grid single">${drawerCard('OBSERVA\u00c7\u00d5ES', [drawerField('frete','Evento'), drawerTextarea('obs','Observa\u00e7\u00f5es')])}</div>`;
 }
@@ -3944,7 +3877,6 @@ function rowActionMenu(viagem) {
   const id = escapeAttr(viagem._id);
   const hasPhone = hasConversationPhone(viagem);
   const items = [
-    isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
     hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/enviarpedido.png?v=20260717" alt=""></button>` : '',
     rowConversationAction(viagem),
     !isBetaTripWorkspace() && viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
@@ -8046,7 +7978,7 @@ function handleNewViagemPlacaInput(event) {
   input.value = placa;
   if (state.editingId) return;
   if (state.plateAutofillTimer) clearTimeout(state.plateAutofillTimer);
-  if (placa.replace(/[^A-Z0-9]/g, '').length < 5) return;
+  if (placa.replace(/[^A-Z0-9]/g, '').length !== 7) return;
   const token = ++state.plateAutofillToken;
   state.plateAutofillTimer = setTimeout(() => autofillViagemByPlaca(placa, token), 350);
 }
