@@ -162,7 +162,7 @@ const VIAGEM_FIELD_LABELS = {
   marcadoAmarelo: 'MARCAÇÃO AMARELA'
 };
 
-const TRIP_STATUS_FIELDS = ['placa','secao','status','usuario','tipo','pamcard','trocaMotoristaConcluida','dt','programado','pedidoEnviadoDt','cte','manifesto','contrato','num_pedagio','descarga','descargaVerde','adiantamentoOk','conclusaoContrato','billingRuleVersion',...betaInvoices.FIELDS,...betaInvoices.TIME_FIELDS];
+const TRIP_STATUS_FIELDS = ['placa','secao','status','usuario','tipo','pamcard','trocaMotoristaConcluida','dt','programado','pedidoEnviadoDt','cte','manifesto','contrato','num_pedagio','descarga','descargaVerde','adiantamentoOk','conclusaoContrato','billingRuleVersion',...(betaInvoices?.FIELDS||['nota']),...(betaInvoices?.TIME_FIELDS||['hora_nf'])];
 const TRIP_READ_FIELDS = [...new Set([...TRIP_STATUS_FIELDS,...Object.keys(VIAGEM_FIELD_LABELS),...VIAGENS_EXPORT_COLUMNS.map(c=>c.key),'createdAt','updatedAt','agendamentoVerde','eventoCteConfirmadoPor','comentariosBeta','corLinhaBeta','obsCriadaEm','eixo','valorPf','valorPj','valor_pf','valor_pj'])];
 const TRIP_REPORT_FIELDS = [...new Set([...TRIP_STATUS_FIELDS,'data','origem','destino','produto','peso','createdAt'])];
 const TRIP_EXPORT_FIELDS = [...new Set([...TRIP_STATUS_FIELDS,...VIAGENS_EXPORT_COLUMNS.map(c=>c.key),'data','createdAt'])];
@@ -478,6 +478,10 @@ async function searchBetaInvoices(value, filters={}, options={}) {
   if(!value)return [];
   const variants=[...new Set([value,betaInvoices.digits(value)])];
   if(!variants.every(v=>/^\d+(?:\.\d+)*$/.test(v)))return [];
+  if(betaReadOnly){
+    const lists=await Promise.all(betaInvoices.FIELDS.map(key=>selectDocsByJson(TABLES.viagens,filters,{...options,in:{...(options.in||{}),[key]:variants}})));
+    return [...new Map(lists.flat().map(doc=>[doc._id,doc])).values()];
+  }
   const or=betaInvoices.FIELDS.map(key=>'dados->>'+key+'.in.('+variants.join(',')+')').join(',');
   return selectDocsByJson(TABLES.viagens,filters,{...options,or});
 }
@@ -732,7 +736,7 @@ async function latestViagemByPlaca(placa) {
 async function latestAnyViagemByPlaca(placa, ignoreId = '') {
   const normalizedPlaca = normalizeUniqueValue(placa);
   if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
-  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT });
+  const docs = await selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT, order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] });
   return docs
     .filter(doc => doc._id !== ignoreId)
     .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
@@ -2574,7 +2578,9 @@ app.get('/api/viagens/export', requireAdmin, async (req, res) => {
 
 app.get('/api/viagens/:id', async (req, res) => {
   try {
-    const viagem = await findOneById(TABLES.viagens, req.params.id);
+    const {data,error}=await supabase.from(TABLES.viagens).select(tripProjection()).eq('id',req.params.id).maybeSingle();
+    if(error)throw error;
+    const viagem=data?projectedTrip(data):null;
     if (!viagem) return res.status(404).json({ error: 'Viagem não encontrada' });
     res.json(publicTrip(viagem));
   } catch (e) {
