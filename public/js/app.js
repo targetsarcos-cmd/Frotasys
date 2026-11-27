@@ -388,6 +388,7 @@ async function startApp() {
 // ─── WEBSOCKET ────────────────────────────────────────────────────────────────
 let wsWasAuthenticated=false;
 let wsRefreshPending=false;
+let wsCursor=null;
 function refreshProductionAfterReconnect(){
   if(!wsRefreshPending)return;
   if(activeInlineEdit?.input?.isConnected||state.drawerSaving||state.drawerActiveField||
@@ -412,7 +413,8 @@ function initWS() {
       const token=await FrotasysAuth.getAccessToken();
       if(socket.readyState!==WebSocket.OPEN)return;
       if(!token){socket.close();return;}
-      socket.send(JSON.stringify({type:'authenticate',token}));
+      const editing=activeInlineEdit?.input?.isConnected||state.drawerSaving||state.drawerActiveField||document.activeElement===document.getElementById('reminder-text')||document.getElementById('reminder-status')?.dataset.state==='Salvando...';
+      socket.send(JSON.stringify({type:'authenticate',token,...(!authenticated&&!editing&&wsCursor?{cursor:wsCursor}:{})}));
     } catch(_error){socket.close();}
   };
   socket.onopen = authenticateSocket;
@@ -433,11 +435,16 @@ function initWS() {
       status.className='ws-status online';
       status.textContent='Conectado';
       if(msg.payload){state.userProfile=msg.payload;applyPermissions();}
-      if(firstAuthentication&&wsWasAuthenticated&&!wsRefreshPending){wsRefreshPending=true;refreshProductionAfterReconnect();}
+      if(firstAuthentication&&wsWasAuthenticated){
+         if(Array.isArray(msg.resume?.replay)&&!wsRefreshPending){
+           try{for(const event of msg.resume.replay)handleWsMessage(event);}catch(_error){wsRefreshPending=true;refreshProductionAfterReconnect();}
+         }else if(!wsRefreshPending){wsRefreshPending=true;refreshProductionAfterReconnect();}
+       }
+       if(firstAuthentication)wsCursor=msg.resume?.cursor||null;
       wsWasAuthenticated=true;
       return;
     }
-    if(authenticated)handleWsMessage(msg);
+    if(authenticated){handleWsMessage(msg);if(msg.cursor)wsCursor=msg.cursor;}
   };
 }
 
@@ -461,7 +468,8 @@ function handleWsMessage(msg) {
     }
     const idx = state.viagens.findIndex(v => v._id === payload._id);
     if (idx !== -1) {
-      state.viagens[idx] = payload;
+      if(payload.data===state.currentDate)state.viagens[idx] = payload;
+      else state.viagens.splice(idx,1);
     } else if (payload.data === state.currentDate) {
       state.viagens.push(payload);
     }
