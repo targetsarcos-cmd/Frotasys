@@ -12,11 +12,12 @@ const betaWorkspace = betaReadOnly || betaEditable;
 const betaAccess = betaWorkspace && require('./beta/access');
 const betaMode = betaEditable && require('./beta/mode');
 const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
+const betaBilling = betaWorkspace && require('./public/js/workspace-trip-sections');
 const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
   betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus: calculateBaseTripStatus, hasAdvanceOk } = require('./tripStatus');
 function calculateTripStatus(trip) {
-  return calculateBaseTripStatus(trip,{requireDischargeConfirmation:betaWorkspace,preserveLegacyCompleted:true});
+  return calculateBaseTripStatus(trip,{requireDischargeConfirmation:betaWorkspace,requireBillingCompletion:betaWorkspace,preserveLegacyCompleted:true});
 }
 
 const app = express();
@@ -77,7 +78,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
   kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
-  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
+  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(betaWorkspace?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA']
 };
@@ -316,7 +317,10 @@ app.get('/login', (req, res) => {
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
   if (doc.status === 'PROGRAMAR' && doc.dt) doc.status = calculateTripStatus(doc);
-  if (betaWorkspace && ['ADIANTAMENTO / DESCARGA','ADIANTAMENTO','AGENDAR DESCARGA','CONCLUIDO'].includes(doc.status)) doc.status = calculateTripStatus(doc);
+  if (betaWorkspace && doc.placa !== undefined && doc.secao !== undefined) {
+    doc.status = calculateTripStatus(doc);
+    doc.secao = betaBilling.isBilled(doc) ? 'arcos' : 'agenciando';
+  }
   if (isViagemBloqueada(doc)) {
     doc.status = 'CONCLUIDO';
     doc.usuario = '';
@@ -1308,6 +1312,7 @@ function exportFillFor(columnKey, value) {
   if (columnKey === 'status' && normalized === 'PROGRAMAR') return 'aba110';
   if (columnKey === 'status' && normalized === 'AGUARDANDO CARREGAMENTO') return '0b2f5f';
   if (columnKey === 'status' && normalized === 'EMITIR CTE') return '2563eb';
+  if (columnKey === 'status' && normalized === 'HORA NF') return '0e7490';
   if (columnKey === 'status' && normalized === 'ADIANTAMENTO / DESCARGA') return 'c2410c';
   if (columnKey === 'status' && normalized === 'FALTA ADIANTAMENTO') return 'c2410c';
   if (columnKey === 'status' && normalized === 'ADIANTAMENTO') return '115927';
@@ -2010,6 +2015,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       origem:item.origem || '', obs:item.obs || '', secao:'agenciando', data:viagemData,
       ...registration
     };
+    if(betaEditable)trip.billingRuleVersion=2;
     trip.status = calculateTripStatus(trip);
 
     const { data: removedRows, error: removeError } = await supabase
@@ -2538,7 +2544,7 @@ app.post('/api/viagens/:id/evento-cte-confirmacao', requireViagemEditor, async(r
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
-    if(betaEditable){delete payload.eventoCteConfirmadoEm;delete payload.eventoCteConfirmadoPor;if(payload.descargaVerde===undefined)payload.descargaVerde=false;}
+    if(betaEditable){delete payload.eventoCteConfirmadoEm;delete payload.eventoCteConfirmadoPor;payload.billingRuleVersion=2;if(payload.descargaVerde===undefined)payload.descargaVerde=false;}
     if (betaEditable && (Object.hasOwn(payload, 'comentariosBeta') || Object.hasOwn(payload, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (betaEditable) {
@@ -2546,8 +2552,8 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
       catch(error) { return res.status(400).json({error:error.message}); }
     }
     normalizeViagemDocumentNumbers(payload);
-    if (betaEditable) payload.secao = betaMode.persistedSection(payload);
     applyFrotaContratoRule(payload);
+    if (betaEditable) payload.secao = betaMode.persistedSection(payload);
     const previousByPlaca = await latestViagemByPlaca(payload.placa);
     const nomeAlteradoDoHistorico = previousByPlaca &&
       normalizeUniqueValue(previousByPlaca.nome) &&
@@ -2605,7 +2611,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
-    if(betaEditable){delete patch.eventoCteConfirmadoEm;delete patch.eventoCteConfirmadoPor;}
+    if(betaEditable){delete patch.eventoCteConfirmadoEm;delete patch.eventoCteConfirmadoPor;delete patch.billingRuleVersion;}
     if (betaEditable && (Object.hasOwn(patch, 'comentariosBeta') || Object.hasOwn(patch, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
@@ -2657,6 +2663,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
         const lockedNextData = applyFrotaContratoRule({ ...current, ...patch });
         patch.status = calculateTripStatus(lockedNextData);
+        if(betaEditable){lockedNextData.status=patch.status;patch.secao=betaMode.persistedSection(lockedNextData);}
         const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
         if (!updated) return res.status(409).json({ error: 'A viagem mudou durante a edicao. Atualize e tente novamente.' });
         const workChanged = updated.status === 'CONCLUIDO'
@@ -2674,8 +2681,12 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
 
     const nextData = applyFrotaContratoRule({ ...current, ...patch });
     if (betaEditable) {
-      patch.secao = betaMode.persistedSection(nextData);
-      nextData.secao = patch.secao;
+      const fiscalChanged=['tipo','cte','manifesto','contrato',...betaInvoices.FIELDS,...betaInvoices.TIME_FIELDS]
+        .some(key=>String(nextData[key]??'').trim()!==String(current[key]??'').trim());
+      if(!betaBilling.isLegacyCompleted(current)||fiscalChanged) {
+        patch.billingRuleVersion=2;
+        nextData.billingRuleVersion=2;
+      }
     }
     if (patch.programado === true && !current.programado &&
         calculateTripStatus({...nextData, programado:false}) === 'ENVIAR PEDIDO') {
@@ -2684,6 +2695,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (normalizeTipo(nextData.tipo) === 'FROTA') patch.contrato = nextData.contrato;
     patch.status = calculateTripStatus(nextData);
     nextData.status = patch.status;
+    if(betaEditable){patch.secao=betaMode.persistedSection(nextData);nextData.secao=patch.secao;}
     if (patch.status === 'CONCLUIDO') {
       patch.usuario = '';
       if (!isViagemBloqueada(current)) {
