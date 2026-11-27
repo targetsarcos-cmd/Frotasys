@@ -102,7 +102,7 @@
     panel.replaceChildren();
     const header = el('div', 'beta-comment-header');
     const heading = el('div');
-    heading.append(el('strong', '', trip.placa || 'Viagem'), el('small', '', 'Observacoes e comentarios'));
+    heading.append(el('strong', '', trip.placa || 'Viagem'), el('small', 'beta-comment-driver', String(trip.nome || '').trim() || 'Motorista não informado'));
     const dismiss = button('×', () => close(), 'beta-comment-close');
     dismiss.setAttribute('aria-label','Fechar comentarios');
     header.append(heading, dismiss); panel.append(header);
@@ -110,10 +110,10 @@
     const obs = observation(trip);
     if (obs) {
       const section = el('div', 'beta-comment-observation');
-      section.append(el('strong', '', 'Observacao da viagem'), el('p', '', obs));
+      section.append(el('p', '', obs));
       if (canWrite() && canEditViagemField(trip,'obs')) {
         const actions = el('div','beta-comment-actions');
-        actions.append(button('Editar observacao', () => {
+        actions.append(button('Editar observação', () => {
           pin();
           const editor = el('textarea','beta-obs-editor');
           editor.value = obs;
@@ -122,10 +122,10 @@
           const controls = el('div','beta-comment-actions');
           controls.append(button('Cancelar', () => render(), 'beta-comment-link'),
             button('Salvar', () => saveObservation(editor.value), 'beta-comment-primary'));
-          section.replaceChildren(el('strong','','Observacao da viagem'),editor,controls);
+          section.replaceChildren(editor,controls);
           editor.focus();
           position();
-        },'beta-comment-link'), button('Excluir observacao', async () => {
+        },'beta-comment-link'), button('Excluir observação', async () => {
           pin();
           if (!pending && window.confirm('Excluir a observacao desta viagem?')) await saveObservation('');
         },'beta-comment-link beta-comment-danger'));

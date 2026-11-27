@@ -798,7 +798,7 @@ test('icone de layout fica entre pesquisa e filtros e aplica alinhamento nas tab
   assert.match(app,/orderFields\(fields,state.betaColumnPreference\)/);
   assert.match(app,/applyBetaColumnAlignment\(headRow\)/);
   assert.match(app,/applyBetaColumnAlignment\(tbody\)/);
-  assert.match(app,/draggable="true"/);
+  assert.match(app,/th\.draggable = true/);
   assert.match(app,/prefers-reduced-motion: reduce/);
   assert.match(app,/duration:220/);
   assert.match(css,/\[data-beta-align=left\] \{text-align:left\}/);
@@ -811,4 +811,62 @@ test('icone de layout fica entre pesquisa e filtros e aplica alinhamento nas tab
   const apply=new Function('betaColumnPref',app.slice(start,end)+'return applyBetaColumnAlignment;')(()=>pref);
   apply({querySelectorAll:()=>cells});
   assert.deepEqual(cells.map(c=>c.dataset.betaAlign),['center',undefined,'right']);
+});
+
+test('icone beta alterna alinhamento geral sem abrir painel e preserva a ordem',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const start=app.indexOf('function betaGlobalAlignment()'),end=app.indexOf('function clearBetaColumnDrag()',start);
+  const state={betaColumnPreference:{order:['nome','placa'],alignment:{nome:'center'},extra:['obs']}};
+  const fields=['placa','nome','obs','trabalho'].map(key=>({key}));
+  const button={dataset:{},setAttribute(){}},icon={animate(){}};
+  let saved=0,applied=0;
+  const document={getElementById:()=>button,querySelectorAll:()=>[{}],querySelector:()=>icon};
+  const api=new Function('state','betaColumnPref','allSortableTableFields','document','betaAlignIcon','applyBetaColumnAlignment','saveBetaColumnPreference','window','betaColumnSaveMessage',app.slice(start,end)+'return {betaGlobalAlignment,cycleBetaColumnAlignment};')(state,()=>JSON.parse(JSON.stringify(state.betaColumnPreference)),()=>fields,document,x=>x,()=>applied++,()=>saved++,{matchMedia:()=>({matches:true})},'');
+  assert.equal(api.betaGlobalAlignment(),'mixed');
+  for(const mode of ['left','center','right','default']){
+    api.cycleBetaColumnAlignment();
+    assert.equal(api.betaGlobalAlignment(),mode);
+    assert.equal(button.dataset.alignment,mode);
+    assert.deepEqual(state.betaColumnPreference.alignment,mode==='default'?{}:Object.fromEntries(fields.map(f=>[f.key,mode])));
+    assert.deepEqual(state.betaColumnPreference.order,['nome','placa']);
+    assert.deepEqual(state.betaColumnPreference.extra,['obs']);
+  }
+  assert.equal(saved,4);assert.equal(applied,4);
+  assert.doesNotMatch(html,/id="beta-column-layout"/);
+  assert.doesNotMatch(app,/function renderBetaColumnLayout\(/);
+  assert.match(app,/button.addEventListener\('click',cycleBetaColumnAlignment\)/);
+});
+test('reordenacao beta ocorre diretamente no cabecalho e nao dispara ordenacao de registros',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const start=app.indexOf('function initBetaColumnLayout()'),end=app.indexOf('function renderColumnPicker()',start);
+  const events={},docEvents={},moves=[];
+  const classList=()=>({add(){},remove(){}});
+  const th1={dataset:{field:'placa'},classList:classList()},th2={dataset:{field:'nome'},classList:classList()};
+  const shell={addEventListener:(key,fn)=>events[key]=fn,querySelectorAll:()=>[]};
+  const button={addEventListener:(key,fn)=>events['button-'+key]=fn};
+  const document={getElementById:id=>id==='beta-shell'?shell:button,addEventListener:(key,fn)=>docEvents[key]=fn};
+  const init=new Function('document','changeBetaColumnOrder','activeInlineEdit','updateBetaAlignmentButton','cycleBetaColumnAlignment','let betaColumnDragKey="",betaColumnSuppressSortUntil=0;function clearBetaColumnDrag(){betaColumnDragKey="";}'+app.slice(start,end)+'initBetaColumnLayout();return ()=>betaColumnSuppressSortUntil;');
+  const suppressed=init(document,(a,b)=>moves.push([a,b]),null,()=>{},()=>{});
+  let prevented=0;
+  const event=th=>({target:{closest:()=>th},preventDefault:()=>prevented++,dataTransfer:{setData(){}}});
+  events.dragstart(event(th1));events.dragover(event(th2));events.drop(event(th2));
+  assert.deepEqual(moves,[['placa','nome']]);
+  assert.equal(prevented,2);assert.ok(suppressed()>Date.now());
+  assert.match(app,/Date.now\(\)>=betaColumnSuppressSortUntil/);
+  assert.match(app,/event.altKey&&\['ArrowLeft','ArrowRight'\]/);
+  events.dragstart(event(th1));docEvents.dragend();events.drop(event(th2));
+  assert.equal(moves.length,1);
+});
+test('balao beta mostra placa e motorista sem titulos redundantes',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-comments.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(js,/heading\.append\(el\('strong', '', trip\.placa/);
+  assert.match(js,/el\('small', 'beta-comment-driver', String\(trip\.nome/);
+  assert.doesNotMatch(js,/'Observacoes e comentarios'|'Observacao da viagem'/);
+  assert.match(js,/section\.append\(el\('p', '', obs\)\)/);
+  assert.match(js,/section\.replaceChildren\(editor,controls\)/);
+  assert.match(js,/button\('Editar observação'/);
+  assert.match(js,/button\('Excluir observação'/);
+  assert.match(css,/\.beta-comment-observation \.beta-comment-actions \{margin-top:15px;gap:15px\}/);
 });
