@@ -13,6 +13,7 @@ const betaAccess = betaWorkspace && require('./beta/access');
 const betaMode = betaEditable && require('./beta/mode');
 const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
 const betaBilling = betaWorkspace && require('./public/js/workspace-trip-sections');
+const betaRetention = betaWorkspace && require('./beta/trip-comments');
 const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
   betaEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
 const { calculateTripStatus: calculateBaseTripStatus, hasAdvanceOk } = require('./tripStatus');
@@ -1417,7 +1418,7 @@ function appendViagemHistory(current, entries) {
 }
 
 function buildViagemHistoryEntries(current, patch, profile, action = 'ALTERACAO') {
-  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico', 'billingRuleVersion']);
+  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico', 'billingRuleVersion', 'obsCriadaEm']);
   const fields = Object.keys(patch || {}).filter(field => !ignored.has(field));
   const changed = fields.filter(field => historyTextValue(current?.[field]) !== historyTextValue(patch[field]));
   if (!changed.length && action !== 'CRIACAO') return [];
@@ -2015,7 +2016,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
       origem:item.origem || '', obs:item.obs || '', secao:'agenciando', data:viagemData,
       ...registration
     };
-    if(betaEditable)trip.billingRuleVersion=2;
+    if(betaEditable){trip.billingRuleVersion=2;Object.assign(trip,betaRetention.observationWritePatch({},trip));}
     trip.status = calculateTripStatus(trip);
 
     const { data: removedRows, error: removeError } = await supabase
@@ -2494,11 +2495,13 @@ if (betaEditable) {
     try {
       const current = await findOneById(TABLES.viagens, req.params.id);
       if (!current) return res.status(404).json({ error: 'Viagem nao encontrada.' });
-      const comentariosBeta = applyCommentAction(current.comentariosBeta, req.body, {
+      const retentionPatch=betaRetention.expiredTripContentPatch(current);
+      const comentariosBeta = applyCommentAction(retentionPatch.comentariosBeta ?? current.comentariosBeta, req.body, {
         id:req.authUser.id, name:profileDisplayName(req.userProfile), role:req.userProfile.role
       });
-      const updated = await updateDoc(TABLES.viagens, req.params.id, { comentariosBeta }, current);
+      const updated = await updateDoc(TABLES.viagens, req.params.id, { ...retentionPatch, comentariosBeta }, current);
       if (!updated) return res.status(409).json({ error: 'A viagem mudou. Atualize a pagina e tente novamente.' });
+      broadcast({type:'viagem_atualizada',payload:updated});
       return res.json(updated);
     } catch (error) {
       if (error instanceof CommentError) return res.status(error.status).json({error:error.message});
@@ -2544,7 +2547,7 @@ app.post('/api/viagens/:id/evento-cte-confirmacao', requireViagemEditor, async(r
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
-    if(betaEditable){delete payload.eventoCteConfirmadoEm;delete payload.eventoCteConfirmadoPor;payload.billingRuleVersion=2;if(payload.descargaVerde===undefined)payload.descargaVerde=false;}
+    if(betaEditable){delete payload.eventoCteConfirmadoEm;delete payload.eventoCteConfirmadoPor;delete payload.obsCriadaEm;Object.assign(payload,betaRetention.observationWritePatch({},payload));payload.billingRuleVersion=2;if(payload.descargaVerde===undefined)payload.descargaVerde=false;}
     if (betaEditable && (Object.hasOwn(payload, 'comentariosBeta') || Object.hasOwn(payload, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
     if (betaEditable) {
@@ -2611,7 +2614,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
-    if(betaEditable){delete patch.eventoCteConfirmadoEm;delete patch.eventoCteConfirmadoPor;delete patch.billingRuleVersion;}
+    if(betaEditable){delete patch.eventoCteConfirmadoEm;delete patch.eventoCteConfirmadoPor;delete patch.billingRuleVersion;delete patch.obsCriadaEm;Object.assign(patch,betaRetention.observationWritePatch(current,patch));}
     if (betaEditable && (Object.hasOwn(patch, 'comentariosBeta') || Object.hasOwn(patch, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
@@ -3101,8 +3104,44 @@ app.get('/api/datas', async (req, res) => {
   }
 });
 
+
+/* Only the editable beta runs the automatic cleanup. Use raw snapshots so the
+ * maintenance task never changes fiscal fields or recalculates stored statuses. */
+let betaRetentionRunning=false;
+async function sweepBetaTripContent(now=Date.now()){
+  if(!betaEditable||betaRetentionRunning)return;
+  betaRetentionRunning=true;
+  try{
+    for(const [field,empty] of [['obs',''],['comentariosBeta','[]']]){
+      let cursor=null;
+      for(;;){
+        let query=supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT)
+          .not('dados->>'+field,'is',null).neq('dados->>'+field,empty)
+          .order('id',{ascending:true}).limit(200);
+        if(cursor!==null)query=query.gt('id',cursor);
+        const {data,error}=await query;
+        if(error)throw error;
+        if(!data?.length)break;
+        for(const record of data){
+          const raw={...record.dados,_id:record.id,id:record.id,createdAt:record.dados?.createdAt||record.created_at,updatedAt:record.updated_at};
+          const patch=betaRetention.expiredTripContentPatch(raw,now);
+          if(!Object.keys(patch).length)continue;
+          try{
+            const saved=await updateDoc(TABLES.viagens,record.id,patch,raw);
+            if(saved)broadcast({type:'viagem_atualizada',payload:saved});
+          }catch(error){console.error('Falha na limpeza de recado da viagem:',record.id,error.message);}
+        }
+        cursor=data[data.length-1].id;
+        if(data.length<200)break;
+      }
+    }
+  }catch(error){console.error('Falha na rotina de expiracao de recados:',error.message);}
+  finally{betaRetentionRunning=false;}
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
+  if(betaEditable){void sweepBetaTripContent();setInterval(()=>void sweepBetaTripContent(),60_000).unref();}
   const os = require('os');
   const nets = os.networkInterfaces();
   console.log(`\nServidor rodando!`);
