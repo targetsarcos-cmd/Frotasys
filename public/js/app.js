@@ -3796,7 +3796,7 @@ function drawerField(field, label, type = 'text') {
   const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : isBetaInvoiceTimeField(field) ? normalizeHours(drawerValue(field)) : drawerValue(field);
   const display = field === 'peso' ? formatPeso(value) : field === 'vlr_pedagio' ? formatMoney(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
   if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
-  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'text' : 'text';
+  const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : 'text';
   return `<label class="drawer-field is-editing" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><input data-drawer-field="${escapeAttr(field)}" data-drawer-commit="blur" type="${inputType}" value="${escapeAttr(value)}" ${field === 'descarga' ? 'inputmode="numeric" placeholder="dd/mm/aaaa --:--" autocomplete="off"' : ''} autofocus></label>`;
 }
 
@@ -7587,7 +7587,7 @@ function startInlineEdit(td) {
   lockInlineEditCellWidth(td);
   activeInlineCell = td;
 
-  const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : field === 'descarga' ? 'text' : 'text';
+  const inputType = field === 'peso' || field === 'vlr_pedagio' ? 'number' : field === 'data' ? 'date' : 'text';
   const inputValue = field === 'descarga' ? descargaToInputValue(cur) : cur;
   const step = field === 'peso' ? '0.001' : field === 'vlr_pedagio' ? '0.01' : '';
   const placeholder = field==='descarga'?'dd/mm/aaaa --:--':inputPlaceholder(field);
@@ -7766,6 +7766,7 @@ async function updateViagemField(id, field, value, options = {}) {
   if (field === 'data' && !canSaveViagemDate(value)) return null;
   const previousValue = normalizeFieldValue(field, viagem?.[field] || '');
   const nextValue = normalizeFieldValue(field, value);
+  if(field==='descarga'&&previousValue===nextValue){if(!options.skipRender)renderAll();return viagem;}
   const updated = await persistTripField(id, field, nextValue);
   if (updated) {
     const idx = state.viagens.findIndex(v => v._id === id);
