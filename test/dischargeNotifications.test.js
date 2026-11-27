@@ -133,7 +133,9 @@ test('editor carrega a data existente, salva sem confirmar e confirma com os val
   assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',false),{descarga:'09:45 28/11/2026'});
   assert.deepEqual(dischargeEditPatch('28/11/2026 09:45',true),{descarga:'09:45 28/11/2026',descargaVerde:true});
   assert.equal(dischargeEditPatch('31/02/2026 09:45',true),null);
-  assert.equal(dischargeEditPatch('',false),null);
+  assert.deepEqual(dischargeEditPatch('',false),{descarga:'',descargaVerde:false});
+  assert.equal(dischargeEditPatch('',true),null);
+  assert.equal(dischargeEditorValue('20260-11-28T15:00'),'20260-11-28T15:00');
   assert.match(js,/dateRow\.append\(input\)/);
   assert.doesNotMatch(js,/beta-discharge-edit','Editar|function openEditor\(/);
   assert.match(js,/editor\.hidden=!changed/);
