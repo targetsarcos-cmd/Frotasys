@@ -5,6 +5,9 @@
 <circle cx="8" cy="18" r="2"/>
 <circle cx="19" cy="18" r="2"/>
 </symbol>
+<symbol id="beta-icon-dashboard" viewBox="0 0 24 24">
+<rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/>
+</symbol>
 <symbol id="beta-icon-search" viewBox="0 0 24 24">
 <circle cx="10.5" cy="10.5" r="6.5"/>
 <path d="m16 16 5 5"/>
@@ -98,11 +101,18 @@
 </button>
 <nav class="nav" aria-label="Menu principal">
 <div class="nav-group">OPERAÇÃO</div>
-<button id="navHome" title="Controle operacional" class="nav-current" aria-current="page">
+<button id="navHome" title="Dashboard" class="nav-current" aria-current="page">
+<svg><use href="#beta-icon-dashboard"/></svg>
+<span>Dashboard</span>
+</button>
+<div class="nav-operation-group" role="group" aria-label="Controle operacional">
+<div class="nav-operation-heading"><svg aria-hidden="true"><use href="#beta-icon-truck"/></svg><span>Controle operacional</span></div>
+<div class="nav-operation-submenu">
+<button data-nav="Lista de Espera" title="Lista de Espera">
 <svg>
-<use href="#beta-icon-truck"/>
+<use href="#beta-icon-list"/>
 </svg>
-<span>Controle operacional</span>
+<span>Lista de Espera</span>
 </button>
 <button data-nav="Lembretes" title="Lembretes">
 <svg>
@@ -110,23 +120,19 @@
 </svg>
 <span>Lembretes</span>
 </button>
-<button data-nav="Relatórios" title="Relatórios">
-<svg>
-<use href="#beta-icon-report"/>
-</svg>
-<span>Relatórios</span>
-</button>
 <button data-nav="Consulta Frete" title="Consulta Frete">
 <svg>
 <use href="#beta-icon-money"/>
 </svg>
 <span>Consulta Frete</span>
 </button>
-<button data-nav="Lista de Espera" title="Lista de Espera">
+</div>
+</div>
+<button data-nav="Relatórios" title="Relatórios">
 <svg>
-<use href="#beta-icon-list"/>
+<use href="#beta-icon-report"/>
 </svg>
-<span>Lista de Espera</span>
+<span>Relatórios</span>
 </button>
 <div class="nav-group admin-group">ADMINISTRAÇÃO</div>
 <button data-nav="Usuários" title="Usuários">

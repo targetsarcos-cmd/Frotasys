@@ -484,3 +484,24 @@ test('lembrete beta mantem editor original, salvamento e painel nao modal',()=>{
   assert.match(css,/#reminder-note\s*\{position:fixed;inset:var\(--shell,64px\) 0 0 auto;transform:none;[^}]*width:min\(420px,100vw\)/);
   assert.match(css,/beta-reminder-open #beta-shell \.workspace\s*\{margin-right:420px\}/);
 });
+
+test('menu beta agrupa atalhos operacionais entre dashboard e relatorios',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const nav=html.slice(html.indexOf('<nav class="nav"'),html.indexOf('</nav>'));
+  assert.match(nav,/<button id="navHome" title="Dashboard"[^>]*>[\s\S]*?<span>Dashboard<\/span>/);
+  const group=nav.match(/<div class="nav-operation-group"[^>]*>[\s\S]*?<div class="nav-operation-submenu">([\s\S]*?)<\/div>\s*<\/div>/);
+  assert.ok(group);
+  assert.match(group[0],/aria-label="Controle operacional"/);
+  assert.deepEqual([...group[1].matchAll(/data-nav="([^"]+)"/g)].map(m=>m[1]),['Lista de Espera','Lembretes','Consulta Frete']);
+  assert.ok(nav.indexOf('id="navHome"')<nav.indexOf('class="nav-operation-group"'));
+  assert.ok(nav.indexOf(group[0])+group[0].length<nav.indexOf('data-nav="Relatórios"'));
+  assert.ok(nav.indexOf('data-nav="Relatórios"')<nav.indexOf('class="nav-group admin-group"'));
+  for(const name of ['Lista de Espera','Lembretes','Consulta Frete','Relatórios','Usuários','Configurações']){
+    assert.equal([...nav.matchAll(/data-nav="([^"]+)"/g)].filter(m=>m[1]===name).length,1);
+    assert.ok(js.includes("'"+name+"':"));
+  }
+  assert.match(css,/\.nav-operation-submenu button\s*\{[^}]*min-height:32px;[^}]*font-size:11px/);
+  assert.match(css,/\.nav-compact \.app-sidebar \.nav-operation-heading\s*\{display:none\}/);
+});
