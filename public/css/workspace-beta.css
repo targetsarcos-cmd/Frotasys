@@ -33,6 +33,7 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell .operations-panel:has(.column-picker-menu:not(.hidden)),#beta-shell .command-surface {overflow:visible}
 #beta-shell #operation-filter, #beta-shell #date-picker {position:static;background:white;color:#183346;box-shadow:none;font:600 13px 'Segoe UI',sans-serif;border:0;border-radius:0;min-height:0;width:auto;padding:4px}
 #beta-shell .compact-field:has(#operation-filter) {align-items:center;min-width:0}
+#beta-shell .date-field #date-weekday {display:inline-flex;align-items:center;justify-content:center;min-width:100px;white-space:nowrap;cursor:default;font:600 12px/1.2 'Segoe UI',sans-serif;color:#096ac1;padding:0 10px 0 0;border-right:1px solid #d6e0e9;flex-shrink:0}
 #beta-shell #operation-filter {min-width:0;max-width:150px;height:100%;max-height:100%;margin:0;padding:0 3px;background:transparent;appearance:auto;box-sizing:border-box}
 #beta-shell .compact-field:has(#operation-filter):focus-within {outline:2px solid #08747b;outline-offset:1px}
 #beta-shell #operation-filter:focus-visible {outline:0}
