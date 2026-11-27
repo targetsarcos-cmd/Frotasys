@@ -370,7 +370,7 @@ async function startApp() {
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
-  const production = document.body.dataset.workspaceRuntime === 'production';
+  const production = !isBetaTripWorkspace() || document.body.dataset.workspaceRuntime === 'production';
   if (!production) {
     const badge = document.getElementById('ws-status');
     badge.textContent = isBetaReadOnly() ? 'Beta | Somente leitura' : 'Beta | Banco compartilhado';
