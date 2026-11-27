@@ -39,3 +39,30 @@ test('painel preserva o editor e apresenta notificações sem textos redundantes
   assert.match(js,/reminderPanel.querySelector\('\.beta-reminder-text-slot'\).append\(reminderText\)/);
   assert.match(js,/setInterval\(refreshDischargeNotifications,30000\)/);
 });
+
+test('adiantamento usa regra existente e exclui frota, liberados e concluídos legados',()=>{
+  const {advanceNotification}=require('../beta/discharge-notifications');
+  const day='2026-11-27';
+  assert.ok(advanceNotification({...trip,tipo:'AGREGADO'},day));
+  assert.equal(advanceNotification({...trip,tipo:'FROTA'},day),null);
+  assert.equal(advanceNotification({...trip,adiantamentoOk:true},day),null);
+  assert.equal(advanceNotification({...trip,conclusaoContrato:'ADIANTAMENTO EFETUADO'},day),null);
+  assert.equal(advanceNotification({...trip,conclusaoContrato:'NAO FAZ CONTRATO'},day),null);
+  assert.equal(advanceNotification(trip,'2026-11-26'),null);
+  const legacy={...trip,status:'CONCLUIDO',descargaVerde:undefined};
+  assert.equal(advanceNotification(legacy,day),null);
+  assert.equal(dischargeNotification(legacy,day),null);
+  assert.ok(dischargeNotification({...legacy,descargaVerde:false},day));
+  assert.ok(advanceNotification({...trip,descargaVerde:true},day));
+});
+test('grupos recolhíveis, sino no topo e ação agendado mantêm a edição autorizada',()=>{
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(js,/shell\.querySelector\('\.top \.search'\)\.before\(reminderNav\)/);
+  assert.match(js,/id="beta-advance-list"/);
+  assert.match(js,/id="beta-discharge-list"/);
+  assert.match(js,/const total=items\.length\+advances\.length/);
+  assert.match(js,/const patch=\{descargaVerde:true\}/);
+  assert.match(js,/if\(!item\.descarga&&!input\.value\)/);
+  assert.match(css,/#reminder-text \{height:175px;min-height:175px/);
+});
