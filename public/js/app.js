@@ -5471,12 +5471,25 @@ async function addConfigOption(field) {
 }
 
 async function deleteConfigOption(field, value) {
-  if (isBetaTripWorkspace() && (!isAdmin() || isBetaReadOnly() || !confirm('Excluir '+value+' das opções cadastradas?'))) return;
+  const beta=isBetaTripWorkspace();
+  if (beta && (!isAdmin() || isBetaReadOnly())) return;
+  const linked=field==='origem' && operationsList().some(op=>normalizeOption(op.origem)===normalizeOption(value));
+  if (beta && !confirm('Excluir '+value+' das opções cadastradas?'+(linked?' A operação vinculada também será removida.':''))) return;
   const updated = await apiFetch(`/api/config-options/${field}/${encodeURIComponent(value)}`, { method: 'DELETE' });
-  if (!updated) return;
+  if (!updated) { if(beta)showSummaryToast('Não foi possível confirmar a exclusão.', 'error'); return; }
+  if (beta && (!Array.isArray(updated[field]) || updated[field].some(item=>normalizeOption(item)===normalizeOption(value)))) {
+    showSummaryToast('A opção ainda consta no cadastro. Tente novamente.', 'error');
+    return;
+  }
   state.configOptions = normalizeConfigOptions(updated);
+  if(beta && field==='origem'){
+    const operations=await apiFetch('/api/operacoes');
+    if(Array.isArray(operations))state.operacoes=normalizeOperacoes(operations);
+    else state.operacoes=state.operacoes.filter(op=>normalizeOption(op.origem)!==normalizeOption(value));
+  }
   renderSettingsModal();
   renderAll();
+  if(beta)showSummaryToast('Opção excluída: '+value);
 }
 
 async function deleteOperation(operationId) {
