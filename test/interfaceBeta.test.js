@@ -533,7 +533,7 @@ test('Escape fecha drawer beta sem descartar edicao ativa ou salvar em andamento
 test('titulo da pagina inicial beta e Dashboard sem renomear submenu',()=>{
   const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
   assert.match(html,/<h1>Dashboard<\/h1>/);
-  assert.match(html,/<div class="shell-location">[\s\S]*?<strong>Dashboard<\/strong>/);
+  assert.match(html,/<div class="shell-location" hidden>[\s\S]*?<strong>Dashboard<\/strong>/);
   assert.match(html,/class="nav-operation-group" role="group" aria-label="Controle operacional"/);
 });
 
