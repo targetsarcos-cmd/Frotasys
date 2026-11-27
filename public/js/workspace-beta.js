@@ -216,7 +216,7 @@
           const top=makeElement('div','beta-discharge-card-top');
           const identity=makeElement('div','beta-notice-identity');
           identity.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-driver',item.nome||'Motorista não informado'));
-          const loadingDate=makeElement('time','beta-notice-loading-date',dischargeDate(item.data));
+          const loadingDate=makeElement('time','beta-notice-loading-date','Data carregamento: '+dischargeDate(item.data));
           loadingDate.dateTime=item.data;loadingDate.title='Data de carregamento';
           loadingDate.setAttribute('aria-label','Data de carregamento: '+dischargeDate(item.data));
           top.append(identity,loadingDate);
