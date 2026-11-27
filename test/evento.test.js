@@ -134,19 +134,20 @@ test('as tarifas de Agregado e Terceiros são independentes por rota e eixo', ()
   assert.match(ui.freteValuesForViagem({...trip,tipo:'CARRETEIRO'}).pf,/3\.848,00/);
 });
 
-test('pedido pelo WhatsApp avança o status da DT e mantém a viagem em Agenciado', async () => {
+test('programação antecede o pedido pelo WhatsApp e mantém a viagem em Agenciado', async () => {
   const { request } = setup();
   const created = await request('post', collection, { ...trip, secao:'agenciando', dt:'123' });
-  assert.equal(created.data.status, 'ENVIAR PEDIDO');
+  assert.equal(created.data.status, 'PROGRAMAR');
   const id = created.data._id;
   const edit = (body, role = 'operador') => request('put', item, body, role, id);
-  assert.equal((await edit({ programado:true })).code, 409);
+  assert.equal((await edit({ pedidoEnviadoDt:'123' })).code, 409);
+  assert.equal((await edit({ programado:true })).data.status, 'ENVIAR PEDIDO');
   assert.equal((await edit({ pedidoEnviadoDt:'124' })).code, 409);
   assert.equal((await edit({ pedidoEnviadoDt:'123' }, 'visualizador')).code, 403);
   const sent = await edit({ pedidoEnviadoDt:'123' });
-  assert.equal(sent.data.status, 'PROGRAMAR');
+  assert.equal(sent.data.status, 'AGUARDANDO CARREGAMENTO');
   assert.equal(sent.data.secao, 'agenciando');
-  assert.equal((await request('get', item, {}, 'visualizador', id)).data.status, 'PROGRAMAR');
+  assert.equal((await request('get', item, {}, 'visualizador', id)).data.status, 'AGUARDANDO CARREGAMENTO');
   assert.equal((await edit({ dt:'124' })).data.status, 'ENVIAR PEDIDO');
 });
 
