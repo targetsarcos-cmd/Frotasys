@@ -5,7 +5,8 @@ function resolveRuntime(env={}){
   const pilotReadOnly=env.FROTASYS_INTERFACE_BETA==='readonly';
   const pilotEditable=env.FROTASYS_INTERFACE_BETA==='editable';
   const pilot=pilotReadOnly||pilotEditable;
-  return {pilot,pilotReadOnly,pilotEditable,production:!pilot,editable:!pilotReadOnly};
+  const classic=env.FROTASYS_INTERFACE_BETA==='classic';
+  return {pilot,pilotReadOnly,pilotEditable,classic,workspace:!classic,production:!pilot,editable:!pilotReadOnly&&!classic};
 }
 function canAccessUser(runtime,userId,env={}){
   return !!userId&&(!runtime.pilot||userId===env.BETA_USER_ID);
