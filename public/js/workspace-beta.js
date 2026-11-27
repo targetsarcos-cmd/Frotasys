@@ -257,35 +257,38 @@
             const mark=makeElement('button','beta-discharge-mark',kind==='discharge'?'Agendado':'Adiantamento OK');
             mark.type='button';
             const error=makeElement('p','beta-notice-error','');error.setAttribute('role','status');
-            let input,editor,edit,save,cancel;
+            let input,editor,save,cancel;
             if(kind==='discharge'){
               input=makeElement('input','beta-discharge-schedule');input.type='text';input.inputMode='numeric';input.maxLength=16;
               input.placeholder='dd/mm/aaaa hh:mm';input.autocomplete='off';
               input.setAttribute('aria-label','Data e hora da descarga');
-              editor=makeElement('div','beta-discharge-editor');editor.hidden=draft===undefined;
+              editor=makeElement('div','beta-discharge-editor');
               input.value=draft??dischargeEditorValue(item.descarga);
               attachDischargeMask(input,item.id);
               input.addEventListener('input',()=>input.removeAttribute('aria-invalid'));
-              edit=makeElement('button','beta-discharge-edit','Editar');
-              edit.type='button';edit.title='Editar data e hora da descarga';
-              dateRow.append(edit);
               save=makeElement('button','beta-discharge-save','Salvar');
               save.type='button';
               cancel=makeElement('button','beta-discharge-cancel','Cancelar');cancel.type='button';
               const actions=makeElement('div','beta-discharge-editor-actions');actions.append(cancel,save);
-              editor.append(input,actions);
-              function openEditor(){
-                editor.hidden=false;
-                dischargeDrafts.set(item.id,input.value);
-                input.focus();input.select();
+              // The discharge field itself is always editable; no Edit button.
+              dateLabel.textContent='Descarga:';
+              dateRow.append(input);
+              editor.append(actions);
+              function syncEditorActions(){
+                const changed=input.value!==dischargeEditorValue(item.descarga);
+                editor.hidden=!changed;
+                if(!changed)dischargeDrafts.delete(item.id);
               }
               function closeEditor(){
                 dischargeDrafts.delete(item.id);
-                editor.hidden=true;input.removeAttribute('aria-invalid');
+                input.removeAttribute('aria-invalid');
                 input.value=dischargeEditorValue(item.descarga);
                 error.textContent='';
+                syncEditorActions();
               }
-              edit.addEventListener('click',openEditor);
+              input.addEventListener('input',syncEditorActions);
+              input.addEventListener('keydown',()=>queueMicrotask(syncEditorActions));
+              syncEditorActions();
               cancel.addEventListener('click',closeEditor);
               save.addEventListener('click',()=>persistDischarge(false));
               input.addEventListener('keydown',event=>{
@@ -294,10 +297,9 @@
               });
               async function persistDischarge(confirm){
                 if(!canEditViagens()||mark.disabled)return;
-                if(confirm&&editor.hidden&&!input.value){openEditor();return;}
                 const patch=dischargeEditPatch(input.value,confirm);
-                if(!patch){editor.hidden=false;dischargeDrafts.set(item.id,input.value);input.focus();if(input.value)input.setAttribute('aria-invalid','true');return;}
-                mark.disabled=save.disabled=cancel.disabled=edit.disabled=input.disabled=true;
+                if(!patch){dischargeDrafts.set(item.id,input.value);input.focus();if(input.value)input.setAttribute('aria-invalid','true');return;}
+                mark.disabled=save.disabled=cancel.disabled=input.disabled=true;
                 dischargeWrites++;
                 error.textContent='';
                 try{
@@ -307,14 +309,13 @@
                   if(index!==-1)state.viagens[index]=updated;
                   if(state.selectedViagemId===item.id)state.selectedViagemDetails=updated;
                   item.descarga=updated.descarga;
-                  dateLabel.textContent='Descarga: '+formatDescargaDateTime(item.descarga);
                   closeEditor();
                   if(confirm)card.remove();
                   renderAllUnlessInlineEditing();
                 }catch(e){error.textContent='Não foi possível salvar a descarga. Tente novamente.';}
                 finally{
                   dischargeWrites--;
-                  mark.disabled=save.disabled=cancel.disabled=edit.disabled=input.disabled=false;
+                  mark.disabled=save.disabled=cancel.disabled=input.disabled=false;
                   void refreshDischargeNotifications();
                 }
               }
