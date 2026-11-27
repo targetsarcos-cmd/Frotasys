@@ -895,3 +895,42 @@ body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,t
 #beta-settings .beta-flow-legacy {padding:12px;border:1px dashed #c4d4e2;border-radius:5px;margin-top:10px}
 @media(max-width:1000px){#beta-settings .beta-status-column:first-child .settings-item:last-child {border-bottom:1px solid #d9e4ed}#beta-settings .beta-status-column .settings-item {border-right:0}}
 @media(max-width:600px){#beta-settings .beta-flow-stage {padding:10px}#beta-settings .beta-flow-branches {gap:6px}#beta-settings .beta-flow-node {font-size:11px;padding:7px}}
+
+/* Compact work indicators, aligned with the rectangular dashboard status cells. */
+#beta-shell .tablewrap .work-session-card {
+  width:100%!important;max-width:120px;min-width:0;box-sizing:border-box;
+  min-height:28px!important;height:28px!important;
+  grid-template-columns:18px minmax(0,1fr) 9px!important;
+  gap:5px!important;padding:2px 5px!important;margin-inline:auto;
+  border-radius:4px!important;box-shadow:none!important;
+  border:1px solid color-mix(in srgb,var(--work-color,#2563eb) 42%,#fff)!important;
+  background:color-mix(in srgb,var(--work-color,#2563eb) 13%,#fff)!important;
+  color:#173950!important;
+}
+#beta-shell .tablewrap .work-session-card:hover {
+  border-color:var(--work-color,#2563eb)!important;
+  background:color-mix(in srgb,var(--work-color,#2563eb) 20%,#fff)!important;
+}
+#beta-shell .tablewrap .work-avatar {
+  width:18px!important;height:18px!important;border-radius:3px!important;
+  border:1px solid color-mix(in srgb,var(--work-color,#2563eb) 30%,#fff);
+  box-shadow:none!important;box-sizing:border-box;
+  font-size:9px!important;font-weight:700;color:#173950;background:#fff;
+}
+#beta-shell .tablewrap .work-info {gap:0;min-width:0}
+#beta-shell .tablewrap .work-info strong {font-size:10px!important;line-height:11px!important;font-weight:650;color:#173950}
+#beta-shell .tablewrap .work-info em {font-size:9px!important;line-height:10px!important;font-weight:600;color:#405a70}
+#beta-shell .tablewrap .work-arrow {font-size:9px!important;color:#526b80}
+#beta-shell .tablewrap .work-session-card.is-paused {filter:none;opacity:1;border-style:dashed!important}
+#beta-shell .tablewrap .work-avatar-stack {
+  max-width:120px!important;height:28px!important;padding:2px 3px!important;
+  gap:1px;border-radius:4px!important;box-shadow:none!important;margin-inline:auto;
+}
+#beta-shell .tablewrap :is(.work-avatar-mini,.work-add-mini,.work-avatar-extra) {
+  width:15px!important;height:19px!important;min-width:0;flex:0 1 15px;
+  margin-left:0;border-radius:3px!important;border-width:1px;box-shadow:none!important;
+  font-size:8px!important;box-sizing:border-box;
+}
+#beta-shell .tablewrap .work-add-mini {font-size:11px!important}
+#beta-shell .tablewrap :is(.work-avatar-mini,.work-add-mini):hover {transform:none;box-shadow:none!important}
+#beta-shell .tablewrap :is(.work-session-card,.work-avatar-mini,.work-add-mini):focus-visible {outline:2px solid #1665a3;outline-offset:1px}
