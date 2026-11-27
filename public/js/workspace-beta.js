@@ -376,11 +376,16 @@
       if(dischargeQueued){dischargeQueued=false;void refreshDischargeNotifications();}
     }
   }
-  document.addEventListener('beta-discharge-changed',refreshDischargeNotifications);
+  let dischargeRefreshTimer;
+  function scheduleDischargeRefresh(){
+    if(dischargeRefreshTimer)return;
+    dischargeRefreshTimer=setTimeout(()=>{dischargeRefreshTimer=null;void refreshDischargeNotifications();},1000);
+  }
+  document.addEventListener('beta-discharge-changed',scheduleDischargeRefresh);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshDischargeNotifications();});
   new MutationObserver(()=>{if(!reminderPanel.classList.contains('hidden'))void refreshDischargeNotifications();})
     .observe(reminderPanel,{attributes:true,attributeFilter:['class']});
-  setInterval(refreshDischargeNotifications,30000);
+  setInterval(refreshDischargeNotifications,120000);
   void refreshDischargeNotifications();
   const globalSearch = adopt('globalSearch','header-search-input');
   globalSearch.setAttribute('form', 'header-search-form');
