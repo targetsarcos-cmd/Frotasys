@@ -954,3 +954,60 @@ test('descarga tem menu proprio sem palete e confirmacao independente de carga',
   assert.match(css,/td\[data-field="descarga"\]\.has-agendamento \.sched/);
   assert.match(css,/#agendamento-palete\[hidden\] \{display:none!important\}/);
 });
+
+test('beta exige data de descarga e confirmacao verde para concluir, preservando historico antigo',()=>{
+  const {calculateTripStatus}=require('../tripStatus');
+  const trip={tipo:'CARRETEIRO',pamcard:'PAMCARD OK',cte:'123',manifesto:'456',contrato:'789',descarga:'09:00 28/11/2026',adiantamentoOk:true};
+  const options={requireDischargeConfirmation:true,preserveLegacyCompleted:true};
+  assert.equal(calculateTripStatus(trip,options),'AGENDAR DESCARGA');
+  assert.equal(calculateTripStatus({...trip,descargaVerde:false},options),'AGENDAR DESCARGA');
+  assert.equal(calculateTripStatus({...trip,descargaVerde:true},options),'CONCLUIDO');
+  assert.equal(calculateTripStatus({...trip,descargaVerde:true,descarga:''},options),'AGENDAR DESCARGA');
+  assert.equal(calculateTripStatus({...trip,descargaVerde:true,adiantamentoOk:false},options),'ADIANTAMENTO');
+  assert.equal(calculateTripStatus({...trip,descargaVerde:false,adiantamentoOk:false},options),'ADIANTAMENTO / DESCARGA');
+  assert.equal(calculateTripStatus({...trip,status:'CONCLUIDO'},options),'CONCLUIDO');
+  assert.equal(calculateTripStatus({...trip,status:'CONCLUIDO',descargaVerde:false},options),'AGENDAR DESCARGA');
+  assert.equal(calculateTripStatus(trip),'CONCLUIDO');
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  assert.match(server,/requireDischargeConfirmation:betaWorkspace/);
+  assert.match(server,/if\(payload\.descargaVerde===undefined\)payload\.descargaVerde=false/);
+});
+test('aviso de evento por viagem usa observacoes e confirma permanentemente no servidor',async()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const start=server.indexOf('function betaEventWarningText('),end=server.indexOf("app.post('/api/viagens',",start);
+  let handler,writes=0,broadcasts=0,fail=false;
+  const trip={_id:'1',cte:'123',obs:'Verificar canhoto'};
+  const app={post:(url,guard,fn)=>{assert.equal(url,'/api/viagens/:id/evento-cte-confirmacao');assert.equal(guard,'editor');handler=fn;}};
+  const api=new Function('app','requireViagemEditor','betaEditable','formatDocumentNumber','TABLES','findOneById','updateDoc','broadcast','buildViagemHistoryEntries','appendViagemHistory',server.slice(start,end)+'return {shouldWarnBetaEvent,betaEventWarningText};')(app,'editor',true,v=>String(v||''),{viagens:'viagens'},async()=>({...trip}),async(t,id,p)=>{writes++;if(fail)return null;Object.assign(trip,p);return trip;},()=>broadcasts++,()=>[],()=>[]);
+  assert.equal(api.shouldWarnBetaEvent({}, {cte:'123'},trip),true);
+  assert.equal(api.shouldWarnBetaEvent({cte:'123'}, {cte:'123'},trip),false);
+  assert.equal(api.shouldWarnBetaEvent({}, {cte:'123'},{cte:'123',obs:' ',frete:''}),false);
+  assert.equal(api.shouldWarnBetaEvent({}, {cte:'123'},{cte:'123',frete:'Evento'}),true);
+  assert.equal(api.betaEventWarningText({frete:'Igual',obs:'Igual'}),'Igual');
+  assert.equal(api.betaEventWarningText({frete:'Evento',obs:'Observação'}),'Evento\n\nObservação');
+  async function request(){let status=200,data;const res={status(n){status=n;return this},json(v){data=v;return this}};await handler({params:{id:'1'},authUser:{id:'u1'},userProfile:{}},res);return {status,data};}
+  fail=true;assert.equal((await request()).status,409);assert.equal(writes,3);assert.equal(trip.eventoCteConfirmadoEm,undefined);
+  fail=false;assert.deepEqual((await request()).data,{ok:true});assert.equal(writes,4);assert.equal(broadcasts,1);assert.equal(trip.eventoCteConfirmadoPor,'u1');
+  assert.equal(api.shouldWarnBetaEvent({cte:'123'},{cte:'456'},{...trip,cte:'456'}),false);
+  assert.deepEqual((await request()).data,{ok:true});assert.equal(writes,4);
+});
+test('dialogo beta de evento nao duplica avisos e fecha apos confirmar no banco',async()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const start=app.indexOf('const pendingEventWarnings ='),end=app.indexOf("  document.getElementById('date-picker').addEventListener",start);
+  const events={},formEvents={},button={disabled:false},error={textContent:''},content={textContent:''};
+  const dialog={open:false,addEventListener:(name,fn)=>events[name]=fn,querySelector:key=>key==='form'?{addEventListener:(name,fn)=>formEvents[name]=fn}:button,showModal(){this.open=true},close(){this.open=false;events.close();}};
+  const document={getElementById:id=>({'event-warning':dialog,'event-warning-text':content,'event-warning-error':error}[id])};
+  let success=false,calls=[];
+  const show=new Function('document','apiFetch',app.slice(start,end)+'} initUI();return showEventWarning;')(document,async(url,opts)=>{calls.push([url,opts.method]);return success?{ok:true}:null});
+  show('Recado','1','ABC1234');show('Recado','1','ABC1234');
+  assert.equal(dialog.open,true);assert.equal(content.textContent,'ABC1234\n\nRecado');
+  let prevented=0;const e={preventDefault(){prevented++;}};
+  events.cancel(e);assert.equal(prevented,1);
+  await formEvents.submit(e);assert.equal(dialog.open,true);assert.ok(error.textContent.includes('Clique em OK'));
+  success=true;await formEvents.submit(e);assert.equal(dialog.open,false);
+  show('Outro','1');assert.equal(dialog.open,false);
+  assert.deepEqual(calls,[['/api/viagens/1/evento-cte-confirmacao','POST'],['/api/viagens/1/evento-cte-confirmacao','POST']]);
+  show('Outro','2');assert.equal(dialog.open,true);
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  assert.match(css,/body\.workspace-beta #event-warning h2 \{[^}]*background:var\(--beta-navy/);
+});
