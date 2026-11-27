@@ -93,6 +93,9 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell #reminder-status[data-state="Salvando..."] {color:#89620c}
 #beta-shell #reminder-status[data-state="Erro ao salvar"] {color:#b52f3b}
 #beta-shell [data-nav="Lembretes"][aria-expanded=true] {background:#204866;color:#fff}
+#beta-shell [data-nav="Lembretes"] svg .beta-reminder-bell-dot {fill:#ff6969;stroke:#142b42;stroke-width:1.6;opacity:0;transition:opacity .18s ease;pointer-events:none}
+#beta-shell [data-nav="Lembretes"][data-has-reminder=true] svg .beta-reminder-bell-dot {opacity:1}
+@media(prefers-reduced-motion:reduce){#beta-shell [data-nav="Lembretes"] svg .beta-reminder-bell-dot{transition:none}}
 @media(min-width:1251px){body.workspace-beta.beta-reminder-open #beta-shell .workspace {margin-right:420px}}
 @media(max-width:680px){#beta-shell #reminder-note {top:0;width:100vw}}
 #beta-shell .top .search {padding:0 8px;gap:4px;overflow:hidden}
