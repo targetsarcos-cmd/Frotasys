@@ -1101,3 +1101,49 @@ test('produto e peso compactos aproximam agendamento e descarga sem reduzir legi
   const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
   assert.match(css,/\[data-field=produto\],\[data-field=peso\]\) \{padding-inline:4px\}/);
 });
+
+test('recados beta expiram individualmente em 72 horas sem renovar ao editar',()=>{
+  const {RETENTION_MS,observationWritePatch,expiredTripContentPatch}=require('../beta/trip-comments');
+  const now=Date.parse('2026-11-27T12:00:00Z'),old=new Date(now-RETENTION_MS).toISOString(),recent=new Date(now-RETENTION_MS+1).toISOString();
+  assert.equal(RETENTION_MS,259200000);
+  const trip={obs:'Antiga',obsCriadaEm:old,cte:'123',frete:'Evento',historico:[{campo:'cte'}],comentariosBeta:[
+    {id:'a',messages:[{id:'old',text:'Expirado',createdAt:old,editedAt:recent},{id:'new',text:'Atual',createdAt:recent}]},
+    {id:'b',messages:[{id:'old2',createdAt:old}]}
+  ]};
+  const patch=expiredTripContentPatch(trip,now);
+  assert.deepEqual(patch,{obs:'',obsCriadaEm:null,comentariosBeta:[{id:'a',messages:[trip.comentariosBeta[0].messages[1]]}]});
+  assert.equal(trip.obs,'Antiga');
+  assert.deepEqual(expiredTripContentPatch({...trip,...patch},now),{});
+  assert.deepEqual(expiredTripContentPatch({obs:'Nova',obsCriadaEm:recent},now),{});
+  assert.deepEqual(observationWritePatch({obs:'Antiga',obsCriadaEm:old},{obs:'Editada'},now),{obsCriadaEm:old});
+  assert.deepEqual(observationWritePatch({obs:''},{obs:'Nova'},now),{obsCriadaEm:new Date(now).toISOString()});
+  assert.deepEqual(observationWritePatch(trip,{obs:''},now),{obsCriadaEm:null});
+  assert.deepEqual(observationWritePatch(trip,{cte:'456'},now),{});
+  assert.deepEqual(expiredTripContentPatch({obs:'Legada',createdAt:old},now),{obs:'',obsCriadaEm:null});
+  assert.deepEqual(expiredTripContentPatch({obs:'Legada',createdAt:old,historico:[{campo:'obs',atual:'Legada',dataHora:recent}]},now),{obsCriadaEm:recent});
+  assert.deepEqual(expiredTripContentPatch({obs:'Sem data'},now),{obsCriadaEm:new Date(now).toISOString()});
+  assert.deepEqual(expiredTripContentPatch({createdAt:old,comentariosBeta:[{id:'x',messages:[{id:'legacy'}]}]},now),{comentariosBeta:[]});
+});
+test('rotina de expiracao beta grava apenas recados, pagina e publica as alteracoes',async()=>{
+  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+  const {expiredTripContentPatch}=require('../beta/trip-comments');
+  const now=Date.parse('2026-11-27T12:00:00Z'),old='2026-11-24T12:00:00Z',recent='2026-11-27T11:00:00Z';
+  const records=Array.from({length:201},(_,i)=>({id:String(i).padStart(4,'0'),created_at:old,updated_at:recent,dados:{obs:i===200?'Apagar':'Manter',obsCriadaEm:i===200?old:recent,cte:'123',status:'PROGRAMAR'}}));
+  const writes=[],events=[],pages=[];
+  const supabase={from:()=>{let field='',cursor=null,limit=200;const q={select(){return q},not(key){field=key.split('->>')[1];return q},neq(){return q},order(){return q},limit(n){limit=n;return q},gt(key,value){cursor=value;return q},then(resolve){pages.push([field,cursor]);return resolve({data:records.filter(r=>(cursor===null||r.id>cursor)&&r.dados[field]&&r.dados[field].length).slice(0,limit),error:null});}};return q;}};
+  const start=server.indexOf('let betaRetentionRunning=false;'),end=server.indexOf('const PORT =',start);
+  const sweep=new Function('betaEditable','supabase','TABLES','SUPABASE_DOC_SELECT','betaRetention','updateDoc','broadcast',server.slice(start,end)+'return sweepBetaTripContent;')(true,supabase,{viagens:'viagens'},'*',{expiredTripContentPatch},async(table,id,patch,snapshot)=>{writes.push({id,patch,snapshot});return {...snapshot,...patch};},msg=>events.push(msg));
+  await sweep(now);
+  assert.equal(writes.length,1);
+  assert.equal(writes[0].id,'0200');
+  assert.deepEqual(writes[0].patch,{obs:'',obsCriadaEm:null});
+  assert.equal(writes[0].snapshot.status,'PROGRAMAR');
+  assert.equal(writes[0].snapshot.updatedAt,recent);
+  assert.equal(events[0].payload.cte,'123');
+  assert.deepEqual(pages,[['obs',null],['obs','0199'],['comentariosBeta',null]]);
+  assert.match(server,/setInterval\(\(\)=>void sweepBetaTripContent\(\),60_000\)\.unref\(\)/);
+  assert.match(server,/retentionPatch\.comentariosBeta \?\? current\.comentariosBeta/);
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  assert.match(app,/state\.selectedViagemDetails\.obs=payload\.obs/);
+  assert.match(app,/FrotasysBetaComments\?\.refreshTrip\(payload\._id\)/);
+});
