@@ -42,6 +42,22 @@ body.workspace-beta { margin:0; background:#edf2f6; }
 #beta-shell.nav-compact :is(.sidebar-brand .brand span,.nav-group,.app-sidebar nav button span,.collapse-nav span,.sidebar-foot div) {display:none}
 #beta-shell.nav-compact :is(.app-sidebar nav button,.collapse-nav) {justify-content:center;padding-inline:0;gap:0}
 #beta-shell.nav-compact .collapse-nav svg {transform:rotate(180deg)}
+
+/* Hierarchy of the primary operation navigation. */
+#beta-shell .app-sidebar .nav-operation-group {display:flex;flex-direction:column;gap:2px;min-width:0}
+#beta-shell .app-sidebar .nav-operation-heading {display:flex;align-items:center;gap:8px;padding:8px 10px;color:#d7e5f2;font:600 12px/1.2 'Segoe UI',sans-serif;min-height:34px;white-space:nowrap}
+#beta-shell .app-sidebar .nav-operation-heading svg {width:18px;height:18px;color:#aac4d9;flex-shrink:0}
+#beta-shell .app-sidebar .nav-operation-submenu {display:flex;flex-direction:column;gap:2px;margin:0 0 4px 19px;padding-left:6px;border-left:1px solid #36536a;min-width:0}
+#beta-shell .app-sidebar .nav-operation-submenu button {min-height:32px;padding:7px 6px;gap:7px;font-size:11px;font-weight:550}
+#beta-shell .app-sidebar .nav-operation-submenu button svg {width:15px;height:15px}
+#beta-shell.nav-compact .app-sidebar .nav-operation-heading {display:none}
+#beta-shell.nav-compact .app-sidebar .nav-operation-submenu {margin:0;padding:0;border:0}
+#beta-shell.nav-compact .app-sidebar .nav-operation-submenu button {justify-content:center;padding:7px}
+@media(max-width:1250px){
+  #beta-shell .app-sidebar .nav-operation-heading {display:none}
+  #beta-shell .app-sidebar .nav-operation-submenu {margin:0;padding:0;border:0}
+  #beta-shell .app-sidebar .nav-operation-submenu button {justify-content:center;padding:7px}
+}
 #beta-shell .matrix .product-toggle {display:inline-flex;align-items:center;gap:8px;padding:4px 0;font:inherit;color:inherit;text-align:left}
 #beta-shell .product-toggle::before {content:'▸';color:#096ac1}
 #beta-shell .product-toggle[aria-expanded=true]::before {content:'▾'}
