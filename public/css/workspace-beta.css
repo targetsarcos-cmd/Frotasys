@@ -950,3 +950,49 @@ body[data-role=admin][data-beta-mode=editable] #beta-fretes .rate-route :is(td,t
 #beta-shell .tablewrap .work-avatar:has(.profile-avatar-image) {width:22px!important;height:22px!important}
 #beta-shell .tablewrap .work-session-card:has(.profile-avatar-image) {grid-template-columns:22px minmax(0,1fr) 9px!important}
 #beta-shell .tablewrap .work-avatar-mini:has(.profile-avatar-image) {height:20px!important}
+
+/* Release notification, in the same visual language as the workspace. */
+#frotasys-version-notice {width:min(410px,calc(100vw - 32px));padding:0;border:1px solid #b7cbdc;border-radius:6px;background:white;color:#173950;box-shadow:0 12px 35px #142b4240;font:14px/1.5 'Segoe UI',Arial,sans-serif}
+#frotasys-version-notice::backdrop {background:#142b4240}
+.version-notice-head {display:flex;align-items:center;gap:10px;background:#142b42;color:white;padding:14px 18px}
+.version-notice-head h2 {font-size:16px;margin:0;font-weight:650}
+.version-notice-symbol {font-size:24px;line-height:1;color:#8ad4ff}
+.version-notice-body {padding:16px 18px}
+.version-notice-body p {margin:0 0 9px}
+.version-notice-body p:last-child {margin:0}
+.version-notice-body kbd {display:inline-block;border:1px solid #b7cbdc;background:#edf3f8;border-radius:3px;padding:1px 7px;font:700 13px 'Segoe UI',sans-serif}
+.version-notice-footer {display:flex;justify-content:flex-end;border-top:1px solid #d6e1eb;padding:11px 18px;background:#f5f8fb}
+.version-notice-footer button {border:1px solid #135c92;background:#135c92;color:white;font-weight:600;font-size:13px;border-radius:4px;padding:7px 16px;cursor:pointer}
+/* Allow explicit menu expansion even at narrower supported desktop widths. */
+#beta-shell:not(.nav-compact) {--rail:184px}
+#beta-shell.nav-compact {--rail:64px}
+.workspace-beta:has(#beta-shell:not(.nav-compact)) {--beta-rail:184px}
+#beta-shell #collapseNav {display:flex}
+#beta-shell:not(.nav-compact) .sidebar-brand {padding:0 15px}
+#beta-shell:not(.nav-compact) .sidebar-brand .brand {font-size:24px}
+#beta-shell:not(.nav-compact) :is(.sidebar-brand .brand span,.nav-group,.app-sidebar nav button span,.collapse-nav span,.sidebar-foot div) {display:revert}
+#beta-shell:not(.nav-compact) :is(.app-sidebar nav button,.collapse-nav) {justify-content:flex-start;gap:10px}
+#beta-shell:not(.nav-compact) .app-sidebar .nav-operation-heading {display:flex}
+#beta-shell:not(.nav-compact) .app-sidebar .nav-operation-submenu {margin:0 0 4px 19px;padding-left:6px;border-left:1px solid #36536a}
+#beta-shell:not(.nav-compact) .app-sidebar .nav-operation-submenu button {justify-content:flex-start;padding:7px 6px}
+/* Work popover: a compact operational panel, not a rounded card stack. */
+.workspace-beta .work-popover {width:290px;border:1px solid #b8ccdd;border-radius:5px;padding:0;box-shadow:0 6px 20px #142b4226;font:13px 'Segoe UI',Arial,sans-serif;background:#fff}
+.workspace-beta .work-popover-head {position:relative;background:#142b42;color:white;padding:12px 42px 12px 14px;margin:0;gap:4px}
+.workspace-beta .work-popover-head strong {font-size:14px;font-weight:650;color:white}
+.workspace-beta .work-popover-head span {font-size:11px;font-weight:500;color:#d2e1ee;overflow-wrap:anywhere}
+.workspace-beta .work-popover-close {position:absolute;right:10px;top:10px;width:25px;height:25px;border:1px solid #ffffff50;border-radius:3px;background:transparent;color:white;font:19px/1 'Segoe UI',sans-serif;cursor:pointer}
+.workspace-beta .work-popover-close:hover {background:#ffffff20}
+.workspace-beta .work-popover-subtitle {margin:0;padding:10px 13px 7px;font-size:10px;font-weight:700;color:#526b80;letter-spacing:.3px}
+.workspace-beta .work-popover .work-type-list {gap:0;margin:0 11px 12px;padding:0;border:1px solid #ccdbe7;border-radius:4px;overflow:auto}
+.workspace-beta .work-popover .work-type-option {display:grid;grid-template-columns:5px minmax(0,1fr) 12px;gap:10px;min-height:35px;border:0;border-bottom:1px solid #dae5ee;border-radius:0;padding:0 10px;background:#fff;color:#173950;font:600 12px 'Segoe UI',sans-serif}
+.workspace-beta .work-popover .work-type-option:last-child {border-bottom:0}
+.workspace-beta .work-popover .work-type-option:hover {background:#eaf3fa;color:#075b9e}
+.workspace-beta .work-popover .work-type-color {width:4px;height:19px;border-radius:1px;box-shadow:none}
+.workspace-beta .work-popover .work-type-chevron {width:auto;height:auto;background:transparent;color:#607c92;font-size:18px}
+.workspace-beta .work-popover .work-detail {margin:11px;padding:10px;border:1px solid #d3e0eb;background:#f4f8fb;border-radius:4px}
+.workspace-beta .work-popover .work-detail span {font-size:12px;font-weight:500;color:#405a70}
+.workspace-beta .work-popover .work-actions {margin:0 11px 3px;gap:8px}
+.workspace-beta .work-popover .work-actions button {min-height:32px;border-radius:4px;font:600 12px 'Segoe UI',sans-serif;color:#135c92;border-color:#b7cbdc}
+.workspace-beta .work-popover .work-actions .work-finish {background:#197044;border-color:#197044;color:#fff}
+.workspace-beta .work-popover .work-actions .work-finish:hover {background:#125a36}
+.workspace-beta .work-popover .work-empty {padding:10px;font-weight:500;font-size:12px}
