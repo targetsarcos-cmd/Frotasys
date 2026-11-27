@@ -383,7 +383,7 @@
   paintSummary();
 })();
 
-function syncBetaReminderPanel() {
+function syncBetaReminderPanel(hasContent) {
   const panel = document.getElementById('reminder-note');
   const input = document.getElementById('reminder-text');
   const count = document.getElementById('beta-reminder-count');
@@ -392,5 +392,10 @@ function syncBetaReminderPanel() {
   count.textContent = input.value.length.toLocaleString('pt-BR')+' / 2.000 caracteres';
   const open = !panel.classList.contains('hidden');
   nav.setAttribute('aria-expanded',String(open));
+  const hasReminder = typeof hasContent === 'boolean' ? hasContent : Boolean(input.value.trim());
+  nav.setAttribute('data-has-reminder',String(hasReminder));
+  const label = hasReminder ? 'Lembretes — há um recado' : 'Lembretes';
+  nav.setAttribute('aria-label',label);
+  nav.setAttribute('title',label);
   document.body.classList.toggle('beta-reminder-open',open);
 }
