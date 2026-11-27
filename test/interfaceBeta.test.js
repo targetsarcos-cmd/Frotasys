@@ -536,3 +536,29 @@ test('titulo da pagina inicial beta e Dashboard sem renomear submenu',()=>{
   assert.match(html,/<div class="shell-location">[\s\S]*?<strong>Dashboard<\/strong>/);
   assert.match(html,/class="nav-operation-group" role="group" aria-label="Controle operacional"/);
 });
+
+test('data beta mostra dia da semana e Hoje somente na data atual',()=>{
+  const app=fs.readFileSync(path.join(__dirname,'../public/js/app.js'),'utf8');
+  const js=fs.readFileSync(path.join(__dirname,'../public/js/workspace-beta.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'../beta/workspace-shell.html'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'../public/css/workspace-beta.css'),'utf8');
+  const start=app.indexOf('function weekdayLabel(');
+  const end=app.indexOf('// ─── INIT',start);
+  const label={textContent:''},state={currentDate:'2026-11-26'};
+  const helpers=new Function('localDateStr','state','document',app.slice(start,end)+'return {weekdayLabel,renderDateWeekday};')(()=> '2026-11-26',state,{getElementById:id=>id==='date-weekday'?label:null});
+  const week=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Hoje','Sexta-feira','Sábado'];
+  for(let i=0;i<week.length;i++){
+    state.currentDate='2026-11-'+(22+i);
+    helpers.renderDateWeekday();
+    assert.equal(label.textContent,week[i]);
+  }
+  assert.equal(helpers.weekdayLabel('2026-12-01'),'Terça-feira');
+  assert.equal(helpers.weekdayLabel(''),'');
+  assert.match(html,/<span class="today" id="today" aria-live="polite">Hoje<\/span>/);
+  assert.doesNotMatch(html,/<button[^>]*id="today"/);
+  assert.match(js,/adopt\('today','date-weekday',true\)/);
+  assert.doesNotMatch(js,/byId\('today'\)\.onclick/);
+  assert.match(app,/state\.currentDate = e\.target\.value;\s*if \(isBetaTripWorkspace\(\)\) renderDateWeekday\(\);/);
+  assert.match(app,/document\.getElementById\('date-picker'\)\.value = state\.currentDate;\s*if \(isBetaTripWorkspace\(\)\) renderDateWeekday\(\);/);
+  assert.match(css,/#date-weekday\s*\{[^}]*cursor:default/);
+});
