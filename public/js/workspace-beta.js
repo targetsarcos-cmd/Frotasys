@@ -127,7 +127,10 @@
   const date = adopt('date','date-picker');
   adopt('prev','btn-prev-date',true);
   adopt('next','btn-next-date',true);
-  byId('today').onclick = () => { date.value = todayStr(); date.dispatchEvent(new Event('change')); };
+  const weekday = adopt('today','date-weekday',true);
+  weekday.setAttribute('aria-live','polite');
+  renderDateWeekday();
+  window.addEventListener('focus',renderDateWeekday);
   const filter = adopt('filterBtn','btn-trip-filters',true);
   filter.parentElement.classList.add('trip-filter-wrap');
   filter.after(byId('trip-filters'));
