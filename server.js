@@ -330,7 +330,7 @@ function invalidateAfterWrite(table, after, before) {
     const signature=doc=>JSON.stringify(doc?[dischargeNotification(doc,day),advanceNotification(doc,day)]:[null,null]);
     if((!after&&!before)||signature(after)!==signature(before)){
       invalidateCache('pending-trips-');
-      broadcast({type:'pending_notifications_changed'});
+      try{broadcast({type:'pending_notifications_changed'});}catch(error){console.warn('Falha ao notificar alteração de pendências:',error.message);}
     }
     return;
   }
@@ -1142,8 +1142,9 @@ function expiredWorkPatch(session,now=Date.now()){
   return require('./beta/work-day-rollover').expiredWorkPatch(session,now);
 }
 
-async function activeWorkSessions() {
-  const docs = await selectDocsByJson(TABLES.configOptions, { field: WORK_SESSION_FIELD }, { in: { status: ['active', 'paused'] } });
+async function activeWorkSessions(tripId) {
+  const filters={field:WORK_SESSION_FIELD,...(tripId?{tripId}:{})};
+  const docs = await selectDocsByJson(TABLES.configOptions, filters, { in: { status: ['active', 'paused'] } });
   return docs.filter(session => !session.deletedAt && isWorkSessionOpen(session) && !expiredWorkPatch(session));
 }
 
@@ -1173,12 +1174,12 @@ async function publicWorkSession(session = {}) {
 }
 
 async function openSessionForTrip(tripId) {
-  const sessions = await activeWorkSessions();
+  const sessions = await activeWorkSessions(tripId);
   return sessions.find(session => session.tripId === tripId) || null;
 }
 
 async function completeOpenWorkSessionsForTrip(tripId, profile = {}) {
-  const sessions = (await activeWorkSessions()).filter(session => session.tripId === tripId);
+  const sessions = (await activeWorkSessions(tripId)).filter(session => session.tripId === tripId);
   if (!sessions.length) return false;
 
   const now = new Date().toISOString();
@@ -3121,9 +3122,9 @@ app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => 
       if (!orderedNormalized.includes(doc.normalized)) orderedNormalized.push(doc.normalized);
     });
 
-    await Promise.all(orderedNormalized.map((normalized, index) =>
-      updateWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized, { ordem: index + 1 })
-    ));
+    const ranks=new Map(orderedNormalized.map((normalized,index)=>[normalized,index+1]));
+    await Promise.all(docs.filter(doc=>ranks.has(doc.normalized)&&Number(doc.ordem)!==ranks.get(doc.normalized)).map(doc=>updateDoc(TABLES.configOptions,doc._id,{ordem:ranks.get(doc.normalized)},doc).then(saved=>{if(!saved)throw Error('Configuração alterada durante a edição. Tente novamente.');})));
+
 
     if (field === 'origem') {
       await Promise.all(orderedNormalized.map((normalized, index) =>
