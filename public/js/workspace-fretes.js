@@ -25,6 +25,40 @@
   const grid = document.getElementById('frete-consult-grid');
   page.append(grid);
   page.addEventListener('contextmenu',openFreteActions);
+  // Keep focus until a pending edit is saved when moving directly to another cell.
+  page.addEventListener('pointerdown',event=>{
+    if(event.button!==0)return;
+    const field=event.target.closest('td,th')?.querySelector('[data-frete-field]');
+    const active=page.querySelector('[data-frete-field][contenteditable="true"]');
+    if(field && active && field!==active && isAdmin()&&!isBetaReadOnly())event.preventDefault();
+  });
+  page.addEventListener('click',async event=>{
+    const field=event.target.closest('td,th')?.querySelector('[data-frete-field]');
+    if(!field || freteBoardSaving || !isAdmin() || isBetaReadOnly())return;
+    const active=page.querySelector('[data-frete-field][contenteditable="true"]');
+    if(active && active!==field){
+      const {routeIndex,rateGroup,rowIndex,freteField}=field.dataset;
+      const route=freteRoutes()[Number(routeIndex)];
+      const axis=route?.[rateGroup]?.[Number(rowIndex)]?.eixos;
+      const editingRoute=active.dataset.freteField==='rota'&&active.dataset.routeIndex===routeIndex;
+      const name=editingRoute?normalizeFreteRouteName(active.textContent):route?.rota;
+      await commitFreteBoardEdit(active);
+      if(field.isConnected){startFreteBoardEdit(field);return;}
+      const nextRoute=freteRoutes().findIndex(r=>r.rota===name);
+      if(nextRoute<0)return;
+      const nextRow=freteRoutes()[nextRoute]?.[rateGroup]?.findIndex(r=>r.eixos===axis);
+      const next=[...page.querySelectorAll('[data-frete-field]')].find(el=>Number(el.dataset.routeIndex)===nextRoute&&el.dataset.freteField===freteField&&(freteField==='rota'||el.dataset.rateGroup===rateGroup&&Number(el.dataset.rowIndex)===nextRow));
+      if(next)startFreteBoardEdit(next);
+      return;
+    }
+    startFreteBoardEdit(field);
+  });
+  page.addEventListener('keydown',event=>{
+    if(event.key!=='Enter'&&event.key!=='F2')return;
+    const field=event.target.closest('[data-frete-field]');
+    if(!field||field.isContentEditable)return;
+    if(startFreteBoardEdit(field))event.preventDefault();
+  });
 
   function navigate() {
     const active = location.hash === '#fretes';
@@ -66,10 +100,24 @@
   navigate();
 })();
 
+function startFreteBoardEdit(field) {
+  if(!field?.isConnected || !isAdmin() || isBetaReadOnly() || freteBoardSaving)return false;
+  if(field.isContentEditable)return true;
+  field.setAttribute('contenteditable','true');
+  field.setAttribute('spellcheck','false');
+  field.focus();
+  const range=document.createRange();
+  range.selectNodeContents(field);
+  const selection=window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
 function openFreteActions(event) {
   const cell = event.target.closest('td,th');
   const body = cell?.closest('tbody[data-route-index]');
-  if (!body || cell.classList.contains('rate-category-gap') || !isAdmin() || isBetaReadOnly()) return;
+  if (!body || cell.classList.contains('rate-category-gap') || !isAdmin() || isBetaReadOnly() || freteBoardSaving) return;
   event.preventDefault();
   event.stopPropagation();
   document.getElementById('frete-actions')?.remove();
@@ -89,15 +137,7 @@ function openFreteActions(event) {
     };
     menu.append(button);
   }
-  if (field) action('Editar '+({rota:'rota',eixos:'eixos',pj:'valor PJ',pf:'valor PF'}[field.dataset.freteField]),() => {
-    field.setAttribute('contenteditable','true');
-    field.focus();
-    const range = document.createRange();
-    range.selectNodeContents(field);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-  });
+  if (field) action('Editar '+({rota:'rota',eixos:'eixos',pj:'valor PJ',pf:'valor PF'}[field.dataset.freteField]),() => startFreteBoardEdit(field));
   for (const [key,label] of [['agregado','Agregado'],['rows','Terceiros']]) {
     if (!group || group === key) action('Adicionar eixos · '+label,() => addFreteEixo(index,key));
   }
@@ -142,11 +182,11 @@ function renderBetaFreteBoard(routes) {
       if (!row) return '<td colspan="3" data-group="'+key+'" class="rate-empty">&mdash;</td>';
       return ['eixos','pj','pf'].map(field => {
         const value = field === 'eixos' ? row.eixos : formatFreteAccounting(row[field]);
-        return '<td data-group="'+key+'"><span data-frete-field="'+field+'" data-rate-group="'+key+'" data-route-index="'+index+'" data-row-index="'+i+'" data-value="'+escapeAttr(value)+'">'+escapeHtml(value)+'</span></td>';
+        return '<td data-group="'+key+'"><span tabindex="0" data-frete-field="'+field+'" data-rate-group="'+key+'" data-route-index="'+index+'" data-row-index="'+i+'" data-value="'+escapeAttr(value)+'">'+escapeHtml(value)+'</span></td>';
       }).join('');
     }
     const count = Math.max(route.agregado?.length || 0,route.rows.length,1);
-    const name = '<th scope="rowgroup" rowspan="'+count+'"><span data-frete-field="rota" data-route-index="'+index+'" data-value="'+escapeAttr(route.rota)+'">'+escapeHtml(route.rota)+'</span></th>';
+    const name = '<th scope="rowgroup" rowspan="'+count+'"><span tabindex="0" data-frete-field="rota" data-route-index="'+index+'" data-value="'+escapeAttr(route.rota)+'">'+escapeHtml(route.rota)+'</span></th>';
     const rows = Array.from({length:count},(_,i) => '<tr data-row-index="'+i+'">'+(i===0?name:'')+categoryGap+cells('agregado',i)+categoryGap+cells('rows',i)+'</tr>').join('');
     return '<tbody class="rate-route" data-route-index="'+index+'">'+rows+'</tbody>';
   }).join('<tbody class="rate-gap" aria-hidden="true"><tr><td colspan="9"></td></tr></tbody>');

@@ -822,6 +822,7 @@ function normalizeFreteConsultas(saved = {}) {
   }).filter(route => route.rota && (route.rows.length || route.agregado.length));
 
   return {
+    axesInitialized: saved?.axesInitialized === true,
     updatedAt: String(saved?.updatedAt || '').trim(),
     source: String(saved?.source || '').trim(),
     routes
