@@ -720,7 +720,7 @@ function initUI() {
   document.addEventListener('click', e => {
     if (!e.target.closest('.row-action-menu')) closeRowActionMenus();
     if (!e.target.closest('.column-picker-wrap')) closeColumnPicker();
-    if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
+    if (state.lembreteOpen && !isBetaTripWorkspace() && !e.target.closest('.header-reminder')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (!e.target.closest('#contrato-menu')) hideContratoMenu();
@@ -1028,6 +1028,7 @@ function renderReminderNote() {
 
   if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '';
   if (!status.dataset.state) status.textContent = hasReminderContent(state.lembrete.texto) ? 'Salvo' : 'Sem lembrete';
+  if (isBetaTripWorkspace() && typeof syncBetaReminderPanel === 'function') syncBetaReminderPanel();
 }
 
 function handleReminderInput(event) {
