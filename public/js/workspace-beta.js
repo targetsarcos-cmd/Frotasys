@@ -216,7 +216,12 @@
         for(const item of next){
           const card=makeElement('article','beta-discharge-card');
           const top=makeElement('div','beta-discharge-card-top');
-          top.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-driver',item.nome||'Motorista não informado'));
+          const identity=makeElement('div','beta-notice-identity');
+          identity.append(makeElement('strong','',item.placa),makeElement('span','beta-discharge-driver',item.nome||'Motorista não informado'));
+          const loadingDate=makeElement('time','beta-notice-loading-date',dischargeDate(item.data));
+          loadingDate.dateTime=item.data;loadingDate.title='Data de carregamento';
+          loadingDate.setAttribute('aria-label','Data de carregamento: '+dischargeDate(item.data));
+          top.append(identity,loadingDate);
           card.append(top);
           if(kind==='discharge')card.append(makeElement('div','beta-discharge-date','Descarga: '+(item.descarga?formatDescargaDateTime(item.descarga):'Não informada')));
           else card.append(makeElement('div','beta-discharge-date',kind==='advance'?'Adiantamento não efetuado':'Não programado'));
@@ -244,6 +249,7 @@
               input.setAttribute('aria-label','Data e hora da descarga');
               input.hidden=draft===undefined;input.value=draft||'';
               attachDischargeMask(input,item.id);
+              input.addEventListener('input',()=>input.removeAttribute('aria-invalid'));
             }
             if(kind==='advance'&&!item.canAdvance){
               mark.disabled=true;mark.title='Preencha os documentos obrigatórios antes de concluir o adiantamento.';
@@ -257,7 +263,8 @@
                   const parsed=parseDischargeDate(input.value);
                   if(!parsed){
                     input.hidden=false;dischargeDrafts.set(item.id,input.value);input.focus();
-                    error.textContent='Informe uma data e hora válidas (dd/mm/aaaa hh:mm).';return;
+                    if(input.value)input.setAttribute('aria-invalid','true');
+                    return;
                   }
                   patch={descargaVerde:true,descarga:parsed};
                 }else patch={descargaVerde:true};
