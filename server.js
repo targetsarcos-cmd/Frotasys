@@ -2059,7 +2059,103 @@ app.post('/api/users', requireAdmin, async (req, res) => {
   }
 });
 
+const USER_ADMIN_COLUMNS = 'id,user_id,nome,email,role,ativo,created_at';
+let betaUserMutationTail = Promise.resolve();
+
+function betaUserMutation(handler) {
+  return (req,res) => {
+    const run=async()=>{
+      try {
+        if(!betaEditable) return res.status(403).json({error:'Disponível somente no beta editável.'});
+        const actor=await profileForUser(req.authUser.id);
+        if(!actor?.ativo || actor.role!=='admin') return res.status(403).json({error:'Permissão administrativa necessária.'});
+        const {data:target,error}=await supabase.from('user_profiles').select(USER_ADMIN_COLUMNS).eq('id',req.params.id).maybeSingle();
+        if(error) throw error;
+        if(!target) return res.status(404).json({error:'Usuário não encontrado.'});
+        return await handler(req,res,target);
+      } catch(e) {
+        return res.status(500).json({error:'Não foi possível concluir a operação de usuário.'});
+      }
+    };
+    const pending=betaUserMutationTail.then(run,run);
+    betaUserMutationTail=pending.catch(()=>{});
+    return pending;
+  };
+}
+
+async function betaUserRemovalBlocked(req,target) {
+  if(target.user_id===req.authUser.id || target.user_id===process.env.BETA_USER_ID) return 'Não é possível remover, desativar ou rebaixar a conta administrativa que mantém o acesso ao beta.';
+  if(target.role==='admin' && target.ativo) {
+    const {count,error}=await supabase.from('user_profiles').select('id',{count:'exact',head:true}).eq('role','admin').eq('ativo',true);
+    if(error) throw error;
+    if(count<=1) return 'O sistema precisa manter pelo menos um administrador ativo.';
+  }
+  return '';
+}
+
+const updateBetaUser = betaUserMutation(async(req,res,target)=>{
+  const body=req.body||{},patch={};
+  if(body.nome!==undefined){
+    if(typeof body.nome!=='string'||!body.nome.trim()||body.nome.trim().length>100) return res.status(400).json({error:'Informe um nome válido de até 100 caracteres.'});
+    patch.nome=body.nome.trim();
+  }
+  if(body.email!==undefined){
+    if(typeof body.email!=='string'||body.email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return res.status(400).json({error:'Informe um e-mail válido.'});
+    patch.email=body.email.trim().toLowerCase();
+  }
+  if(body.role!==undefined){
+    if(!['admin','operador','visualizador'].includes(body.role)) return res.status(400).json({error:'Perfil inválido.'});
+    patch.role=body.role;
+  }
+  if(body.ativo!==undefined){
+    if(typeof body.ativo!=='boolean') return res.status(400).json({error:'Status inválido.'});
+    patch.ativo=body.ativo;
+  }
+  if(!Object.keys(patch).length) return res.status(400).json({error:'Nada para atualizar.'});
+  if(patch.ativo===false || (target.role==='admin' && patch.role && patch.role!=='admin')){
+    const blocked=await betaUserRemovalBlocked(req,target);
+    if(blocked) return res.status(409).json({error:blocked});
+  }
+  const emailChanged=patch.email!==undefined && patch.email!==target.email;
+  if(emailChanged){
+    const {error}=await supabase.auth.admin.updateUserById(target.user_id,{email:patch.email,email_confirm:true});
+    if(error) return res.status(409).json({error:'Não foi possível alterar o e-mail no Supabase Auth. Verifique se já está em uso.'});
+  }
+  const {data,error}=await supabase.from('user_profiles').update(patch).eq('id',target.id).select(USER_ADMIN_COLUMNS).single();
+  if(error||!data){
+    if(emailChanged){
+      const rollback=await supabase.auth.admin.updateUserById(target.user_id,{email:target.email,email_confirm:true});
+      if(rollback.error) return res.status(500).json({error:'E-mail alterado no Auth, mas falhou a sincronização do perfil. Solicite revisão administrativa antes de repetir.'});
+    }
+    return res.status(500).json({error:'Não foi possível salvar o perfil.'});
+  }
+  res.json(publicProfile(data));
+});
+
+app.put('/api/users/:id/password',requireAdmin,betaUserMutation(async(req,res,target)=>{
+  const password=req.body?.password;
+  if(typeof password!=='string'||password.length<8||password.length>128) return res.status(400).json({error:'A nova senha deve ter entre 8 e 128 caracteres.'});
+  const {error}=await supabase.auth.admin.updateUserById(target.user_id,{password});
+  if(error) return res.status(400).json({error:'Não foi possível redefinir a senha. Confira os requisitos de segurança do Supabase.'});
+  res.json({ok:true});
+}));
+
+app.delete('/api/users/:id',requireAdmin,betaUserMutation(async(req,res,target)=>{
+  const blocked=await betaUserRemovalBlocked(req,target);
+  if(blocked) return res.status(409).json({error:blocked});
+  if(req.body?.confirmEmail!==target.email) return res.status(400).json({error:'Confirme o e-mail exato do usuário para excluir.'});
+  // Remove the login first. A foreign key may cascade the profile deletion.
+  const {error}=await supabase.auth.admin.deleteUser(target.user_id,false);
+  if(error) return res.status(409).json({error:'Não foi possível excluir a conta no Supabase Auth. Nenhum sucesso foi confirmado.'});
+  const remaining=await supabase.from('user_profiles').delete().eq('user_id',target.user_id);
+  if(remaining.error) return res.status(500).json({error:'Login excluído do Auth, mas a limpeza do perfil falhou. Solicite revisão administrativa.'});
+  const check=await supabase.from('user_profiles').select('id').eq('user_id',target.user_id).maybeSingle();
+  if(check.error||check.data) return res.status(500).json({error:'Login excluído, mas a remoção do perfil não foi confirmada.'});
+  res.json({ok:true});
+}));
+
 app.put('/api/users/:id', requireAdmin, async (req, res) => {
+  if (betaWorkspace) return updateBetaUser(req,res);
   try {
     const patch = {};
     if (req.body.role !== undefined) {
