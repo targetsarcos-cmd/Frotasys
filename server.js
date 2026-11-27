@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs/promises');
 const zlib = require('zlib');
+const {isDeepStrictEqual}=require('node:util');
 const ExcelJS = require('exceljs');
 require('dotenv').config();
 const {resolveRuntime,canAccessUser}=require('./beta/runtime');
@@ -100,6 +101,10 @@ const SUPABASE_DOC_SELECT = 'id,dados,created_at,updated_at';
 const DEFAULT_RANGE_LIMIT = 200;
 const VIAGENS_SEARCH_LIMIT = 200;
 const APP_CACHE_TTL_MS = 45 * 1000;
+// Enable only after installing and validating sql/egress-phase3.sql.
+const EGRESS_V3_RPC = runtime.production && process.env.FROTASYS_EGRESS_V3_RPC === '1';
+// Only enable where this server is the sole writer and there is one instance.
+const replayJournal=runtime.production&&process.env.FROTASYS_EGRESS_WS_REPLAY==='1'?require('./beta/egress-replay').createReplayJournal():null;
 const VIAGENS_EXPORT_COLUMNS = [
   { key: 'placa', header: 'PLACA', width: 12 },
   { key: 'nome', header: 'NOME', width: 20 },
@@ -340,7 +345,14 @@ async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
 // configuration records, user settings or operations.
 function invalidateAfterWrite(table, after, before) {
   if (table === TABLES.viagens) {
-    invalidateCache('dashboard-trips-');
+    // The unfiltered snapshot and only the affected dates can be stale.
+    if (!after?.data && !before?.data) invalidateCache('dashboard-trips-');
+    else {
+      appCache.delete('dashboard-trips-');
+      for(const day of new Set([before?.data,after?.data].filter(Boolean)))appCache.delete('dashboard-trips-'+day);
+    }
+    invalidateCache('report-range-');
+    if(!after||!before||before.data!==after.data)invalidateCache('available-trip-dates');
     for(const plate of new Set([before?.placa,after?.placa].filter(Boolean)))invalidateCache('plate-lookup-'+normalizeUniqueValue(plate));
     if(!betaWorkspace)return;
     const {localDay,dischargeNotification,advanceNotification}=require('./beta/discharge-notifications');
@@ -352,7 +364,11 @@ function invalidateAfterWrite(table, after, before) {
     }
     return;
   }
-  if(table===TABLES.metas){invalidateCache('dashboard-metas-');return;}
+  if(table===TABLES.metas){
+    if(!after?.data&&!before?.data)invalidateCache('dashboard-metas-');
+    else {appCache.delete('dashboard-metas-');for(const day of new Set([after?.data,before?.data].filter(Boolean)))appCache.delete('dashboard-metas-'+day);}
+    return;
+  }
   if(table===TABLES.operacoes){invalidateCache('operacoes-list');return;}
   if(table!==TABLES.configOptions){invalidateCache();return;}
   const doc=after||before;
@@ -440,6 +456,7 @@ async function selectDocsByJson(table, filters = {}, options = {}) {
   const fields=table===TABLES.viagens?(options.fields||TRIP_READ_FIELDS):null;
   let query = supabase.from(table).select(fields?tripProjection(fields):SUPABASE_DOC_SELECT);
   query = applyJsonFilters(query, filters);
+  if(options.id)query=query.eq('id',options.id);
   if(options.or)query=query.or(options.or);
 
   if (options.gte) {
@@ -468,7 +485,8 @@ async function selectDocsByJson(table, filters = {}, options = {}) {
       query = query.order(json ? `dados->>${key}` : key, { ascending });
     });
   }
-  if (options.limit) query = query.limit(options.limit);
+  if (options.offset !== undefined && options.limit) query = query.range(options.offset, options.offset + options.limit - 1);
+  else if (options.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -553,11 +571,30 @@ async function insertDocs(table, docs) {
 async function updateDoc(table, id, patch, snapshot) {
   const current = snapshot || await findOneById(table, id);
   if (!current) return null;
+  // Config documents are not derived trip state; a no-op must still verify
+  // optimistic concurrency before returning the existing snapshot.
+  if(table!==TABLES.viagens && snapshot && Object.keys(patch).every(key=>isDeepStrictEqual(current[key],patch[key]))){
+    const {data,error}=await supabase.from(table).select('id').eq('id',id).eq('updated_at',snapshot.updatedAt).maybeSingle();
+    if(error)throw error;
+    return data?current:null;
+  }
   const next = {
     ...current,
     ...patch,
     updatedAt: new Date().toISOString()
   };
+  if(EGRESS_V3_RPC && table===TABLES.viagens && snapshot?.updatedAt){
+    // Keep all validation in the existing routes. The RPC merges only the
+    // validated fields into the raw document, under the same version check.
+    const delta=frontendToSupabase({...patch,createdAt:next.createdAt,status:next.status,secao:next.secao,usuario:next.usuario}).dados;
+    delete delta.updatedAt;
+    const {data,error}=await supabase.rpc('frotasys_trip_patch_v3',{p_id:String(id),p_expected:snapshot.updatedAt,p_patch:delta,p_fields:TRIP_READ_FIELDS});
+    if(error)throw error; // Never retry a potentially committed write.
+    if(!data?.row)return null;
+    const saved=projectedTrip(data.row);
+    if(data.changed)invalidateAfterWrite(table,saved,current);
+    return saved;
+  }
   let query = supabase.from(table).update(frontendToSupabase(next)).eq('id', id);
   if (snapshot) query = query.eq('updated_at', snapshot.updatedAt);
   const result = query.select(table===TABLES.viagens?tripProjection():SUPABASE_DOC_SELECT);
@@ -728,11 +765,20 @@ function hasLoadedHistory(doc = {}) {
 async function latestViagemByPlaca(placa) {
   const normalizedPlaca = normalizeUniqueValue(placa);
   if (!normalizedPlaca || normalizedPlaca.length < 5) return null;
-  const docs = await cachedValue('plate-lookup-'+normalizedPlaca,()=>selectDocsByJson(TABLES.viagens, { placa: normalizedPlaca }, { limit: DEFAULT_RANGE_LIMIT,fields:[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt','nome','carroceria','telefone','telefone2'])],order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}] }),30000);
-  return docs
-    .filter(doc => normalizeUniqueValue(doc.placa) === normalizedPlaca)
-    .filter(doc => isViagemBloqueada(doc) || normalizeUniqueValue(doc.status) === 'CONCLUIDO')
-    .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+  return cachedValue('plate-lookup-'+normalizedPlaca,async()=>{
+    // Preserve legacy JS status rules. Read the newest candidates first, stop
+    // as soon as the first eligible trip is found; avoid a second, racy read.
+    const pageSize=10;
+    const fields=[...new Set([...TRIP_STATUS_FIELDS,'data','createdAt','nome','carroceria','telefone','telefone2'])];
+    const order=[{key:'data',ascending:false},{key:'createdAt',ascending:false},{key:'id',ascending:false,json:false}];
+    for(let offset=0;offset<DEFAULT_RANGE_LIMIT;offset+=pageSize){
+      const docs=await selectDocsByJson(TABLES.viagens,{placa:normalizedPlaca},{limit:pageSize,offset,fields,order});
+      const match=docs.find(doc=>normalizeUniqueValue(doc.placa)===normalizedPlaca&&(isViagemBloqueada(doc)||normalizeUniqueValue(doc.status)==='CONCLUIDO'));
+      if(match)return match;
+      if(docs.length<pageSize)break;
+    }
+    return null;
+  },30000);
 }
 
 async function latestAnyViagemByPlaca(placa, ignoreId = '') {
@@ -1599,7 +1645,8 @@ async function findDuplicateViagemFields(data, currentId = null, previous = null
 }
 
 function broadcast(data) {
-  broadcastAuthenticated(wss.clients,['viagem_atualizada','viagem_criada'].includes(data.type)?{...data,payload:publicTrip(data.payload)}:data);
+  const message=['viagem_atualizada','viagem_criada'].includes(data.type)?{...data,payload:publicTrip(data.payload)}:data;
+  broadcastAuthenticated(wss.clients,replayJournal?replayJournal.record(message):message);
 }
 
 function publicProfile(profile = {}) {
@@ -1706,7 +1753,17 @@ function statusOperacional(data = {}) {
   return calculateTripStatus(data);
 }
 
-async function profileForUser(userId) {
+const profileInFlight=new Map();
+function profileForUser(userId){
+  if(profileInFlight.has(userId))return profileInFlight.get(userId);
+  const pending=readProfileForUser(userId);
+  if(profileInFlight.size>=128)return pending;
+  profileInFlight.set(userId,pending);
+  const clear=()=>{if(profileInFlight.get(userId)===pending)profileInFlight.delete(userId);};
+  pending.then(clear,clear);
+  return pending;
+}
+async function readProfileForUser(userId) {
   const { data, error } = await supabase
     .from('user_profiles')
     .select('id,user_id,nome,email,role,ativo,created_at')
@@ -1841,8 +1898,8 @@ app.get('/api/app-state', async (req, res) => {
     const metaFilters = data ? { data } : {};
 
     const [viagensRaw, metas, workSessions] = await Promise.all([
-      cachedValue('dashboard-trips-'+data,()=>selectDocsByJson(TABLES.viagens, viagemFilters, data ? {} : { limit: DEFAULT_RANGE_LIMIT }),10000),
-      cachedValue('dashboard-metas-'+data,()=>selectDocsByJson(TABLES.metas, metaFilters),15000),
+      cachedValue('dashboard-trips-'+data,()=>selectDocsByJson(TABLES.viagens, viagemFilters, data ? {} : { limit: DEFAULT_RANGE_LIMIT }),30000),
+      cachedValue('dashboard-metas-'+data,()=>selectDocsByJson(TABLES.metas, metaFilters),30000),
       publicWorkSessions()
     ]);
     const viagens = sortDocs(viagensRaw, { createdAt: 1 });
@@ -2344,7 +2401,7 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
 });
 
 wss.on('connection', ws => {
-  bindAuthenticatedSocket(ws,{authenticate:async token=>{
+  bindAuthenticatedSocket(ws,{resume:replayJournal?cursor=>replayJournal.resume(cursor):undefined,authenticate:async token=>{
     const {data,error}=await verifyAuthUser(token);
     if(error||!data?.user||!canAccessUser(runtime,data.user.id,process.env))return null;
     const profile=await profileForUser(data.user.id);
@@ -2468,7 +2525,7 @@ app.get('/api/viagens/search', async (req, res) => {
       const searchOptions={...options,...(reportOnly?{fields:TRIP_REPORT_FIELDS}:{}),limit:hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT};
       docs=betaWorkspace && notaTerm
         ? await searchBetaInvoices(formatDocumentNumber(req.query.nota,'nota'),query,searchOptions)
-        : await selectDocsByJson(TABLES.viagens,query,searchOptions);
+        : reportOnly ? await cachedValue('report-range-'+JSON.stringify([origem,dataInicio,dataFim]),()=>selectDocsByJson(TABLES.viagens,query,searchOptions),30000) : await selectDocsByJson(TABLES.viagens,query,searchOptions);
     }
 
     const matches = docs
@@ -3123,13 +3180,11 @@ app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => 
 
 
     if (field === 'origem') {
-      await Promise.all(orderedNormalized.map((normalized, index) =>
-        updateWhere(
-          TABLES.operacoes,
-          doc => normalizeUniqueValue(doc.origem) === normalized,
-          { ordem: index + 1 }
-        )
-      ));
+      const operations=await selectDocs(TABLES.operacoes);
+      await Promise.all(operations.filter(doc=>ranks.has(normalizeUniqueValue(doc.origem))&&Number(doc.ordem)!==ranks.get(normalizeUniqueValue(doc.origem))).map(async doc=>{
+        const saved=await updateDoc(TABLES.operacoes,doc._id,{ordem:ranks.get(normalizeUniqueValue(doc.origem))},doc);
+        if(!saved)throw Error('Operação alterada durante a edição. Tente novamente.');
+      }));
     }
 
     const grouped = await configOptionsGrouped();
@@ -3216,7 +3271,15 @@ app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) =
 
 app.get('/api/datas', async (req, res) => {
   try {
-    const datas = [...new Set(await selectJsonTextValues(TABLES.viagens, 'data'))].sort();
+    const datas = await cachedValue('available-trip-dates',async()=>{
+      if(EGRESS_V3_RPC){
+        const {data,error}=await supabase.rpc('frotasys_trip_dates_v3');
+        if(error)throw error;
+        if(!Array.isArray(data))throw Error('Invalid dates response');
+        return data;
+      }
+      return [...new Set(await selectJsonTextValues(TABLES.viagens, 'data'))].sort();
+    },30000);
     res.json(datas);
   } catch (e) {
     res.status(500).json({ error: e.message });

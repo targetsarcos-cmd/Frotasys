@@ -1,7 +1,7 @@
 'use strict';
 const AUTH_TIMEOUT=10000;
 const SESSION_LIMIT=5*60*1000;
-function bindAuthenticatedSocket(ws,{authenticate,schedule=setTimeout,cancel=clearTimeout,now=Date.now}){
+function bindAuthenticatedSocket(ws,{authenticate,resume,schedule=setTimeout,cancel=clearTimeout,now=Date.now}){
   ws.authenticated=false;
   let active=true,busy=false,renewAllowed=false,expiry,renew;
   const deadline=schedule(()=>ws.close(4401,'Autenticação necessária'),AUTH_TIMEOUT);
@@ -29,7 +29,8 @@ function bindAuthenticatedSocket(ws,{authenticate,schedule=setTimeout,cancel=cle
         if(!active||!ws.authenticated||ws.readyState!==1)return;
         renewAllowed=true;ws.send(JSON.stringify({type:'auth_renew'}));
       },remaining-15000);
-      ws.send(JSON.stringify({type:'auth_ok',renewed,payload:identity.profile}));
+      const replay=!renewed&&resume?resume(message.cursor):undefined;
+      ws.send(JSON.stringify({type:'auth_ok',renewed,payload:identity.profile,...(replay?{resume:replay}:{})}));
     }catch(_error){ws.authenticated=false;if(active)ws.close(4403,'Acesso negado');}
     finally{busy=false;}
   });

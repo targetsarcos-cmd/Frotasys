@@ -15,16 +15,16 @@ test('cache seletivo conserva catálogos em alterações de trabalho e viagem do
   const server=read('server.js');
   const source=server.slice(server.indexOf('function invalidateAfterWrite('),server.indexOf('function invalidateCache('));
   const invalidated=[],events=[];
-  const fields=['TABLES','betaWorkspace','require','invalidateCache','broadcast','WORK_EVENT_FIELD','WORK_SESSION_FIELD','WORK_TYPE_FIELD','USER_PROFILE_SETTINGS_FIELD','WAITLIST_FIELD','FRETE_CONSULT_FIELD','LEMBRETE_FIELD','OPERATION_MESSAGES_FIELD','CONFIG_FIELDS','CONFIG_SEED_MARKER_FIELD'];
+  const fields=['appCache','TABLES','betaWorkspace','require','invalidateCache','broadcast','WORK_EVENT_FIELD','WORK_SESSION_FIELD','WORK_TYPE_FIELD','USER_PROFILE_SETTINGS_FIELD','WAITLIST_FIELD','FRETE_CONSULT_FIELD','LEMBRETE_FIELD','OPERATION_MESSAGES_FIELD','CONFIG_FIELDS','CONFIG_SEED_MARKER_FIELD'];
   const rules={localDay:()=> '2026-11-27',dischargeNotification:(d,t)=>d.data<t&&!d.descargaVerde&&d.nota?{id:d.id,descarga:d.descarga}:null,advanceNotification:()=>null};
-  const invalidate=new Function(...fields,source+'return invalidateAfterWrite;')({viagens:'viagens',metas:'metas',operacoes:'operacoes',configOptions:'config'},true,()=>rules,k=>invalidated.push(k),e=>events.push(e),'event','session','type','profile','wait','frete','note','messages',['tipo'],'seed');
+  const invalidate=new Function(...fields,source+'return invalidateAfterWrite;')({delete:k=>invalidated.push(k)},{viagens:'viagens',metas:'metas',operacoes:'operacoes',configOptions:'config'},true,()=>rules,k=>invalidated.push(k),e=>events.push(e),'event','session','type','profile','wait','frete','note','messages',['tipo'],'seed');
   invalidate('config',{field:'event'});assert.deepEqual(invalidated,[]);
   invalidate('config',{field:'session',workTypeId:'A'},{field:'session',workTypeId:'A'});
   assert.deepEqual(invalidated,['public-work-sessions']);invalidated.length=0;
   invalidate('config',{field:'profile',userId:'u'});assert.deepEqual(invalidated,['profile-settings-u','public-work-sessions']);invalidated.length=0;
-  invalidate('viagens',{data:'2026-11-27',nota:'123'},{data:'2026-11-27',nota:''});assert.deepEqual(invalidated,['dashboard-trips-']);assert.equal(events.length,0);invalidated.length=0;
+  invalidate('viagens',{data:'2026-11-27',nota:'123'},{data:'2026-11-27',nota:''});assert.deepEqual(invalidated,['dashboard-trips-','dashboard-trips-2026-11-27','report-range-']);assert.equal(events.length,0);invalidated.length=0;
   invalidate('viagens',{data:'2026-11-26',id:'a',nota:'123',descargaVerde:true},{data:'2026-11-26',id:'a',nota:'123'});
-  assert.deepEqual(invalidated,['dashboard-trips-','pending-trips-']);assert.equal(events[0].type,'pending_notifications_changed');
+  assert.deepEqual(invalidated,['dashboard-trips-','dashboard-trips-2026-11-26','report-range-','pending-trips-']);assert.equal(events[0].type,'pending_notifications_changed');
 });
 test('métricas agregadas não registram parâmetros, identificadores ou credenciais',async()=>{
   const url='https://example.supabase.co/rest/v1/viagens?select=id%2Cdados%2Cupdated_at&dados-%3E%3Eplaca=eq.SECRET';
@@ -38,7 +38,8 @@ test('métricas agregadas não registram parâmetros, identificadores ou credenc
 });
 test('frontend não recarrega ao renovar autenticação e usa evento de notificação',()=>{
   const app=read('public/js/app.js'),server=read('server.js'),workspace=read('public/js/workspace-beta.js');
-  assert.match(app,/firstAuthentication&&wsWasAuthenticated&&!wsRefreshPending/);
+  assert.match(app,/firstAuthentication&&wsWasAuthenticated/);
+  assert.match(app,/else if\(!wsRefreshPending\)/);
   assert.match(app,/msg.type==='auth_renew'/);
   assert.match(app,/type === 'pending_notifications_changed'/);
   assert.match(workspace,/setInterval\(refreshDischargeNotifications,120000\)/);
