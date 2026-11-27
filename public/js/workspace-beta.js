@@ -118,6 +118,15 @@
   syncBetaReminderPanel();
   const globalSearch = adopt('globalSearch','header-search-input');
   globalSearch.setAttribute('form', 'header-search-form');
+  globalSearch.placeholder = 'Pesquisar placa, motorista, nota, CT-e...';
+  globalSearch.setAttribute('aria-label','Pesquisa global de carregamentos');
+  globalSearch.maxLength = 120;
+  globalSearch.addEventListener('keydown',event=>{
+    if(event.key==='Enter' && !event.isComposing) {
+      event.preventDefault();
+      byId('header-search-form').requestSubmit();
+    }
+  });
   const advanced = byId('btn-advanced-search');
   advanced.setAttribute('aria-label','Busca avançada');
   advanced.replaceChildren(globalSearch.parentElement.querySelector('svg'));
