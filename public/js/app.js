@@ -568,6 +568,7 @@ function initUI() {
   });
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;
+    if (isBetaTripWorkspace()) renderDateWeekday();
     clearTripFilterScope();
     loadAll();
   });
@@ -3089,6 +3090,7 @@ function changeDate(delta) {
   state.currentDate = d.toISOString().split('T')[0];
   clearTripFilterScope();
   document.getElementById('date-picker').value = state.currentDate;
+  if (isBetaTripWorkspace()) renderDateWeekday();
   loadAll();
 }
 
