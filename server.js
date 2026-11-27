@@ -303,6 +303,10 @@ const appCache = new Map();
 async function cachedValue(key, loader, ttl = APP_CACHE_TTL_MS) {
   const cached = appCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.value;
+  if(appCache.size>=256){
+    for(const [k,v] of appCache)if(v.expires<=Date.now())appCache.delete(k);
+    if(appCache.size>=256){for(const [k,v] of appCache){if(v.expires!==Infinity){appCache.delete(k);break;}}}
+  }
   const entry = { value: Promise.resolve().then(loader), expires: Infinity };
   appCache.set(key, entry);
   try {
