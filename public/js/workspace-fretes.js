@@ -6,6 +6,9 @@
   const nav = shell.querySelector('[data-nav="Consulta Frete"]');
   const queue = document.getElementById('beta-espera');
   const queueNav = shell.querySelector('[data-nav="Lista de Espera"]');
+  const settings = document.getElementById('beta-settings');
+  const settingsNav = shell.querySelector('[data-nav="Configurações"]');
+  prepareBetaSettingsPage();
   const form = document.getElementById('waitlist-form');
   document.getElementById('espera-cadastro').append(form);
   for (const group of form.querySelectorAll('.form-group')) {
@@ -23,14 +26,21 @@
   function navigate() {
     const active = location.hash === '#fretes';
     const queueActive = location.hash === '#lista-espera';
+    const settingsActive = location.hash === '#configuracoes';
+    settings.hidden = !settingsActive;
     queue.hidden = !queueActive;
     page.hidden = !active;
-    shell.querySelector('main.workspace').hidden = active || queueActive;
-    title.textContent = active ? 'Tabela de Fretes' : queueActive ? 'Lista de Espera' : homeTitle;
-    for (const [button,selected] of [[home,!active && !queueActive],[nav,active],[queueNav,queueActive]]) {
+    shell.querySelector('main.workspace').hidden = active || queueActive || settingsActive;
+    title.textContent = active ? 'Tabela de Fretes' : queueActive ? 'Lista de Espera' : settingsActive ? 'Configurações' : homeTitle;
+    for (const [button,selected] of [[home,!active && !queueActive && !settingsActive],[nav,active],[queueNav,queueActive],[settingsNav,settingsActive]]) {
       button.classList.toggle('nav-current',selected);
       if (selected) button.setAttribute('aria-current','page');
       else button.removeAttribute('aria-current');
+    }
+    if (settingsActive) {
+      closeTravelDrawer();
+      if(state.userProfile){resetExportViagensForm();renderSettingsModal();}
+      window.scrollTo(0,0);
     }
     if (queueActive) {
       closeTravelDrawer();
@@ -44,7 +54,7 @@
       if (state.userProfile) refreshFreteConsultas();
     }
   }
-  home.addEventListener('click',() => { if (!page.hidden || !queue.hidden) location.hash = ''; });
+  home.addEventListener('click',() => { if (!page.hidden || !queue.hidden || !settings.hidden) location.hash = ''; });
   window.addEventListener('hashchange',navigate);
   navigate();
 })();

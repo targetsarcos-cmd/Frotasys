@@ -521,6 +521,7 @@ async function loadAll() {
   state.staticDataLoaded = true;
   clearReminderStatus();
   renderAll();
+  if (document.getElementById('beta-settings')?.hidden === false) renderSettingsModal();
 }
 
 async function apiFetch(url, opts = {}) {
@@ -3288,12 +3289,14 @@ function viagemStatusDisplay(viagem) {
 
 function statusColorStyle(status) {
   const normalized = normalizeOption(status);
+  if (isBetaTripWorkspace()) return colorPreviewStyle(configColor('status',status));
   if (STATUS_COLOR_OVERRIDES[normalized]) return colorPreviewStyle(STATUS_COLOR_OVERRIDES[normalized]);
   return selectColorStyle('status', status);
 }
 
 function statusHexColor(status) {
   const normalized = normalizeOption(status);
+  if (isBetaTripWorkspace()) return configColor('status',status || 'STATUS');
   if (STATUS_COLOR_OVERRIDES[normalized]) return STATUS_COLOR_OVERRIDES[normalized];
   return configColor('status', status || 'STATUS');
 }
@@ -4851,7 +4854,153 @@ function setReportOperationOptions() {
   select.value = preferred;
 }
 
+
+let betaSettingsTab = 'all';
+
+function prepareBetaSettingsPage() {
+  const page=document.getElementById('beta-settings');
+  const target=document.getElementById('beta-settings-content');
+  const body=document.querySelector('#settings-modal-overlay .modal-body');
+  if(!page||!target||!body)return;
+  body.classList.add('beta-settings-body');
+  target.append(body);
+  const primary=document.createElement('div');
+  primary.className='beta-settings-primary';
+  const profile=document.createElement('div');
+  profile.id='settings-profile-top';profile.className='settings-profile-top';
+  const extra=document.createElement('div');extra.id='beta-settings-extra';
+  primary.append(profile,body.querySelector('.settings-export-section'),document.getElementById('settings-operations'),extra);
+  body.prepend(primary);
+  document.getElementById('beta-settings-search').addEventListener('input',filterBetaSettingsPage);
+  page.addEventListener('click',event=>{
+    const tab=event.target.closest('[data-settings-tab]');
+    if(tab){betaSettingsTab=tab.dataset.settingsTab;filterBetaSettingsPage();return;}
+    const card=event.target.closest('[data-settings-jump]');
+    if(card){
+      betaSettingsTab='all';
+      document.getElementById('beta-settings-search').value='';
+      filterBetaSettingsPage();
+      page.querySelector(card.dataset.settingsJump)?.scrollIntoView({block:'start',behavior:'smooth'});
+      return;
+    }
+    const edit=event.target.closest('[data-settings-edit]');
+    if(edit){editBetaSettingsName(edit);return;}
+    const remove=event.target.closest('[data-settings-delete]');
+    if(remove){
+      const field=remove.dataset.settingsDelete;
+      const value=configOptionList(field)[Number(remove.dataset.settingsIndex)];
+      if(value)deleteConfigOption(field,value);
+    }
+  });
+}
+
+function syncBetaSettingsPage() {
+  const page=document.getElementById('beta-settings');
+  if(!page)return;
+  const extra=document.getElementById('beta-settings-extra');
+  const destination=page.querySelector('#settings-grid [data-field="destino"]');
+  const work=page.querySelector('#settings-grid .settings-work-section');
+  if(destination)extra.append(destination);
+  if(work)extra.append(work);
+  const cards=page.querySelectorAll('.settings-section');
+  for(const card of cards){
+    card.dataset.settingsCategory=card.matches('.settings-operation-messages-section')?'messages':
+      card.matches('.settings-work-section,.settings-operations-section,[data-field="tipo"],[data-field="status"]')?'operational':
+      card.hasAttribute('data-field')?'catalog':'general';
+  }
+  const admin=isAdmin();
+  const overview=document.getElementById('beta-settings-overview');
+  const entries=admin?[
+    ['Operações',operationsList().length,'Operações configuradas','.settings-operations-section','#beta-icon-truck'],
+    ['Categorias',CONFIG_FIELDS.length,'Listas de cadastro','#settings-grid [data-field]','#beta-icon-list'],
+    ['Mensagens',operationsList().filter(op=>String(state.operationMessages[operationMessageKey(op)]||'').trim()).length,'Mensagens preenchidas','.settings-operation-messages-section','#beta-icon-bell'],
+    ['Exportação','Excel por período','Exportar viagens','.settings-export-section','#beta-icon-download']
+  ]:[['Perfil',loggedUserDisplayName(),'Preferências pessoais','.settings-profile-section','#beta-icon-users']];
+  overview.innerHTML=entries.map(([label,value,description,selector,icon])=>'<button type="button" class="beta-settings-kpi" data-settings-jump="'+escapeAttr(selector)+'"><span class="beta-settings-kpi-icon"><svg aria-hidden="true"><use href="'+icon+'"/></svg></span><span><small>'+escapeHtml(label)+'</small><strong>'+escapeHtml(String(value))+'</strong><span>'+escapeHtml(description)+'</span></span><svg class="beta-settings-chevron" aria-hidden="true"><use href="#beta-icon-right"/></svg></button>').join('');
+  if(isBetaReadOnly()){
+    page.querySelectorAll('#beta-settings-content input,#beta-settings-content textarea,#beta-settings-content select,#beta-settings-content button').forEach(el=>{if(!el.closest('.settings-export-section'))el.disabled=true;});
+    document.getElementById('beta-settings-notice').textContent='Modo somente leitura. As configurações não podem ser alteradas.';
+  }
+  page.querySelectorAll('[data-settings-tab]:not([data-settings-tab="all"])').forEach(btn=>btn.hidden=!admin);
+  if(!admin)betaSettingsTab='all';
+  filterBetaSettingsPage();
+}
+
+function filterBetaSettingsPage() {
+  const page=document.getElementById('beta-settings');
+  if(!page)return;
+  const term=normalizeOption(document.getElementById('beta-settings-search').value);
+  let shown=0;
+  for(const card of page.querySelectorAll('.settings-section')){
+    const allowed=!card.classList.contains('is-hidden')&&(isAdmin()||card.matches('.settings-profile-section'));
+    const text=normalizeOption(card.textContent+' '+[...card.querySelectorAll('input,textarea')].map(el=>el.value).join(' '));
+    card.hidden=!(allowed&&(betaSettingsTab==='all'||card.dataset.settingsCategory===betaSettingsTab)&&(!term||text.includes(term)));
+    if(!card.hidden)shown++;
+  }
+  for(const tab of page.querySelectorAll('[data-settings-tab]'))tab.setAttribute('aria-pressed',String(tab.dataset.settingsTab===betaSettingsTab));
+  document.getElementById('beta-settings-empty').hidden=shown>0;
+}
+
+function renderBetaStatusSettings() {
+  const statuses=[...new Set([...STATUS,...Object.keys(DEFAULT_CONFIG_COLORS.status)])];
+  return '<section class="settings-section has-colors beta-status-settings" data-field="status"><div class="settings-section-head"><strong>STATUS OPERACIONAIS</strong><span>'+statuses.length+' status</span></div><p class="beta-settings-section-help">Cores personalizáveis. Os nomes e a sequência são definidos pelo fluxo da viagem.</p><div class="settings-list">'+statuses.map(value=>'<div class="settings-item"><span>'+escapeHtml(value)+'</span>'+renderConfigColorPicker('status',value)+'</div>').join('')+'</div></section>';
+}
+
+function renderBetaConfigEditButton(field,value,index) {
+  if(field==='origem'){
+    const op=operationsList().find(item=>item.origem===value);
+    if(!op?._id)return '';
+    return '<button type="button" class="beta-settings-edit" data-settings-edit="origem" data-settings-index="'+index+'" title="Editar nome da operação" aria-label="Editar nome da operação">&#9998;</button>';
+  }
+  if(['tipo','pamcard'].includes(field)&&(DEFAULT_CONFIG_OPTIONS[field]||[]).includes(value))return '';
+  return '<button type="button" class="beta-settings-edit" data-settings-edit="'+escapeAttr(field)+'" data-settings-index="'+index+'" title="Editar nome" aria-label="Editar nome">&#9998;</button>';
+}
+
+function editBetaSettingsName(button) {
+  if(!isAdmin()||isBetaReadOnly())return;
+  const field=button.dataset.settingsEdit,index=Number(button.dataset.settingsIndex);
+  const work=field==='work'?state.workTypes[index]:null;
+  const current=work?work.name:configOptionList(field)[index];
+  if(!current)return;
+  if(field==='origem'){
+    const op=operationsList().find(item=>item.origem===current);
+    if(op?._id)openOperationModal(op._id);
+    return;
+  }
+  const row=button.closest('.settings-item');
+  if(!row||row.querySelector('.beta-settings-inline-edit'))return;
+  const name=row.firstElementChild;
+  const editor=document.createElement('form');
+  editor.className='beta-settings-inline-edit';
+  const input=document.createElement('input');
+  input.type='text';input.maxLength=100;input.value=current;input.setAttribute('aria-label','Novo nome');
+  const save=document.createElement('button');save.type='submit';save.textContent='Salvar';
+  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar';
+  editor.append(input,save,cancel);
+  name.hidden=true;row.insertBefore(editor,name);button.disabled=true;
+  const cleanup=()=>{editor.remove();name.hidden=false;button.disabled=false;};
+  cancel.onclick=cleanup;
+  editor.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();cleanup();}});
+  editor.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const next=input.value.trim();
+    if(!next||next===current){cleanup();return;}
+    save.disabled=true;cancel.disabled=true;
+    if(work){await updateWorkType(work._id,{name:next});if(editor.isConnected){save.disabled=false;cancel.disabled=false;}return;}
+    const saved=await apiFetch('/api/config-options/'+encodeURIComponent(field)+'/rename',{method:'PUT',body:JSON.stringify({previous:current,value:next})});
+    if(!saved){save.disabled=false;cancel.disabled=false;return;}
+    state.configOptions=normalizeConfigOptions(saved.options);state.configColors=mergeConfigColors(saved.colors);
+    renderSettingsModal();renderAll();
+  });
+  input.focus();input.select();
+}
+
 function openSettingsModal() {
+  if (isBetaTripWorkspace()) {
+    if (location.hash !== '#configuracoes') location.hash = 'configuracoes';
+    else { resetExportViagensForm(); renderSettingsModal(); }
+    return;
+  }
   resetExportViagensForm();
   renderSettingsModal();
   document.getElementById('settings-modal-overlay').classList.remove('hidden');
@@ -4862,7 +5011,8 @@ function closeSettingsModal() {
 }
 
 function renderSettingsModal() {
-  const body = document.querySelector('#settings-modal-overlay .modal-body');
+  const body = document.querySelector(isBetaTripWorkspace() ? '#beta-settings-content .beta-settings-body' : '#settings-modal-overlay .modal-body');
+  if(isBetaTripWorkspace()) document.getElementById('beta-settings-extra')?.replaceChildren();
   let profileTop = document.getElementById('settings-profile-top');
   if (body && !profileTop) {
     body.insertAdjacentHTML('afterbegin', '<div id="settings-profile-top" class="settings-profile-top"></div>');
@@ -4877,6 +5027,7 @@ function renderSettingsModal() {
   const grid = document.getElementById('settings-grid');
   if (!isAdmin()) {
     grid.innerHTML = '';
+    if (isBetaTripWorkspace()) syncBetaSettingsPage();
     return;
   }
   grid.innerHTML = renderWorkSettingsSection() + CONFIG_FIELDS.map(field => {
@@ -4899,11 +5050,13 @@ function renderSettingsModal() {
             <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">&#8593;</button>
             <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
           </div>
-          <button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>
+          ${isBetaTripWorkspace() ? renderBetaConfigEditButton(field.key, value, index) : ''}
+          ${isBetaTripWorkspace() ? `<button type="button" data-settings-delete="${field.key}" data-settings-index="${index}" title="Excluir">Excluir</button>` : `<button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>`}
         </div>`).join('')}
       </div>
     </section>`;
   }).join('');
+  if (isBetaTripWorkspace()) { grid.insertAdjacentHTML('beforeend',renderBetaStatusSettings()); syncBetaSettingsPage(); }
 }
 
 function renderProfileSettingsSection() {
@@ -4961,6 +5114,7 @@ function renderWorkSettingsSection() {
           <button type="button" class="settings-move-btn" onclick="moveWorkType(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">&#8593;</button>
           <button type="button" class="settings-move-btn" onclick="moveWorkType(${index}, 1)" ${index === items.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
         </div>
+        ${isBetaTripWorkspace() ? `<button type="button" class="beta-settings-edit" data-settings-edit="work" data-settings-index="${index}" title="Editar nome" aria-label="Editar nome da atividade">&#9998;</button>` : ''}
         <button type="button" onclick="updateWorkType('${escapeAttr(type._id)}', { isActive: ${type.isActive ? 'false' : 'true'} })">${type.isActive ? 'Desativar' : 'Ativar'}</button>
         <button type="button" onclick="deleteWorkType('${escapeAttr(type._id)}')" title="Excluir">Excluir</button>
         <small>${type.usageCount || 0} usos</small>
@@ -5279,6 +5433,13 @@ function renderConfigColorPicker(field, value) {
 
 async function setConfigColor(field, value, color) {
   if (!CONFIG_COLOR_FIELDS.includes(field) || !isHexColor(color)) return;
+  if (isBetaTripWorkspace()) {
+    if(!isAdmin()||isBetaReadOnly())return;
+    const saved=await apiFetch(`/api/config-colors/${encodeURIComponent(field)}/${encodeURIComponent(value)}`,{method:'PUT',body:JSON.stringify({color})});
+    if(saved){state.configColors=mergeConfigColors(saved);renderAll();showSummaryToast('Cor salva');}
+    renderSettingsModal();
+    return;
+  }
   const normalized = normalizeOption(value);
   state.configColors[field] = { ...(state.configColors[field] || {}), [normalized]: color };
   renderAll();
@@ -5310,6 +5471,7 @@ async function addConfigOption(field) {
 }
 
 async function deleteConfigOption(field, value) {
+  if (isBetaTripWorkspace() && (!isAdmin() || isBetaReadOnly() || !confirm('Excluir '+value+' das opções cadastradas?'))) return;
   const updated = await apiFetch(`/api/config-options/${field}/${encodeURIComponent(value)}`, { method: 'DELETE' });
   if (!updated) return;
   state.configOptions = normalizeConfigOptions(updated);

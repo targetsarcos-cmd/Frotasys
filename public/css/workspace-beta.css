@@ -594,3 +594,86 @@ body.workspace-beta .beta-search-detail-row .search-result-field span {font:600 
 body.workspace-beta .beta-search-detail-row .search-result-field strong {font:600 12px 'Segoe UI',sans-serif;color:#173950}
 body.workspace-beta #search-modal-overlay .modal-footer {background:#fff;border-top:1px solid #cddde9;padding:10px 20px;flex:none}
 @media(max-width:1100px){body.workspace-beta #advanced-search-form{grid-template-columns:repeat(3,minmax(0,1fr))}body.workspace-beta #search-modal-overlay .modal-body{overflow:auto}body.workspace-beta #search-results{min-height:180px}}
+
+
+/* Settings workspace: real controls in a page, not a floating window. */
+#beta-settings {font-family:'Segoe UI',Arial,sans-serif;color:#173950}
+#beta-settings .beta-settings-head {display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 16px}
+#beta-settings h1 {margin:0;font:700 26px/1.2 'Segoe UI',sans-serif;color:#17354c}
+#beta-settings .beta-settings-head p {margin:5px 0 0;color:#526b80;font-size:13px}
+#beta-settings .beta-settings-search {display:flex;align-items:center;gap:8px;width:min(320px,40%);background:#fff;border:1px solid #b5c9db;border-radius:5px;padding:0 10px;height:36px}
+#beta-settings .beta-settings-search svg {width:17px;height:17px;flex:none;color:#526b80}
+#beta-settings .beta-settings-search input {width:100%;border:0;outline:none;background:transparent;color:#173950;font-size:13px}
+#beta-settings .beta-settings-search:focus-within {outline:2px solid #96c5e6}
+#beta-settings .beta-settings-overview {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+#beta-settings .beta-settings-kpi {display:flex;align-items:center;gap:12px;min-width:0;text-align:left;border:1px solid #cddde9;border-radius:7px;background:#fff;color:#173950;padding:14px 12px;cursor:pointer}
+#beta-settings .beta-settings-kpi:hover {border-color:#7eadd1;background:#f7fbff}
+#beta-settings .beta-settings-kpi-icon {display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:7px;background:#e4edf7;color:#096ac1}
+#beta-settings .beta-settings-kpi-icon svg {width:23px;height:23px}
+#beta-settings .beta-settings-kpi>span:nth-child(2) {display:grid;gap:3px;min-width:0;flex:1}
+#beta-settings .beta-settings-kpi small {font-weight:650;color:#284a62;font-size:12px}
+#beta-settings .beta-settings-kpi strong {font-size:19px;font-weight:700;line-height:1.2;overflow-wrap:anywhere}
+#beta-settings .beta-settings-kpi>span:nth-child(2)>span {font-size:11px;color:#60778a}
+#beta-settings .beta-settings-chevron {width:15px;height:15px;flex:none;color:#526b80}
+#beta-settings .beta-settings-tabs {display:flex;gap:12px;border-bottom:1px solid #c4d4e2;margin-bottom:10px}
+#beta-settings .beta-settings-tabs button {padding:10px 16px;color:#284a62;background:transparent;border:0;border-bottom:3px solid transparent;font:600 13px 'Segoe UI',sans-serif}
+#beta-settings .beta-settings-tabs button[aria-pressed=true] {border-bottom-color:#096ac1;color:#096ac1}
+#beta-settings .beta-settings-notice {margin:0 0 14px;color:#60778a;font-size:12px}
+#beta-settings .beta-settings-body {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:14px;padding:0;overflow:visible}
+#beta-settings :is(.beta-settings-primary,#settings-grid,#settings-operations,#beta-settings-extra) {display:flex;flex-direction:column;align-items:stretch;gap:14px;min-width:0;margin:0}
+#beta-settings #settings-profile-top {display:block;margin:0}
+#beta-settings :is(.beta-settings-primary,#settings-grid,#settings-operations,#beta-settings-extra):not(:has(.settings-section:not([hidden]))) {display:none}
+#beta-settings .beta-settings-body:not(:has(.beta-settings-primary .settings-section:not([hidden]))),#beta-settings .beta-settings-body:not(:has(#settings-grid .settings-section:not([hidden]))) {grid-template-columns:1fr}
+#beta-settings .settings-section {min-width:0;margin:0;padding:15px;background:#fff;border:1px solid #cddde9;border-radius:7px;box-shadow:none;scroll-margin-top:80px}
+#beta-settings .settings-section-head {margin-bottom:12px;gap:8px;align-items:center}
+#beta-settings .settings-section-head strong {font:700 14px/1.3 'Segoe UI',sans-serif;color:#173950}
+#beta-settings .settings-section-head span {font:500 11px 'Segoe UI',sans-serif;color:#60778a}
+#beta-settings .settings-profile-section {width:100%;text-align:left;order:1;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:9px}
+#beta-settings .settings-profile-section .settings-section-head,#beta-settings .settings-profile-preview {grid-column:1/-1}
+#beta-settings .settings-profile-preview {justify-self:start;justify-content:flex-start;min-width:0;background:#f5f8fb;border:1px solid #d9e4ed;padding:8px 10px;border-radius:5px}
+#beta-settings .settings-profile-save {justify-self:stretch;width:auto;min-width:86px}
+#beta-settings .settings-export-section {order:2}
+#beta-settings .settings-operations-section {order:3;grid-column:1/-1}
+#beta-settings .settings-operation-messages-section {order:4;grid-column:1/-1}
+#beta-settings .settings-work-section {order:11;grid-column:1/-1}
+#beta-settings [data-field="produto"].settings-section {order:5}
+#beta-settings [data-field="carroceria"].settings-section {order:6}
+#beta-settings [data-field="origem"].settings-section {order:7}
+#beta-settings [data-field="destino"].settings-section {order:8}
+#beta-settings [data-field="tipo"].settings-section {order:9}
+#beta-settings [data-field="pamcard"].settings-section {order:10}
+#beta-settings .beta-status-settings {order:12;grid-column:1/-1}
+#beta-settings .settings-export-form {grid-template-columns:repeat(2,minmax(0,1fr)) auto;align-items:end;gap:8px}
+#beta-settings .settings-export-status:empty {display:none}
+#beta-settings .settings-operation-list {gap:8px}
+#beta-settings .settings-operation-chip {border-radius:5px;background:#f5f8fb}
+#beta-settings .operation-message-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#beta-settings .operation-message-field {min-width:0;padding:10px;border:1px solid #d9e4ed;border-radius:5px;background:#f5f8fb}
+#beta-settings .operation-message-field textarea {min-height:120px;line-height:1.5}
+#beta-settings :is(.settings-add-row,.settings-work-add-row) {margin-bottom:10px;gap:8px}
+#beta-settings .settings-list {max-height:none;overflow:visible;gap:0;border:1px solid #d9e4ed;border-radius:5px}
+#beta-settings .settings-item {display:flex;align-items:center;gap:5px;min-height:39px;border:0;border-bottom:1px solid #d9e4ed;border-radius:0;background:#fff;padding:5px 7px 5px 10px;min-width:0}
+#beta-settings .settings-item:first-child {border-radius:5px 5px 0 0}
+#beta-settings .settings-item:last-child {border-bottom:0;border-radius:0 0 5px 5px}
+#beta-settings .settings-item:nth-child(even) {background:#f6f9fc}
+#beta-settings .settings-item>span:first-child {flex:1;min-width:0;font:600 12px 'Segoe UI',sans-serif;color:#173950;white-space:normal;overflow-wrap:anywhere}
+#beta-settings .settings-item button {flex:none;height:28px;padding:0 8px;font:600 11px 'Segoe UI',sans-serif;border:1px solid #cbdce9;border-radius:4px;background:#fff;color:#075b9e}
+#beta-settings .settings-item button[title="Excluir"] {color:#a92f37}
+#beta-settings .settings-item button:disabled {opacity:.45;cursor:default}
+#beta-settings .settings-order-actions {display:flex;gap:4px;flex:none}
+#beta-settings .settings-color-control {flex:none}
+#beta-settings .settings-item .beta-settings-edit {font-size:15px;min-width:29px}
+#beta-settings .settings-item .beta-settings-inline-edit {display:flex;gap:5px;flex:1;min-width:0;align-items:center}
+#beta-settings .beta-settings-inline-edit input {min-width:70px;flex:1;width:100%}
+#beta-settings .settings-item:has(.beta-settings-inline-edit) {flex-wrap:wrap}
+#beta-settings .settings-item:has(.beta-settings-inline-edit) .beta-settings-inline-edit {flex-basis:100%}
+#beta-settings :is(input:not([type=color]),textarea,select) {border-radius:4px;border-color:#b5c9db;background:#fff;color:#173950;font-family:'Segoe UI',sans-serif}
+#beta-settings :is(.settings-add-row button,.settings-work-add-row button,.settings-profile-save,.settings-export-btn,.btn-add-operation) {border:1px solid #135c92;border-radius:4px;background:#135c92;color:#fff;font:600 12px 'Segoe UI',sans-serif;box-shadow:none}
+#beta-settings :is(.settings-add-row button,.settings-work-add-row button,.settings-profile-save,.settings-export-btn,.btn-add-operation):hover {background:#0e4875}
+#beta-settings :is(button,input,textarea,select):focus-visible {outline:2px solid #3684be;outline-offset:1px}
+#beta-settings .beta-settings-section-help {margin:0 0 10px;color:#60778a;font-size:12px}
+#beta-settings .beta-status-settings .settings-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+#beta-settings .beta-status-settings .settings-item {border-bottom:1px solid #d9e4ed;border-right:1px solid #d9e4ed}
+#beta-settings #beta-settings-empty {background:#fff;border:1px solid #cddde9;border-radius:6px;padding:20px;text-align:center;color:#60778a}
+@media(max-width:1350px){#beta-settings .beta-settings-overview{grid-template-columns:repeat(2,minmax(0,1fr))}#beta-settings .settings-export-form{grid-template-columns:repeat(2,minmax(0,1fr))}#beta-settings .settings-export-btn{grid-column:1/-1}}
+@media(max-width:1000px){#beta-settings .beta-settings-body{grid-template-columns:1fr}#beta-settings .operation-message-grid,#beta-settings .beta-status-settings .settings-list{grid-template-columns:1fr}}

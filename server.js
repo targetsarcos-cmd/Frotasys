@@ -2848,6 +2848,35 @@ app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => 
   }
 });
 
+
+app.put('/api/config-options/:field/rename', requireAdmin, async (req, res) => {
+  try {
+    if (!betaEditable) return res.status(403).json({error:'Disponível somente no beta editável.'});
+    const field=req.params.field;
+    if (!['tipo','produto','carroceria','pamcard','destino'].includes(field)) return res.status(400).json({error:'Campo protegido ou inválido.'});
+    const previous=normalizeUniqueValue(req.body?.previous);
+    const value=normalizeUniqueValue(req.body?.value);
+    if (!previous || !value || value.length>100) return res.status(400).json({error:'Informe um nome válido, de até 100 caracteres.'});
+    if (['tipo','pamcard'].includes(field) && DEFAULT_CONFIG_OPTIONS[field].includes(previous)) return res.status(409).json({error:'Este valor é utilizado pelas regras operacionais e não pode ser renomeado.'});
+    const current=await findOneByJson(TABLES.configOptions,{field,normalized:previous});
+    if (!current) return res.status(404).json({error:'Opção não encontrada.'});
+    if (previous===value) return res.json({options:await configOptionsGrouped(),colors:await configColorsGrouped()});
+    if (await findOneByJson(TABLES.configOptions,{field,normalized:value})) return res.status(409).json({error:'Já existe uma opção com esse nome.'});
+    if (await countDocs(TABLES.viagens,null,{[field]:current.value})) return res.status(409).json({error:'Opção vinculada a viagens. Cadastre um novo valor para preservar o histórico.'});
+    if (field==='produto'||field==='destino') {
+      const keys=field==='produto'?['produtos','resumoProdutos']:['resumoDestinos'];
+      const ops=await selectDocs(TABLES.operacoes);
+      if (ops.some(op=>keys.some(key=>Array.isArray(op[key])&&op[key].some(item=>normalizeUniqueValue(item)===previous)))) return res.status(409).json({error:'Opção vinculada a uma operação. Remova o vínculo antes de renomear.'});
+    }
+    const updated=await updateDoc(TABLES.configOptions,current._id,{value,normalized:value},current);
+    if (!updated) return res.status(409).json({error:'Opção alterada por outro usuário. Atualize a página.'});
+    const options=await configOptionsGrouped(),colors=await configColorsGrouped();
+    broadcast({type:'config_atualizada',payload:options});
+    broadcast({type:'config_cores_atualizadas',payload:colors});
+    res.json({options,colors});
+  } catch(e) { res.status(500).json({error:e.message}); }
+});
+
 app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
