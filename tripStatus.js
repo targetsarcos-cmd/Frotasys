@@ -1,3 +1,5 @@
+const billing=require('./public/js/workspace-trip-sections');
+
 function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
@@ -55,16 +57,20 @@ function hasAdvanceOk(trip = {}) {
     ['ADIANTAMENTO EFETUADO', 'NAO FAZ CONTRATO'].includes(normalizeText(trip.conclusaoContrato));
 }
 
-function calculateTripStatus(trip = {}) {
+function calculateTripStatus(trip = {}, options = {}) {
   const registrationStatus = hasRegistrationPending(trip);
   if (registrationStatus) return registrationStatus;
 
   const hasDt = hasValue(trip.dt);
   const isScheduled = trip.programado === true;
 
-  if (hasTransportDocuments(trip)) {
+  const legacyBilling=options.requireBillingCompletion && options.preserveLegacyCompleted && billing.isLegacyCompleted(trip);
+  const documentsReady=options.requireBillingCompletion && !legacyBilling ? billing.hasBillingDocuments(trip) : hasTransportDocuments(trip);
+  if (documentsReady) {
+    if(options.requireBillingCompletion && !legacyBilling && !billing.hasInvoiceHours(trip))return 'HORA NF';
     const advanceOk = hasAdvanceOk(trip);
-    const hasDischargeTime = hasValue(trip.descarga);
+    const legacyCompleted = options.preserveLegacyCompleted && trip.descargaVerde === undefined && normalizeText(trip.status) === 'CONCLUIDO';
+    const hasDischargeTime = hasValue(trip.descarga) && (!options.requireDischargeConfirmation || trip.descargaVerde === true || legacyCompleted);
     if (advanceOk && hasDischargeTime) return 'CONCLUIDO';
     if (!advanceOk && hasDischargeTime) return 'ADIANTAMENTO';
     if (advanceOk && !hasDischargeTime) return 'AGENDAR DESCARGA';
@@ -73,7 +79,7 @@ function calculateTripStatus(trip = {}) {
 
   if (hasInvoiceAndToll(trip)) return 'EMITIR CTE';
   if (hasDt && isScheduled) return 'AGUARDANDO CARREGAMENTO';
-  if (hasDt && !isScheduled) return 'PROGRAMAR';
+  if (hasDt && !isScheduled) return String(trip.pedidoEnviadoDt || '').trim() === String(trip.dt).trim() ? 'PROGRAMAR' : 'ENVIAR PEDIDO';
   if (!hasDt && isScheduled) return 'CRIAR DT';
   return 'CRIAR DT / PROGRAMAR';
 }

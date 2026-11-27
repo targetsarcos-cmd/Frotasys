@@ -51,7 +51,7 @@ function setup() {
     }
   };
   class SocketServer {
-    clients = [{ readyState: 1, send: msg => messages.push(JSON.parse(msg)) }];
+    clients = [{ readyState: 1, authenticated:true, send: msg => messages.push(JSON.parse(msg)) }];
     on() {}
   }
   class Workbook {
@@ -61,12 +61,13 @@ function setup() {
     }
   }
   const dependencies = {
-    express, http: { createServer: () => ({ listen: noop }) }, ws: { Server: SocketServer, OPEN: 1 },
+    express, http: { createServer: () => ({ listen: noop, on: noop }) }, ws: { Server: SocketServer, OPEN: 1 },
     cors: noop, path, 'fs/promises': {}, zlib: {}, exceljs: { Workbook },
-    './supabaseClient': db, './tripStatus': require('../tripStatus')
+    './supabaseClient': db, './tripStatus': require('../tripStatus'),
+    dotenv:{config:noop}, './beta/runtime':require('../beta/runtime'), './beta/authenticated-socket':require('../beta/authenticated-socket')
   };
   const server = vm.createContext({
-    __dirname: root, process: { env: {} }, require(name) {
+    __dirname: root, process: { env: { FROTASYS_INTERFACE_BETA:'classic' } }, require(name) {
       assert.ok(Object.hasOwn(dependencies, name), name);
       return dependencies[name];
     }
@@ -91,6 +92,63 @@ const collection = '/api/viagens';
 const item = collection + '/:id';
 const trip = { produto: 'CPV', data: '2026-01-05', secao: 'arcos', origem: 'ARCOS', pamcard: 'OK' };
 const eventText = '<em>Aguardar & conferir</em>';
+
+test('gerar viagem da fila distingue cadastro conhecido, troca de motorista e primeiro registro', async () => {
+  const { request, server, records } = setup();
+  records.set('known', { id:'known', dados:{placa:'ABC-1234',nome:'JOSÉ SILVA',pamcard:'PAMCARD OK', telefone:'37999999999',dt:'antiga'} });
+  const item = {field:vm.runInContext('WAITLIST_FIELD', server), placa:'ABC1234', nome:'Jose Silva'};
+  server.findOneById = async () => item;
+  server.waitlistDocs = async () => [];
+  const db = vm.runInContext('supabase',server);
+  const from = db.from.bind(db);
+  db.from = table => table === 'config_options' ? {
+    delete(){return this}, eq(){return this}, select(){return {data:[{}]}}
+  } : from(table);
+  const generate = () => request('post','/api/lista-espera/:id/gerar-viagem',{data:trip.data},'operador','queued');
+  const known = await generate();
+  assert.equal(known.code,200,known.data?.error);
+  assert.equal(known.data.viagem.status,'CRIAR DT / PROGRAMAR');
+  assert.equal(known.data.viagem.telefone,'37999999999');
+  assert.equal(known.data.viagem.dt,undefined);
+  item.nome='OUTRO';
+  assert.equal((await generate()).data.viagem.status,'CONFERIR MOTORISTA');
+  item.placa='XYZ9999';
+  assert.equal((await generate()).data.viagem.status,'SEM CADASTRO');
+});
+
+test('as tarifas de Agregado e Terceiros são independentes por rota e eixo', () => {
+  const { server } = setup();
+  const { ui, state } = browser();
+  ui.document.body = {classList:{contains:()=>true},dataset:{betaMode:'readonly'}};
+  const route = {rota:'ARCOS X OSASCO',rows:[{eixos:5,pj:3744,pf:3848}]};
+  const legacy = server.normalizeFreteConsultas({routes:[route]});
+  assert.equal(legacy.routes[0].agregado.length,0);
+  state.freteConsultas = ui.mergeFreteConsultas(legacy);
+  const trip = {origem:'ARCOS',destino:'OSASCO',eixos:5,tipo:'AGREGADO'};
+  assert.equal(ui.freteValuesForViagem(trip).pj,'-');
+  route.agregado = [{eixos:6,pj:2999,pf:3050}];
+  const normalized = server.normalizeFreteConsultas({routes:[route]});
+  state.freteConsultas = ui.mergeFreteConsultas(normalized);
+  assert.equal(ui.freteValuesForViagem(trip).pf,'-');
+  assert.match(ui.freteValuesForViagem({...trip,eixos:6}).pj,/2\.999,00/);
+  assert.match(ui.freteValuesForViagem({...trip,tipo:'CARRETEIRO'}).pf,/3\.848,00/);
+});
+
+test('pedido pelo WhatsApp avança o status da DT e mantém a viagem em Agenciado', async () => {
+  const { request } = setup();
+  const created = await request('post', collection, { ...trip, secao:'agenciando', dt:'123' });
+  assert.equal(created.data.status, 'ENVIAR PEDIDO');
+  const id = created.data._id;
+  const edit = (body, role = 'operador') => request('put', item, body, role, id);
+  assert.equal((await edit({ programado:true })).code, 409);
+  assert.equal((await edit({ pedidoEnviadoDt:'124' })).code, 409);
+  assert.equal((await edit({ pedidoEnviadoDt:'123' }, 'visualizador')).code, 403);
+  const sent = await edit({ pedidoEnviadoDt:'123' });
+  assert.equal(sent.data.status, 'PROGRAMAR');
+  assert.equal(sent.data.secao, 'agenciando');
+  assert.equal((await request('get', item, {}, 'visualizador', id)).data.status, 'PROGRAMAR');
+  assert.equal((await edit({ dt:'124' })).data.status, 'ENVIAR PEDIDO');
+});
 
 test('editar Evento em viagem com DT historica repetida preserva os documentos', async () => {
   const { records, request } = setup();

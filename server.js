@@ -6,12 +6,28 @@ const path = require('path');
 const fs = require('fs/promises');
 const zlib = require('zlib');
 const ExcelJS = require('exceljs');
-const supabase = require('./supabaseClient');
-const { calculateTripStatus, hasAdvanceOk } = require('./tripStatus');
+require('dotenv').config();
+const {resolveRuntime,canAccessUser}=require('./beta/runtime');
+const {bindAuthenticatedSocket,broadcastAuthenticated}=require('./beta/authenticated-socket');
+const runtime=resolveRuntime(process.env);
+const betaReadOnly = runtime.pilotReadOnly;
+const betaEditable = runtime.editable;
+const betaWorkspace = runtime.workspace;
+const betaAccess = betaWorkspace && require('./beta/access');
+const betaMode = betaEditable && require('./beta/mode');
+const betaInvoices = betaWorkspace && require('./beta/trip-invoices');
+const betaBilling = betaWorkspace && require('./public/js/workspace-trip-sections');
+const betaRetention = betaWorkspace && require('./beta/trip-comments');
+const supabase = betaReadOnly ? betaAccess.createReadClient(process.env) :
+  runtime.pilotEditable ? betaMode.createEditableClient(process.env) : require('./supabaseClient');
+const { calculateTripStatus: calculateBaseTripStatus, hasAdvanceOk } = require('./tripStatus');
+function calculateTripStatus(trip) {
+  return calculateBaseTripStatus(trip,{requireDischargeConfirmation:betaWorkspace,requireBillingCompletion:betaWorkspace,preserveLegacyCompleted:true});
+}
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({noServer:true,maxPayload:16384});
 
 const TABLES = {
   viagens: 'viagens',
@@ -52,10 +68,10 @@ const DEFAULT_WORK_TYPES = [
   { name: 'CT-e', code: 'CTE', color: '#2563eb', icon: 'file', displayOrder: 2 },
   { name: 'Manifesto', code: 'MANIFESTO', color: '#7c3aed', icon: 'file-text', displayOrder: 3 },
   { name: 'Nota Fiscal', code: 'NOTA_FISCAL', color: '#16a34a', icon: 'receipt', displayOrder: 4 },
-  { name: 'Ped�gio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
-  { name: 'Confer�ncia', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
+  { name: 'Pedágio', code: 'PEDAGIO', color: '#0f766e', icon: 'ticket', displayOrder: 5 },
+  { name: 'Conferência', code: 'CONFERENCIA', color: '#0891b2', icon: 'check', displayOrder: 6 },
   { name: 'Cadastro', code: 'CADASTRO', color: '#4f46e5', icon: 'user', displayOrder: 7 },
-  { name: 'Pend�ncia', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
+  { name: 'Pendência', code: 'PENDENCIA', color: '#dc2626', icon: 'alert', displayOrder: 8 },
   { name: 'Agendamento', code: 'AGENDAMENTO', color: '#059669', icon: 'calendar', displayOrder: 9 },
   { name: 'Financeiro', code: 'FINANCEIRO', color: '#b7791f', icon: 'money', displayOrder: 10 },
   { name: 'Outro', code: 'OUTRO', color: '#64748b', icon: 'dot', displayOrder: 11 }
@@ -67,7 +83,7 @@ const DEFAULT_CONFIG_OPTIONS = {
   carroceria: ['GRADE BAIXA', 'BAU', 'SIDER', 'TANQUE', 'GRANELEIRO'],
   kanguru: ['TEM KANGURU', 'SEM KANGURU'],
   pamcard: ['PAMCARD OK', 'FECHAMENTO', 'SEM PAMCARD'],
-  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
+  status: ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(betaWorkspace?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'],
   origem: DEFAULT_OPERACOES.map(op => op.origem),
   destino: ['OSASCO', 'AMERICANA', 'SJRP', 'SOROCABA']
 };
@@ -111,6 +127,7 @@ const VIAGENS_EXPORT_COLUMNS = [
   { key: 'horas', header: 'HORAS', width: 10 }
 ];
 const VIAGEM_FIELD_LABELS = {
+  pedidoEnviadoDt: 'PEDIDO ENVIADO (DT)',
   frete: 'EVENTO',
   placa: 'PLACA',
   nome: 'NOME',
@@ -123,6 +140,8 @@ const VIAGEM_FIELD_LABELS = {
   usuario: 'USUARIO',
   agendamento: 'AGENDAMENTO',
   descarga: 'DESCARGA',
+  descargaVerde: 'CONFIRMAÇÃO DA DESCARGA',
+  eventoCteConfirmadoEm: 'AVISO DE EVENTO CONFIRMADO',
   telefone: 'TELEFONE',
   telefone2: 'TELEFONE 2',
   produto: 'PRODUTO',
@@ -225,7 +244,7 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
         staticGzipCache.set(cacheKey, compressed);
       }
 
-      res.type(filePath);
+      res.type(ext);
       STATIC_CACHE_OPTIONS.setHeaders(res, filePath);
       res.setHeader('Content-Encoding', 'gzip');
       res.setHeader('Vary', 'Accept-Encoding');
@@ -238,6 +257,25 @@ function staticGzipMiddleware(rootDir, urlPrefix = '') {
   };
 }
 
+server.on('upgrade', (req, socket, head) => {
+  if(runtime.pilot || req.url !== '/') return socket.destroy();
+  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
+});
+if (betaWorkspace) {
+  app.use((req, res, next) => {
+    if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
+    next();
+  });
+  app.get(['/', '/index.html'], async (_req, res) => {
+    const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable, production: runtime.production }));
+  });
+  // Serve the reference report as a browser document, never as an attachment.
+  app.get(['/beta/relatorios', '/beta-reports.html'], async (_req, res) => {
+    const source = await fs.readFile(path.join(__dirname, 'public', 'beta-reports.html'), 'utf8');
+    res.type('html').set('Content-Disposition', 'inline').set('Cache-Control', 'no-store').send(source);
+  });
+}
 app.use(cors());
 app.use(responseCompression);
 app.use(express.json({ limit: '1mb' }));
@@ -286,6 +324,11 @@ app.get('/login', (req, res) => {
 
 function supabaseToFrontend(record) {
   const doc = { ...(record?.dados || {}) };
+  if (doc.status === 'PROGRAMAR' && doc.dt) doc.status = calculateTripStatus(doc);
+  if (betaWorkspace && doc.placa !== undefined && doc.secao !== undefined) {
+    doc.status = calculateTripStatus(doc);
+    doc.secao = betaBilling.isBilled(doc) ? 'arcos' : 'agenciando';
+  }
   if (isViagemBloqueada(doc)) {
     doc.status = 'CONCLUIDO';
     doc.usuario = '';
@@ -358,6 +401,15 @@ async function selectDocsByJson(table, filters = {}, options = {}) {
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(supabaseToFrontend);
+}
+
+async function searchBetaInvoices(value, filters={}, options={}) {
+  if(!value)return [];
+  const variants=[...new Set([value,betaInvoices.digits(value)])];
+  const lists=await Promise.all(betaInvoices.FIELDS.map(key=>selectDocsByJson(TABLES.viagens,filters,{
+    ...options,in:{...(options.in||{}),[key]:variants}
+  })));
+  return [...new Map(lists.flat().map(doc=>[doc._id,doc])).values()];
 }
 
 async function selectJsonTextValues(table, key) {
@@ -489,12 +541,14 @@ function slug(value) {
 }
 
 async function ensureDefaultOperacoes() {
+  if (runtime.pilot) return;
   const total = await countDocs(TABLES.operacoes);
   if (total > 0) return;
   await insertDocs(TABLES.operacoes, DEFAULT_OPERACOES);
 }
 
 async function ensureDefaultConfigOptions() {
+  if (runtime.pilot) return;
   const existing = await selectDocs(TABLES.configOptions);
 
   const docs = [];
@@ -629,6 +683,36 @@ function normalizeWaitlistItem(data = {}) {
   };
 }
 
+async function waitlistRegistration(item) {
+  const plate = normalizeUniqueValue(item.placa).replace(/[^A-Z0-9]/g,'');
+  const nameKey = value => normalizeUniqueValue(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+  const name = nameKey(item.nome);
+  const plates = [...new Set([plate, normalizeUniqueValue(item.placa), plate.slice(0,3)+'-'+plate.slice(3)])];
+  const history = plate ? await selectDocsByJson(TABLES.viagens, {}, { in:{placa:plates} }) : [];
+  const registered = trip => {
+    const status = normalizeUniqueValue(trip.status);
+    if (status === 'CONCLUIDO') return true;
+    const calculated = calculateTripStatus(trip);
+    if (calculated === 'CONFERIR MOTORISTA') return false;
+    if (!calculated.includes('CADASTRO')) return true;
+    // Older completed loads can have fiscal documents but no Pamcard field.
+    return !status.includes('CADASTRO') && Boolean(String(trip.nota || trip.cte || '').trim());
+  };
+  const latest = history.filter(registered).sort((a,b) =>
+    String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+  )[0];
+  if (latest && (!name || (nameKey(latest.nome) === name))) {
+    return { nome:item.nome || latest.nome, pamcard:String(latest.pamcard || '').trim() || 'PAMCARD OK',
+      telefone:latest.telefone || '', telefone2:latest.telefone2 || '', carroceria:latest.carroceria || '' };
+  }
+  if (latest) return { status:'CONFERIR MOTORISTA', trocaMotoristaConcluida:false };
+  if (name) {
+    const matches = await selectDocsByJson(TABLES.viagens, {nome:normalizeUniqueValue(item.nome)});
+    if (matches.some(registered)) return { status:'CONFERIR MOTORISTA', trocaMotoristaConcluida:false };
+  }
+  return { status:'SEM CADASTRO' };
+}
+
 function waitlistDocToFrontend(doc = {}) {
   return {
     _id: doc._id,
@@ -715,6 +799,14 @@ function freteNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeRateRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(row => ({
+        eixos: Number(row.eixos || row.eixo || 0) || 0,
+        pj: freteNumber(row.pj ?? row.valorPj ?? row.valor_pj),
+        pf: freteNumber(row.pf ?? row.valorPf ?? row.valor_pf)
+      })).filter(row => row.eixos);
+}
+
 function normalizeFreteConsultas(saved = {}) {
   const source = Array.isArray(saved?.routes) ? saved.routes : [];
   const routes = source.map(route => {
@@ -724,13 +816,10 @@ function normalizeFreteConsultas(saved = {}) {
       rota: routeName,
       origem: normalizeUniqueValue(route.origem || parts.origem),
       destino: normalizeUniqueValue(route.destino || parts.destino),
-      rows: (Array.isArray(route.rows) ? route.rows : []).map(row => ({
-        eixos: Number(row.eixos || row.eixo || 0) || 0,
-        pj: freteNumber(row.pj ?? row.valorPj ?? row.valor_pj),
-        pf: freteNumber(row.pf ?? row.valorPf ?? row.valor_pf)
-      })).filter(row => row.eixos)
+      rows: normalizeRateRows(route.rows),
+      agregado: normalizeRateRows(route.agregado)
     };
-  }).filter(route => route.rota && route.rows.length);
+  }).filter(route => route.rota && (route.rows.length || route.agregado.length));
 
   return {
     updatedAt: String(saved?.updatedAt || '').trim(),
@@ -788,7 +877,11 @@ async function freteConsultasConfig() {
   return cachedValue('frete-consultas', async () => {
     const doc = await findOneByJson(TABLES.configOptions, { field: FRETE_CONSULT_FIELD });
     const saved = normalizeFreteConsultas(doc?.tables || doc?.freteConsultas || {});
-    if (saved.routes.length) return saved;
+    for (const route of saved.routes) {
+      if (doc?.agregadoPorRota && Object.hasOwn(doc.agregadoPorRota,route.rota))
+        route.agregado = normalizeRateRows(doc.agregadoPorRota[route.rota]);
+    }
+    if (saved.routes.length) return { ...saved, revision:doc.updatedAt };
     try {
       const workbookData = await readFreteWorkbook();
       if (workbookData.routes.length) return workbookData;
@@ -802,15 +895,21 @@ async function freteConsultasConfig() {
 async function saveFreteConsultasConfig(tables) {
   const normalized = normalizeFreteConsultas(tables);
   const existing = await findOneByJson(TABLES.configOptions, { field: FRETE_CONSULT_FIELD });
+  if (Object.hasOwn(tables,'revision') && (tables.revision || '') !== (existing?.updatedAt || '')) return null;
+  for (const route of normalized.routes) {
+    const input = tables.routes?.find(item => normalizeFreteRouteName(item.rota || item.route) === route.rota);
+    if (input && !Object.hasOwn(input,'agregado')) route.agregado = normalizeRateRows(existing?.agregadoPorRota?.[route.rota]);
+  }
   const payload = {
     field: FRETE_CONSULT_FIELD,
     value: 'Consulta frete',
     normalized: FRETE_CONSULT_FIELD,
     tables: normalized,
+    agregadoPorRota: Object.fromEntries(normalized.routes.map(route => [route.rota,route.agregado])),
     ordem: existing?.ordem || 1
   };
   let result;
-  if (existing) result = await updateDoc(TABLES.configOptions, existing._id, payload);
+  if (existing) result = await updateDoc(TABLES.configOptions, existing._id, payload, existing);
   else result = await insertDoc(TABLES.configOptions, payload);
   invalidateCache('frete-consultas');
   return result;
@@ -939,6 +1038,7 @@ async function workTypeDocs({ includeDeleted = false } = {}) {
 }
 
 async function ensureDefaultWorkTypes() {
+  if (runtime.pilot) return;
   const existing = await workTypeDocs({ includeDeleted: true });
   if (existing.length) return existing.filter(doc => !doc.deletedAt);
   const created = await insertDocs(TABLES.configOptions, DEFAULT_WORK_TYPES.map(item => ({
@@ -1060,7 +1160,7 @@ function normalizeUniqueValue(value) {
 }
 
 function isDocumentNumberField(field) {
-  return DOCUMENT_NUMBER_FIELDS.includes(field);
+  return DOCUMENT_NUMBER_FIELDS.includes(field) || (betaWorkspace && betaInvoices.FIELDS.includes(field));
 }
 
 function formatDocumentNumber(value, field = '') {
@@ -1220,6 +1320,7 @@ function exportFillFor(columnKey, value) {
   if (columnKey === 'status' && normalized === 'PROGRAMAR') return 'aba110';
   if (columnKey === 'status' && normalized === 'AGUARDANDO CARREGAMENTO') return '0b2f5f';
   if (columnKey === 'status' && normalized === 'EMITIR CTE') return '2563eb';
+  if (columnKey === 'status' && normalized === 'HORA NF') return '0e7490';
   if (columnKey === 'status' && normalized === 'ADIANTAMENTO / DESCARGA') return 'c2410c';
   if (columnKey === 'status' && normalized === 'FALTA ADIANTAMENTO') return 'c2410c';
   if (columnKey === 'status' && normalized === 'ADIANTAMENTO') return '115927';
@@ -1324,7 +1425,7 @@ function appendViagemHistory(current, entries) {
 }
 
 function buildViagemHistoryEntries(current, patch, profile, action = 'ALTERACAO') {
-  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico']);
+  const ignored = new Set(['_id', 'id', 'createdAt', 'updatedAt', 'historico', 'billingRuleVersion', 'obsCriadaEm']);
   const fields = Object.keys(patch || {}).filter(field => !ignored.has(field));
   const changed = fields.filter(field => historyTextValue(current?.[field]) !== historyTextValue(patch[field]));
   if (!changed.length && action !== 'CRIACAO') return [];
@@ -1339,7 +1440,7 @@ function buildViagemHistoryEntries(current, patch, profile, action = 'ALTERACAO'
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${index}`,
     tipo: action,
     campo: item.field,
-    label: item.field ? (VIAGEM_FIELD_LABELS[item.field] || item.field.toUpperCase()) : 'CADASTRO',
+    label: item.field ? (VIAGEM_FIELD_LABELS[item.field] || (/^nota(?:[2-9]|1[0-5])$/.test(item.field) ? 'NOTA FISCAL '+item.field.slice(4) : item.field.toUpperCase())) : 'CADASTRO',
     anterior: item.before,
     atual: item.after,
     usuario: user,
@@ -1372,7 +1473,24 @@ function isHexColor(color) {
 }
 
 async function findDuplicateViagemFields(data, currentId = null) {
+  if (betaEditable) {
+    const entries=betaInvoices.invoiceEntries(data);
+    const values=[...new Set(entries.flatMap(item=>[item.value,betaInvoices.digits(item.value)]))];
+    if(values.length){
+      const conditions=betaInvoices.FIELDS.map(key=>'dados->>'+key+'.in.('+values.join(',')+')').join(',');
+      let query=supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT).or(conditions);
+      if(currentId) query=query.neq('id',currentId);
+      const {data:matches,error}=await query.limit(1);
+      if(error)throw error;
+      if(matches?.length){
+        const existing=new Set(betaInvoices.invoiceEntries(supabaseToFrontend(matches[0])).map(item=>betaInvoices.digits(item.value)));
+        const match=entries.find(item=>existing.has(betaInvoices.digits(item.value)));
+        if(match)return {key:match.key,label:'NOTA FISCAL',value:match.value};
+      }
+    }
+  }
   const filledFields = UNIQUE_VIAGEM_FIELDS
+    .filter(field=>!betaEditable || field.key!=='nota')
     .map(field => ({ ...field, value: comparableUniqueValue(field.key, data[field.key]) }))
     .filter(field => field.value);
 
@@ -1392,10 +1510,7 @@ async function findDuplicateViagemFields(data, currentId = null) {
 }
 
 function broadcast(data) {
-  const msg = JSON.stringify(data);
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) client.send(msg);
-  });
+  broadcastAuthenticated(wss.clients,data);
 }
 
 function publicProfile(profile = {}) {
@@ -1518,9 +1633,11 @@ function requireAuth(req, res, next) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) return res.status(401).json({ error: 'Sessão inválida.' });
 
+    if (!canAccessUser(runtime,data.user.id,process.env)) return res.status(403).json({ error: 'Acesso restrito a beta.' });
     const profile = await profileForUser(data.user.id);
     if (!profile || !profile.ativo) return res.status(403).json({ error: 'Usuário sem acesso ativo.' });
 
+    if (betaEditable && !betaAccess.canRead(req.method) && !['admin', 'operador'].includes(profile.role) && !(req.method === 'PUT' && req.path === '/auth/table-preferences')) return res.status(403).json({ error: 'Permissao de edicao insuficiente.' });
     req.authUser = data.user;
     req.userProfile = profile;
     next();
@@ -1558,6 +1675,34 @@ app.get('/api/auth/me', (req, res) => {
     },
     profile: req.userProfile
   });
+});
+
+
+const betaColumnPreferenceField = '__beta_table_preferences';
+const betaColumnLayout = require('./public/js/workspace-table-layout');
+let betaColumnSaveTail=Promise.resolve();
+app.get('/api/auth/table-preferences',async(req,res)=>{
+  if(!betaWorkspace)return res.status(404).json({error:'Recurso exclusivo do beta.'});
+  try{
+    const saved=await findOneByJson(TABLES.configOptions,{field:betaColumnPreferenceField,userId:req.authUser.id});
+    res.json({preference:saved?betaColumnLayout.normalizePreference(saved.preference):null});
+  }catch(e){res.status(500).json({error:'Não foi possível carregar as preferências.'});}
+});
+app.put('/api/auth/table-preferences',(req,res)=>{
+  if(!betaEditable)return res.status(403).json({error:'Beta somente leitura.'});
+  const run=async()=>{
+    try{
+      const preference=betaColumnLayout.normalizePreference(req.body);
+      const filter={field:betaColumnPreferenceField,userId:req.authUser.id};
+      const existing=await findOneByJson(TABLES.configOptions,filter);
+      const saved=existing?await updateDoc(TABLES.configOptions,existing._id,{preference}):await insertDoc(TABLES.configOptions,{...filter,preference});
+      if(!saved)return res.status(409).json({error:'Preferência não confirmada. Tente novamente.'});
+      res.json({preference:betaColumnLayout.normalizePreference(saved.preference)});
+    }catch(e){res.status(500).json({error:'Não foi possível salvar as preferências.'});}
+  };
+  const pending=betaColumnSaveTail.then(run,run);
+  betaColumnSaveTail=pending.catch(()=>{});
+  return pending;
 });
 
 app.put('/api/auth/profile', async (req, res) => {
@@ -1630,6 +1775,18 @@ app.get('/api/lembretes', async (req, res) => {
     res.json(await lembreteGlobal());
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/lembretes/descargas-pendentes', async (req, res) => {
+  if (!betaWorkspace) return res.status(404).json({error:'Recurso exclusivo do beta.'});
+  try {
+    const { listPendingNotifications } = require('./beta/discharge-notifications');
+    const pending = await listPendingNotifications(supabase,TABLES.viagens);
+    res.set('Cache-Control','no-store').json(pending);
+  } catch (error) {
+    console.error('Falha nas notificações de descarga:',error.message);
+    res.status(500).json({error:'Não foi possível consultar as descargas pendentes.'});
   }
 });
 
@@ -1869,6 +2026,15 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
     const dateError = viagemDateValidationError(viagemData);
     if (dateError) return res.status(400).json({ error: dateError });
 
+    const registration = await waitlistRegistration(item);
+    const trip = {
+      placa:item.placa || '', nome:item.nome || '', tipo:normalizeTipo(item.tipo),
+      origem:item.origem || '', obs:item.obs || '', secao:'agenciando', data:viagemData,
+      ...registration
+    };
+    if(betaEditable){trip.billingRuleVersion=2;Object.assign(trip,betaRetention.observationWritePatch({},trip));}
+    trip.status = calculateTripStatus(trip);
+
     const { data: removedRows, error: removeError } = await supabase
       .from(TABLES.configOptions)
       .delete()
@@ -1878,15 +2044,7 @@ app.post('/api/lista-espera/:id/gerar-viagem', requireViagemEditor, async (req, 
     if (!removedRows?.length) return res.status(409).json({ error: 'Este item já foi gerado ou removido.' });
     invalidateCache();
 
-    const viagem = await insertDoc(TABLES.viagens, {
-      placa: item.placa || '',
-      nome: item.nome || '',
-      tipo: normalizeTipo(item.tipo),
-      origem: item.origem || '',
-      obs: item.obs || '',
-      secao: 'agenciando',
-      data: viagemData
-    });
+    const viagem = await insertDoc(TABLES.viagens, trip);
 
     const lista = await waitlistDocs();
     broadcast({ type: 'viagem_criada', payload: viagem });
@@ -1958,7 +2116,103 @@ app.post('/api/users', requireAdmin, async (req, res) => {
   }
 });
 
+const USER_ADMIN_COLUMNS = 'id,user_id,nome,email,role,ativo,created_at';
+let betaUserMutationTail = Promise.resolve();
+
+function betaUserMutation(handler) {
+  return (req,res) => {
+    const run=async()=>{
+      try {
+        if(!betaEditable) return res.status(403).json({error:'Disponível somente no beta editável.'});
+        const actor=await profileForUser(req.authUser.id);
+        if(!actor?.ativo || actor.role!=='admin') return res.status(403).json({error:'Permissão administrativa necessária.'});
+        const {data:target,error}=await supabase.from('user_profiles').select(USER_ADMIN_COLUMNS).eq('id',req.params.id).maybeSingle();
+        if(error) throw error;
+        if(!target) return res.status(404).json({error:'Usuário não encontrado.'});
+        return await handler(req,res,target);
+      } catch(e) {
+        return res.status(500).json({error:'Não foi possível concluir a operação de usuário.'});
+      }
+    };
+    const pending=betaUserMutationTail.then(run,run);
+    betaUserMutationTail=pending.catch(()=>{});
+    return pending;
+  };
+}
+
+async function betaUserRemovalBlocked(req,target) {
+  if(target.user_id===req.authUser.id || target.user_id===process.env.BETA_USER_ID) return 'Não é possível remover, desativar ou rebaixar a conta administrativa que mantém o acesso ao beta.';
+  if(target.role==='admin' && target.ativo) {
+    const {count,error}=await supabase.from('user_profiles').select('id',{count:'exact',head:true}).eq('role','admin').eq('ativo',true);
+    if(error) throw error;
+    if(count<=1) return 'O sistema precisa manter pelo menos um administrador ativo.';
+  }
+  return '';
+}
+
+const updateBetaUser = betaUserMutation(async(req,res,target)=>{
+  const body=req.body||{},patch={};
+  if(body.nome!==undefined){
+    if(typeof body.nome!=='string'||!body.nome.trim()||body.nome.trim().length>100) return res.status(400).json({error:'Informe um nome válido de até 100 caracteres.'});
+    patch.nome=body.nome.trim();
+  }
+  if(body.email!==undefined){
+    if(typeof body.email!=='string'||body.email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email.trim())) return res.status(400).json({error:'Informe um e-mail válido.'});
+    patch.email=body.email.trim().toLowerCase();
+  }
+  if(body.role!==undefined){
+    if(!['admin','operador','visualizador'].includes(body.role)) return res.status(400).json({error:'Perfil inválido.'});
+    patch.role=body.role;
+  }
+  if(body.ativo!==undefined){
+    if(typeof body.ativo!=='boolean') return res.status(400).json({error:'Status inválido.'});
+    patch.ativo=body.ativo;
+  }
+  if(!Object.keys(patch).length) return res.status(400).json({error:'Nada para atualizar.'});
+  if(patch.ativo===false || (target.role==='admin' && patch.role && patch.role!=='admin')){
+    const blocked=await betaUserRemovalBlocked(req,target);
+    if(blocked) return res.status(409).json({error:blocked});
+  }
+  const emailChanged=patch.email!==undefined && patch.email!==target.email;
+  if(emailChanged){
+    const {error}=await supabase.auth.admin.updateUserById(target.user_id,{email:patch.email,email_confirm:true});
+    if(error) return res.status(409).json({error:'Não foi possível alterar o e-mail no Supabase Auth. Verifique se já está em uso.'});
+  }
+  const {data,error}=await supabase.from('user_profiles').update(patch).eq('id',target.id).select(USER_ADMIN_COLUMNS).single();
+  if(error||!data){
+    if(emailChanged){
+      const rollback=await supabase.auth.admin.updateUserById(target.user_id,{email:target.email,email_confirm:true});
+      if(rollback.error) return res.status(500).json({error:'E-mail alterado no Auth, mas falhou a sincronização do perfil. Solicite revisão administrativa antes de repetir.'});
+    }
+    return res.status(500).json({error:'Não foi possível salvar o perfil.'});
+  }
+  res.json(publicProfile(data));
+});
+
+app.put('/api/users/:id/password',requireAdmin,betaUserMutation(async(req,res,target)=>{
+  const password=req.body?.password;
+  if(typeof password!=='string'||password.length<8||password.length>128) return res.status(400).json({error:'A nova senha deve ter entre 8 e 128 caracteres.'});
+  const {error}=await supabase.auth.admin.updateUserById(target.user_id,{password});
+  if(error) return res.status(400).json({error:'Não foi possível redefinir a senha. Confira os requisitos de segurança do Supabase.'});
+  res.json({ok:true});
+}));
+
+app.delete('/api/users/:id',requireAdmin,betaUserMutation(async(req,res,target)=>{
+  const blocked=await betaUserRemovalBlocked(req,target);
+  if(blocked) return res.status(409).json({error:blocked});
+  if(req.body?.confirmEmail!==target.email) return res.status(400).json({error:'Confirme o e-mail exato do usuário para excluir.'});
+  // Remove the login first. A foreign key may cascade the profile deletion.
+  const {error}=await supabase.auth.admin.deleteUser(target.user_id,false);
+  if(error) return res.status(409).json({error:'Não foi possível excluir a conta no Supabase Auth. Nenhum sucesso foi confirmado.'});
+  const remaining=await supabase.from('user_profiles').delete().eq('user_id',target.user_id);
+  if(remaining.error) return res.status(500).json({error:'Login excluído do Auth, mas a limpeza do perfil falhou. Solicite revisão administrativa.'});
+  const check=await supabase.from('user_profiles').select('id').eq('user_id',target.user_id).maybeSingle();
+  if(check.error||check.data) return res.status(500).json({error:'Login excluído, mas a remoção do perfil não foi confirmada.'});
+  res.json({ok:true});
+}));
+
 app.put('/api/users/:id', requireAdmin, async (req, res) => {
+  if (betaWorkspace) return updateBetaUser(req,res);
   try {
     const patch = {};
     if (req.body.role !== undefined) {
@@ -1983,9 +2237,14 @@ app.put('/api/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
-wss.on('connection', (ws) => {
-  console.log('Cliente conectado');
-  ws.on('close', () => console.log('Cliente desconectado'));
+wss.on('connection', ws => {
+  bindAuthenticatedSocket(ws,{authenticate:async token=>{
+    const {data,error}=await supabase.auth.getUser(token);
+    if(error||!data?.user||!canAccessUser(runtime,data.user.id,process.env))return null;
+    const profile=await profileForUser(data.user.id);
+    const claims=JSON.parse(Buffer.from(token.split('.')[1]||'','base64url').toString());
+    return {userId:data.user.id,profile,expiresAt:Number(claims.exp)*1000};
+  }});
 });
 
 // ─── VIAGENS API ───────────────────────────────────────────────────────────────
@@ -2008,8 +2267,46 @@ app.get('/api/viagens', async (req, res) => {
 });
 
 
+function betaGlobalSearchSpec(value) {
+  const text = String(value || '').trim().slice(0,120);
+  const numeric = /^[\d.\s]+$/.test(text) && /\d/.test(text);
+  return {text, numeric, digits:numeric?text.replace(/\D/g,''):'', plate:text.replace(/[\s-]/g,'').toUpperCase()};
+}
+
+async function searchBetaGlobalTrips(spec, query, options) {
+  const opts={...options,limit:VIAGENS_SEARCH_LIMIT,order:[{key:'data',ascending:false},{key:'createdAt',ascending:false}]};
+  const branches=[];
+  if(spec.numeric) {
+    const formatted=formatDocumentNumber(spec.digits,'nota');
+    const variants=[...new Set([formatted,spec.digits])];
+    branches.push(searchBetaInvoices(formatted,query,opts));
+    for(const key of ['cte','contrato','dt']) {
+      branches.push(selectDocsByJson(TABLES.viagens,query,{...opts,in:{...(opts.in||{}),[key]:variants}}));
+    }
+  } else {
+    const literal=spec.text.replace(/[\\%_]/g,'\\$&');
+    const plate=spec.plate.replace(/[\\%_]/g,'\\$&');
+    for(const [key,value] of [['nome',literal],['placa',plate],['frete',literal]]) {
+      if(value) branches.push(selectDocsByJson(TABLES.viagens,query,{...opts,ilike:{...(opts.ilike||{}),[key]:value}}));
+    }
+  }
+  const lists=await Promise.all(branches);
+  return [...new Map(lists.flat().map(doc=>[doc._id,doc])).values()];
+}
+
+function betaGlobalTripMatches(doc,spec) {
+  if(spec.numeric) {
+    return betaInvoices.invoiceEntries(doc).some(item=>betaInvoices.digits(item.value)===spec.digits) ||
+      ['cte','contrato','dt'].some(key=>comparableSearchValue(key,doc[key])===spec.digits);
+  }
+  const term=spec.text.toUpperCase();
+  return ['nome','frete'].some(key=>String(doc[key]||'').toUpperCase().includes(term)) ||
+    (spec.plate && String(doc.placa||'').replace(/[\s-]/g,'').toUpperCase().includes(spec.plate));
+}
+
 app.get('/api/viagens/search', async (req, res) => {
   try {
+    const globalSearch = betaWorkspace ? betaGlobalSearchSpec(req.query.global) : null;
     const term = comparableSearchValue('cte', req.query.q);
     const dtTerm = comparableSearchValue('dt', req.query.dt);
     const notaTerm = comparableSearchValue('nota', req.query.nota);
@@ -2021,7 +2318,7 @@ app.get('/api/viagens/search', async (req, res) => {
     const origem = String(req.query.origem || '').trim().toUpperCase();
     const dataInicio = String(req.query.dataInicio || '').trim();
     const dataFim = String(req.query.dataFim || '').trim();
-    if (!term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento && !dataInicio && !dataFim) return res.json([]);
+    if (!globalSearch?.text && !term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento && !dataInicio && !dataFim) return res.json([]);
     if ((dataInicio && !isIsoDate(dataInicio)) || (dataFim && !isIsoDate(dataFim))) {
       return res.status(400).json({ error: 'Informe datas válidas para a busca.' });
     }
@@ -2043,26 +2340,28 @@ app.get('/api/viagens/search', async (req, res) => {
 
     if (!dataInicio && !dataFim && !nomeTerm && !placaTerm) {
       if (dtTerm && req.query.dt) options.ilike = { ...(options.ilike || {}), dt: req.query.dt };
-      if (notaTerm && req.query.nota) query.nota = formatDocumentNumber(req.query.nota, 'nota');
+      if (notaTerm && req.query.nota && !betaWorkspace) query.nota = formatDocumentNumber(req.query.nota, 'nota');
       if (contratoTerm && req.query.contrato) query.contrato = formatDocumentNumber(req.query.contrato, 'contrato');
       if (cteTerm && req.query.cte) query.cte = formatDocumentNumber(req.query.cte, 'cte');
     }
 
     let docs;
-    if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento) {
+    if (globalSearch?.text) {
+      docs = await searchBetaGlobalTrips(globalSearch,query,options);
+    } else if (!dataInicio && !dataFim && term && !dtTerm && !notaTerm && !contratoTerm && !cteTerm && !nomeTerm && !placaTerm && !evento) {
       const notaValue = formatDocumentNumber(term, 'nota');
       const cteValue = formatDocumentNumber(term, 'cte');
       const [notaDocs, cteDocs] = await Promise.all([
-        selectDocsByJson(TABLES.viagens, { nota: notaValue }, { limit: VIAGENS_SEARCH_LIMIT }),
+        betaWorkspace ? searchBetaInvoices(notaValue,{}, {limit:VIAGENS_SEARCH_LIMIT}) : selectDocsByJson(TABLES.viagens, { nota: notaValue }, { limit: VIAGENS_SEARCH_LIMIT }),
         selectDocsByJson(TABLES.viagens, { cte: cteValue }, { limit: VIAGENS_SEARCH_LIMIT })
       ]);
       docs = [...new Map([...notaDocs, ...cteDocs].map(doc => [doc._id, doc])).values()];
     } else {
       const hasBoundedRange = Boolean(dataInicio && dataFim);
-      docs = await selectDocsByJson(TABLES.viagens, query, {
-        ...options,
-        limit: hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT
-      });
+      const searchOptions={...options,limit:hasBoundedRange ? undefined : VIAGENS_SEARCH_LIMIT};
+      docs=betaWorkspace && notaTerm
+        ? await searchBetaInvoices(formatDocumentNumber(req.query.nota,'nota'),query,searchOptions)
+        : await selectDocsByJson(TABLES.viagens,query,searchOptions);
     }
 
     const matches = docs
@@ -2072,24 +2371,25 @@ app.get('/api/viagens/search', async (req, res) => {
         if (dataFim && data > dataFim) return false;
 
         const dt = comparableSearchValue('dt', doc.dt);
-        const nota = comparableSearchValue('nota', doc.nota);
+        const notas = betaWorkspace ? betaInvoices.invoiceEntries(doc).map(item=>betaInvoices.digits(item.value)) : [comparableSearchValue('nota',doc.nota)];
         const contrato = comparableSearchValue('contrato', doc.contrato);
         const cte = comparableSearchValue('cte', doc.cte);
         const nome = comparableSearchValue('nome', doc.nome);
         const placa = comparableSearchValue('placa', doc.placa);
         if (evento && !String(doc.frete || '').toLowerCase().includes(evento.toLowerCase())) return false;
         if (dtTerm && dt !== dtTerm) return false;
-        if (notaTerm && nota !== notaTerm) return false;
+        if (notaTerm && !notas.includes(notaTerm)) return false;
         if (contratoTerm && contrato !== contratoTerm) return false;
         if (cteTerm && cte !== cteTerm) return false;
         if (nomeTerm && !nome.includes(nomeTerm)) return false;
         if (placaTerm && !placa.includes(placaTerm)) return false;
-        if (term) return nota === term || cte === term;
+        if (globalSearch?.text && !betaGlobalTripMatches(doc,globalSearch)) return false;
+        if (term) return notas.includes(term) || cte === term;
         return true;
       })
       .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
-    res.json(matches);
+    res.json(globalSearch?.text ? matches.slice(0,VIAGENS_SEARCH_LIMIT) : matches);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2191,19 +2491,93 @@ app.get('/api/viagens/:id', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// Comments are stored in the existing trip JSON; no database schema change is required.
+if (betaEditable) {
+  const { applyCommentAction, CommentError } = require('./beta/trip-comments');
+  const { rowColorPatch } = require('./beta/trip-row-color');
+  app.post('/api/viagens/:id/cor-linha', requireViagemEditor, async (req, res) => {
+    try {
+      let patch;
+      try { patch = rowColorPatch(req.body?.color); }
+      catch (error) { return res.status(400).json({error:error.message}); }
+      const current = await findOneById(TABLES.viagens, req.params.id);
+      if (!current) return res.status(404).json({error:'Viagem nao encontrada.'});
+      const history = buildViagemHistoryEntries(current, patch, req.userProfile);
+      if (history.length) patch.historico = appendViagemHistory(current, history);
+      const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
+      if (!updated) return res.status(409).json({error:'A viagem mudou. Atualize a pagina e tente novamente.'});
+      return res.json(updated);
+    } catch (error) {
+      console.error('Falha ao marcar linha da beta:', error.message);
+      return res.status(500).json({error:'Nao foi possivel salvar a cor.'});
+    }
+  });
+  app.post('/api/viagens/:id/comentarios', requireViagemEditor, async (req, res) => {
+    try {
+      const current = await findOneById(TABLES.viagens, req.params.id);
+      if (!current) return res.status(404).json({ error: 'Viagem nao encontrada.' });
+      const retentionPatch=betaRetention.expiredTripContentPatch(current);
+      const comentariosBeta = applyCommentAction(retentionPatch.comentariosBeta ?? current.comentariosBeta, req.body, {
+        id:req.authUser.id, name:profileDisplayName(req.userProfile), role:req.userProfile.role
+      });
+      const updated = await updateDoc(TABLES.viagens, req.params.id, { ...retentionPatch, comentariosBeta }, current);
+      if (!updated) return res.status(409).json({ error: 'A viagem mudou. Atualize a pagina e tente novamente.' });
+      broadcast({type:'viagem_atualizada',payload:updated});
+      return res.json(updated);
+    } catch (error) {
+      if (error instanceof CommentError) return res.status(error.status).json({error:error.message});
+      console.error('Falha ao salvar comentario da beta:', error.message);
+      return res.status(500).json({error:'Nao foi possivel salvar o comentario.'});
+    }
+  });
+}
+
+function betaEventWarningText(trip) {
+  return [String(trip.frete || '').trim(),String(trip.obs || '').trim()].filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join('\n\n');
+}
+function shouldWarnBetaEvent(previous,patch,saved) {
+  return Boolean(patch.cte && saved.cte && saved.cte !== formatDocumentNumber(previous?.cte,'cte') &&
+    !saved.eventoCteConfirmadoEm && betaEventWarningText(saved));
+}
 function sendSavedViagem(res, previous, patch, saved) {
-  if (patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
+  if (betaEditable ? shouldWarnBetaEvent(previous,patch,saved) :
+      patch.cte && saved.cte !== formatDocumentNumber(previous?.cte, 'cte') && String(saved.frete || '').trim()) {
     res.set('X-Viagem-Evento', '1');
   }
   return res.json(saved);
 }
 
+app.post('/api/viagens/:id/evento-cte-confirmacao', requireViagemEditor, async(req,res)=>{
+  if(!betaEditable)return res.status(403).json({error:'Disponível somente no beta editável.'});
+  try{
+    for(let attempt=0;attempt<3;attempt++){
+      const current=await findOneById(TABLES.viagens,req.params.id);
+      if(!current)return res.status(404).json({error:'Viagem não encontrada.'});
+      if(current.eventoCteConfirmadoEm)return res.json({ok:true});
+      if(!String(current.cte||'').trim())return res.status(409).json({error:'O CT-e não está preenchido.'});
+      const patch={eventoCteConfirmadoEm:new Date().toISOString(),eventoCteConfirmadoPor:req.authUser.id};
+      const entries=buildViagemHistoryEntries(current,{eventoCteConfirmadoEm:patch.eventoCteConfirmadoEm},req.userProfile);
+      patch.historico=appendViagemHistory(current,entries);
+      const saved=await updateDoc(TABLES.viagens,req.params.id,patch,current);
+      if(saved){broadcast({type:'viagem_atualizada',payload:saved});return res.json({ok:true});}
+    }
+    return res.status(409).json({error:'A viagem foi alterada. Tente confirmar novamente.'});
+  }catch(e){return res.status(500).json({error:'Não foi possível registrar a confirmação do evento.'});}
+});
+
 app.post('/api/viagens', requireViagemEditor, async (req, res) => {
   try {
     const payload = { ...req.body };
+    if(betaEditable){delete payload.eventoCteConfirmadoEm;delete payload.eventoCteConfirmadoPor;delete payload.obsCriadaEm;Object.assign(payload,betaRetention.observationWritePatch({},payload));payload.billingRuleVersion=2;if(payload.descargaVerde===undefined)payload.descargaVerde=false;}
+    if (betaEditable && (Object.hasOwn(payload, 'comentariosBeta') || Object.hasOwn(payload, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
     if (payload.frete !== undefined && typeof payload.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
+    if (betaEditable) {
+      try { Object.assign(payload,betaInvoices.invoicePatch({},payload)); }
+      catch(error) { return res.status(400).json({error:error.message}); }
+    }
     normalizeViagemDocumentNumbers(payload);
     applyFrotaContratoRule(payload);
+    if (betaEditable) payload.secao = betaMode.persistedSection(payload);
     const previousByPlaca = await latestViagemByPlaca(payload.placa);
     const nomeAlteradoDoHistorico = previousByPlaca &&
       normalizeUniqueValue(previousByPlaca.nome) &&
@@ -2217,12 +2591,14 @@ app.post('/api/viagens', requireViagemEditor, async (req, res) => {
     if (!normalizeUniqueValue(payload.produto)) {
       return res.status(400).json({ error: 'Selecione PRODUTO para salvar a viagem.', field: 'produto' });
     }
+    delete payload.pedidoEnviadoDt;
     delete payload.usuario;
     const rawCadastroStatus = normalizeUniqueValue(payload.status);
     const cadastroStatus = ['SEM CADASTRO', 'CONFERIR CADASTRO'].includes(rawCadastroStatus) ? 'SEM CADASTRO' : '';
     payload.status = cadastroStatus;
     if (payload.marcadoAmarelo !== undefined) payload.marcadoAmarelo = Boolean(payload.marcadoAmarelo);
     if (payload.agendamentoVerde !== undefined) payload.agendamentoVerde = Boolean(payload.agendamentoVerde);
+    if (betaEditable && payload.descargaVerde !== undefined) payload.descargaVerde = payload.descargaVerde === true;
     if (payload.programado !== undefined) payload.programado = Boolean(payload.programado);
     if (payload.adiantamentoOk !== undefined) payload.adiantamentoOk = Boolean(payload.adiantamentoOk);
     if (payload.conclusaoContrato !== undefined) {
@@ -2259,9 +2635,21 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
 
     const patch = { ...req.body };
+    if(betaEditable){delete patch.eventoCteConfirmadoEm;delete patch.eventoCteConfirmadoPor;delete patch.billingRuleVersion;delete patch.obsCriadaEm;Object.assign(patch,betaRetention.observationWritePatch(current,patch));}
+    if (betaEditable && (Object.hasOwn(patch, 'comentariosBeta') || Object.hasOwn(patch, 'corLinhaBeta'))) return res.status(400).json({error:'Use a funcionalidade de comentarios ou cores.'});
+    if (betaEditable) delete patch.secao; // The invoice determines the section.
     if (patch.frete !== undefined && typeof patch.frete !== 'string') return res.status(400).json({ error: 'Informe um texto para Evento.' });
+    if (Object.hasOwn(patch, 'pedidoEnviadoDt') &&
+        (Object.keys(patch).length !== 1 || !current.dt || patch.pedidoEnviadoDt !== String(current.dt).trim())) {
+      return res.status(409).json({ error: 'Confira a DT atual antes de enviar o pedido.' });
+    }
+    if (Object.hasOwn(patch, 'dt') && String(patch.dt || '').trim() !== String(current.dt || '').trim()) patch.pedidoEnviadoDt = '';
     delete patch.__manualStatus;
     delete patch.status;
+    if (betaEditable) {
+      try { Object.assign(patch,betaInvoices.invoicePatch(current,patch)); }
+      catch(error) { return res.status(400).json({error:error.message}); }
+    }
     normalizeViagemDocumentNumbers(patch);
     applyFrotaContratoRule(patch);
     if (Object.prototype.hasOwnProperty.call(patch, 'data')) {
@@ -2272,6 +2660,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     delete patch.historico;
     if (patch.marcadoAmarelo !== undefined) patch.marcadoAmarelo = Boolean(patch.marcadoAmarelo);
     if (patch.agendamentoVerde !== undefined) patch.agendamentoVerde = Boolean(patch.agendamentoVerde);
+    if (betaEditable && patch.descargaVerde !== undefined) patch.descargaVerde = patch.descargaVerde === true;
     if (patch.trocaMotoristaConcluida !== undefined) patch.trocaMotoristaConcluida = Boolean(patch.trocaMotoristaConcluida);
     if (patch.programado !== undefined) patch.programado = Boolean(patch.programado);
     if (patch.adiantamentoOk !== undefined) patch.adiantamentoOk = Boolean(patch.adiantamentoOk);
@@ -2287,7 +2676,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         patch.usuario = '';
       }
       if (!isAdminUser) {
-        const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field));
+        const invalidFields = Object.keys(patch).filter(field => !LOCKED_EDITABLE_FIELDS.includes(field) && !(betaEditable && field === 'descargaVerde'));
         const blockedFields = isAdminUndoContrato
           ? invalidFields.filter(field => !['conclusaoContrato', 'status', 'usuario'].includes(field))
           : invalidFields;
@@ -2298,6 +2687,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
         if (historyEntries.length) patch.historico = appendViagemHistory(current, historyEntries);
         const lockedNextData = applyFrotaContratoRule({ ...current, ...patch });
         patch.status = calculateTripStatus(lockedNextData);
+        if(betaEditable){lockedNextData.status=patch.status;patch.secao=betaMode.persistedSection(lockedNextData);}
         const updated = await updateDoc(TABLES.viagens, req.params.id, patch, current);
         if (!updated) return res.status(409).json({ error: 'A viagem mudou durante a edicao. Atualize e tente novamente.' });
         const workChanged = updated.status === 'CONCLUIDO'
@@ -2314,9 +2704,22 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
     }
 
     const nextData = applyFrotaContratoRule({ ...current, ...patch });
+    if (betaEditable) {
+      const fiscalChanged=['tipo','cte','manifesto','contrato',...betaInvoices.FIELDS,...betaInvoices.TIME_FIELDS]
+        .some(key=>String(nextData[key]??'').trim()!==String(current[key]??'').trim());
+      if(!betaBilling.isLegacyCompleted(current)||fiscalChanged) {
+        patch.billingRuleVersion=2;
+        nextData.billingRuleVersion=2;
+      }
+    }
+    if (patch.programado === true && !current.programado &&
+        calculateTripStatus({...nextData, programado:false}) === 'ENVIAR PEDIDO') {
+      return res.status(409).json({ error: 'Envie o pedido pelo WhatsApp antes de programar.' });
+    }
     if (normalizeTipo(nextData.tipo) === 'FROTA') patch.contrato = nextData.contrato;
     patch.status = calculateTripStatus(nextData);
     nextData.status = patch.status;
+    if(betaEditable){patch.secao=betaMode.persistedSection(nextData);nextData.secao=patch.secao;}
     if (patch.status === 'CONCLUIDO') {
       patch.usuario = '';
       if (!isViagemBloqueada(current)) {
@@ -2353,7 +2756,7 @@ app.put('/api/viagens/:id', requireViagemEditor, async (req, res) => {
   }
 });
 
-app.delete('/api/viagens/:id', async (req, res) => {
+app.delete('/api/viagens/:id', (req, res, next) => betaEditable ? requireViagemEditor(req, res, next) : next(), async (req, res) => {
   try {
     const current = await findOneById(TABLES.viagens, req.params.id);
     if (!current) return res.status(404).json({ error: 'Viagem não encontrada' });
@@ -2472,8 +2875,7 @@ app.delete('/api/operacoes/:id', requireAdmin, async (req, res) => {
     const normalizedOrigem = normalizeUniqueValue(current.origem);
     const sameOriginOps = await selectDocs(TABLES.operacoes);
     if (!sameOriginOps.some(op => normalizeUniqueValue(op.origem) === normalizedOrigem)) {
-      await deleteWhere(TABLES.configOptions, doc => doc.field === 'origem' && doc.normalized === normalizedOrigem);
-      const remainingOrigins = sortDocs(await selectDocsByJson(TABLES.configOptions, { field: 'origem' }), { ordem: 1, value: 1 });
+      const remainingOrigins = await deleteConfigOptionRecords('origem', normalizedOrigem);
       await Promise.all(remainingOrigins.map((doc, index) => updateDoc(TABLES.configOptions, doc._id, { ordem: index + 1 })));
     }
 
@@ -2501,7 +2903,8 @@ app.get('/api/frete-consultas', async (req, res) => {
 app.put('/api/frete-consultas', requireAdmin, async (req, res) => {
   try {
     const saved = await saveFreteConsultasConfig(req.body?.tables || req.body || {});
-    const payload = saved.tables || await freteConsultasConfig();
+    if (!saved) return res.status(409).json({error:'A tabela de fretes mudou. Confira os valores atualizados e tente novamente.'});
+    const payload = { ...saved.tables, revision:saved.updatedAt };
     broadcast({ type: 'frete_consultas_atualizada', payload });
     res.json(payload);
   } catch (e) {
@@ -2640,21 +3043,70 @@ app.put('/api/config-options/:field/reorder', requireAdmin, async (req, res) => 
   }
 });
 
+
+app.put('/api/config-options/:field/rename', requireAdmin, async (req, res) => {
+  try {
+    if (!betaEditable) return res.status(403).json({error:'Disponível somente no beta editável.'});
+    const field=req.params.field;
+    if (!['tipo','produto','carroceria','pamcard','destino'].includes(field)) return res.status(400).json({error:'Campo protegido ou inválido.'});
+    const previous=normalizeUniqueValue(req.body?.previous);
+    const value=normalizeUniqueValue(req.body?.value);
+    if (!previous || !value || value.length>100) return res.status(400).json({error:'Informe um nome válido, de até 100 caracteres.'});
+    if (['tipo','pamcard'].includes(field) && DEFAULT_CONFIG_OPTIONS[field].includes(previous)) return res.status(409).json({error:'Este valor é utilizado pelas regras operacionais e não pode ser renomeado.'});
+    const current=await findOneByJson(TABLES.configOptions,{field,normalized:previous});
+    if (!current) return res.status(404).json({error:'Opção não encontrada.'});
+    if (previous===value) return res.json({options:await configOptionsGrouped(),colors:await configColorsGrouped()});
+    if (await findOneByJson(TABLES.configOptions,{field,normalized:value})) return res.status(409).json({error:'Já existe uma opção com esse nome.'});
+    if (await countDocs(TABLES.viagens,null,{[field]:current.value})) return res.status(409).json({error:'Opção vinculada a viagens. Cadastre um novo valor para preservar o histórico.'});
+    if (field==='produto'||field==='destino') {
+      const keys=field==='produto'?['produtos','resumoProdutos']:['resumoDestinos'];
+      const ops=await selectDocs(TABLES.operacoes);
+      if (ops.some(op=>keys.some(key=>Array.isArray(op[key])&&op[key].some(item=>normalizeUniqueValue(item)===previous)))) return res.status(409).json({error:'Opção vinculada a uma operação. Remova o vínculo antes de renomear.'});
+    }
+    const updated=await updateDoc(TABLES.configOptions,current._id,{value,normalized:value},current);
+    if (!updated) return res.status(409).json({error:'Opção alterada por outro usuário. Atualize a página.'});
+    const options=await configOptionsGrouped(),colors=await configColorsGrouped();
+    broadcast({type:'config_atualizada',payload:options});
+    broadcast({type:'config_cores_atualizadas',payload:colors});
+    res.json({options,colors});
+  } catch(e) { res.status(500).json({error:e.message}); }
+});
+
+// Configuration records share their table with work logs and other documents.
+async function deleteConfigOptionRecords(field, normalized) {
+  const matches = doc => normalizeUniqueValue(doc.normalized) === normalized || normalizeUniqueValue(doc.value) === normalized;
+  const exact = await selectDocsByJson(TABLES.configOptions, { field, normalized });
+  const scoped = await selectDocsByJson(TABLES.configOptions, { field });
+  const targets = [...new Map([...exact,...scoped.filter(matches)].map(doc=>[doc._id,doc])).values()];
+  await Promise.all(targets.map(doc=>deleteDoc(TABLES.configOptions,doc._id)));
+  const remaining = await selectDocsByJson(TABLES.configOptions, { field });
+  if (remaining.some(matches) || await countDocs(TABLES.configOptions,null,{field,normalized})) {
+    throw new Error('A opção ainda consta no banco de dados. Tente novamente.');
+  }
+  invalidateCache();
+  return sortDocs(remaining,{ordem:1,value:1});
+}
+
 app.delete('/api/config-options/:field/:value', requireAdmin, async (req, res) => {
   try {
     const field = req.params.field;
     if (!CONFIG_FIELDS.includes(field)) return res.status(400).json({ error: 'Campo inválido' });
 
     const normalized = normalizeUniqueValue(decodeURIComponent(req.params.value));
-    await deleteWhere(TABLES.configOptions, doc => doc.field === field && doc.normalized === normalized);
-    const remaining = sortDocs(await selectDocsByJson(TABLES.configOptions, { field }), { ordem: 1, value: 1 });
+    if (!normalized) return res.status(400).json({error:'Informe uma opção válida.'});
+    const remaining = await deleteConfigOptionRecords(field, normalized);
     await Promise.all(remaining.map((doc, index) => updateDoc(TABLES.configOptions, doc._id, { ordem: index + 1 })));
 
     if (field === 'origem') {
-      await deleteWhere(TABLES.operacoes, op => normalizeUniqueValue(op.origem) === normalized);
+      const operations = (await selectDocs(TABLES.operacoes)).filter(op=>normalizeUniqueValue(op.origem)===normalized);
+      await Promise.all(operations.map(op=>deleteDoc(TABLES.operacoes,op._id)));
+      if ((await selectDocs(TABLES.operacoes)).some(op=>normalizeUniqueValue(op.origem)===normalized)) throw new Error('A operação vinculada ainda consta no banco. Tente novamente.');
+      for(const op of operations) broadcast({type:'operacao_removida',payload:{_id:op._id,id:op._id}});
     }
 
+    invalidateCache();
     const grouped = await configOptionsGrouped();
+    if (grouped[field]?.some(value=>normalizeUniqueValue(value)===normalized)) return res.status(409).json({error:'A opção ainda consta no cadastro. Tente novamente.'});
     broadcast({ type: 'config_atualizada', payload: grouped });
     res.json(grouped);
   } catch (e) {
@@ -2673,8 +3125,44 @@ app.get('/api/datas', async (req, res) => {
   }
 });
 
+
+/* Only the editable beta runs the automatic cleanup. Use raw snapshots so the
+ * maintenance task never changes fiscal fields or recalculates stored statuses. */
+let betaRetentionRunning=false;
+async function sweepBetaTripContent(now=Date.now()){
+  if(!betaEditable||betaRetentionRunning)return;
+  betaRetentionRunning=true;
+  try{
+    for(const [field,empty] of [['obs',''],['comentariosBeta','[]']]){
+      let cursor=null;
+      for(;;){
+        let query=supabase.from(TABLES.viagens).select(SUPABASE_DOC_SELECT)
+          .not('dados->>'+field,'is',null).neq('dados->>'+field,empty)
+          .order('id',{ascending:true}).limit(200);
+        if(cursor!==null)query=query.gt('id',cursor);
+        const {data,error}=await query;
+        if(error)throw error;
+        if(!data?.length)break;
+        for(const record of data){
+          const raw={...record.dados,_id:record.id,id:record.id,createdAt:record.dados?.createdAt||record.created_at,updatedAt:record.updated_at};
+          const patch=betaRetention.expiredTripContentPatch(raw,now);
+          if(!Object.keys(patch).length)continue;
+          try{
+            const saved=await updateDoc(TABLES.viagens,record.id,patch,raw);
+            if(saved)broadcast({type:'viagem_atualizada',payload:saved});
+          }catch(error){console.error('Falha na limpeza de recado da viagem:',record.id,error.message);}
+        }
+        cursor=data[data.length-1].id;
+        if(data.length<200)break;
+      }
+    }
+  }catch(error){console.error('Falha na rotina de expiracao de recados:',error.message);}
+  finally{betaRetentionRunning=false;}
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
+  if(betaEditable){void sweepBetaTripContent();setInterval(()=>void sweepBetaTripContent(),60_000).unref();}
   const os = require('os');
   const nets = os.networkInterfaces();
   console.log(`\nServidor rodando!`);

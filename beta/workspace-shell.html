@@ -1,0 +1,430 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<defs>
+<symbol id="beta-icon-truck" viewBox="0 0 24 24">
+<path d="M3 5h12v12H3zM15 9h4l3 4v4h-7M3 17h2m6 0h6"/>
+<circle cx="8" cy="18" r="2"/>
+<circle cx="19" cy="18" r="2"/>
+</symbol>
+<symbol id="beta-icon-dashboard" viewBox="0 0 24 24">
+<rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/>
+</symbol>
+<symbol id="beta-icon-search" viewBox="0 0 24 24">
+<circle cx="10.5" cy="10.5" r="6.5"/>
+<path d="m16 16 5 5"/>
+</symbol>
+<symbol id="beta-icon-bell" viewBox="0 0 24 24">
+<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>
+</symbol>
+<symbol id="beta-icon-report" viewBox="0 0 24 24">
+<path d="M4 3h16v18H4zM8 16v-3m4 3V8m4 8v-5"/>
+</symbol>
+<symbol id="beta-icon-list" viewBox="0 0 24 24">
+<path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/>
+</symbol>
+<symbol id="beta-icon-users" viewBox="0 0 24 24">
+<circle cx="9" cy="8" r="3"/>
+<path d="M2 20v-2a7 7 0 0 1 14 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 4 5v1"/>
+</symbol>
+<symbol id="beta-icon-gear" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="4"/>
+<path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/>
+</symbol>
+<symbol id="beta-icon-plus" viewBox="0 0 24 24">
+<path d="M12 5v14M5 12h14"/>
+</symbol>
+<symbol id="beta-icon-calendar" viewBox="0 0 24 24">
+<rect x="3" y="5" width="18" height="16" rx="2"/>
+<path d="M7 3v4m10-4v4M3 10h18"/>
+</symbol>
+<symbol id="beta-icon-left" viewBox="0 0 24 24">
+<path d="m14 6-6 6 6 6"/>
+</symbol>
+<symbol id="beta-icon-right" viewBox="0 0 24 24">
+<path d="m10 6 6 6-6 6"/>
+</symbol>
+<symbol id="beta-icon-clock" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v5l3 2"/>
+</symbol>
+<symbol id="beta-icon-check" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="9"/>
+<path d="m8 12 3 3 5-6"/>
+</symbol>
+<symbol id="beta-icon-filter" viewBox="0 0 24 24">
+<path d="M3 4h18l-7 8v7l-4-2v-5z"/>
+</symbol>
+<symbol id="beta-icon-cols" viewBox="0 0 24 24">
+<rect x="3" y="4" width="18" height="16" rx="2"/>
+<path d="M9 4v16m6-16v16"/>
+</symbol>
+<symbol id="beta-icon-download" viewBox="0 0 24 24">
+<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>
+</symbol>
+<symbol id="beta-icon-eye" viewBox="0 0 24 24">
+<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/>
+<circle cx="12" cy="12" r="2.5"/>
+</symbol>
+<symbol id="beta-icon-more" viewBox="0 0 24 24">
+<circle cx="5" cy="12" r="1"/>
+<circle cx="12" cy="12" r="1"/>
+<circle cx="19" cy="12" r="1"/>
+</symbol>
+<symbol id="beta-icon-play" viewBox="0 0 24 24">
+<path d="m8 5 12 7-12 7z"/>
+</symbol>
+<symbol id="beta-icon-x" viewBox="0 0 24 24">
+<path d="m6 6 12 12M18 6 6 18"/>
+</symbol>
+<symbol id="beta-icon-money" viewBox="0 0 24 24">
+<rect x="3" y="5" width="18" height="14" rx="2"/>
+<circle cx="12" cy="12" r="3"/>
+<path d="M6 12h1m10 0h1"/>
+</symbol>
+</defs>
+</svg>
+<aside class="app-sidebar" aria-label="Navegação da aplicação">
+<div class="sidebar-brand">
+<div class="brand">
+<svg viewBox="0 0 40 40">
+<path d="M34 10A17 17 0 1 0 34 30M9 13h17l5-5M6 20h22l6-5M9 27h15l6 5"/>
+<circle cx="32" cy="8" r="2"/>
+<circle cx="35" cy="15" r="2"/>
+<circle cx="31" cy="33" r="2"/>
+</svg>System<span>ia</span>
+</div>
+</div>
+<button id="collapseNav" class="collapse-nav" aria-label="Recolher navegação" aria-expanded="true">
+<svg>
+<use href="#beta-icon-left"/>
+</svg>
+<span>Recolher menu</span>
+</button>
+<nav class="nav" aria-label="Menu principal">
+<div class="nav-group">OPERAÇÃO</div>
+<button id="navHome" title="Dashboard" class="nav-current" aria-current="page">
+<svg><use href="#beta-icon-dashboard"/></svg>
+<span>Dashboard</span>
+</button>
+<div class="nav-operation-group" role="group" aria-label="Controle operacional">
+<div class="nav-operation-heading"><svg aria-hidden="true"><use href="#beta-icon-truck"/></svg><span>Controle operacional</span></div>
+<div class="nav-operation-submenu">
+<button data-nav="Lista de Espera" title="Lista de Espera">
+<svg>
+<use href="#beta-icon-list"/>
+</svg>
+<span>Lista de Espera</span>
+</button>
+<button data-nav="Lembretes" title="Lembretes" aria-label="Lembretes" data-has-reminder="false">
+<svg viewBox="0 0 24 24" aria-hidden="true">
+<use href="#beta-icon-bell"/>
+<circle class="beta-reminder-bell-dot" cx="19" cy="5" r="4.5"/>
+</svg>
+<span>Lembretes</span>
+</button>
+<button data-nav="Consulta Frete" title="Consulta Frete">
+<svg>
+<use href="#beta-icon-money"/>
+</svg>
+<span>Consulta Frete</span>
+</button>
+</div>
+</div>
+<button data-nav="Relatórios" title="Relatórios">
+<svg>
+<use href="#beta-icon-report"/>
+</svg>
+<span>Relatórios</span>
+</button>
+<div class="nav-group admin-group">ADMINISTRAÇÃO</div>
+<button data-nav="Usuários" title="Usuários">
+<svg>
+<use href="#beta-icon-users"/>
+</svg>
+<span>Usuários</span>
+</button>
+<button data-nav="Configurações" title="Configurações" aria-label="Configurações">
+<svg>
+<use href="#beta-icon-gear"/>
+</svg>
+<span>Configurações</span>
+</button>
+</nav>
+<div class="sidebar-foot">
+<span class="sidebar-mark">S</span>
+<div>
+<strong>Systemia</strong>
+<small>Controle de transportes</small>
+</div>
+</div>
+</aside>
+<header class="top">
+<div class="shell-location" hidden>
+<span>GESTÃO DE TRANSPORTES</span>
+<strong>Dashboard</strong>
+</div>
+<div class="search">
+<svg>
+<use href="#beta-icon-search"/>
+</svg>
+<input id="globalSearch" placeholder="Buscar CT-e, nota ou placa" aria-label="Busca global">
+</div>
+<button class="new" id="newTrip" disabled title="Beta somente leitura">
+<svg>
+<use href="#beta-icon-plus"/>
+</svg> Nova viagem</button>
+<div class="user">
+<div class="avatar">•</div>
+<div>
+<strong class="username">Usuário</strong>
+<small>
+<span class="connected">●</span> Somente leitura</small>
+</div>
+<button id="logout" title="Sair" aria-label="Sair">
+<svg>
+<use href="#beta-icon-right"/>
+</svg>
+</button>
+</div>
+</header>
+<main class="workspace">
+<section class="pagehead">
+<div>
+<h1>Dashboard</h1>
+</div>
+</section>
+<section class="operations-panel" aria-label="Viagens">
+<div class="command-surface">
+<div class="panelhead compact-toolbar">
+<span id="recordCount" class="hidden">
+</span>
+<div class="tools toolbar-inline">
+<div class="field compact-field">
+<label for="operation">Operação</label>
+<select id="operation">
+<option>Todos</option>
+</select>
+</div>
+<div class="field compact-field date-field">
+<span class="today" id="today" aria-live="polite">Hoje</span>
+<button class="datebtn" id="prev" aria-label="Dia anterior">
+<svg>
+<use href="#beta-icon-left"/>
+</svg>
+</button>
+<input type="date" id="date"  aria-label="Data operacional">
+<button class="datebtn" id="next" aria-label="Dia seguinte">
+<svg>
+<use href="#beta-icon-right"/>
+</svg>
+</button>
+</div>
+<div class="inline-search grow-search">
+<svg>
+<use href="#beta-icon-search"/>
+</svg>
+<input id="tableSearch" placeholder="Buscar nesta lista" aria-label="Buscar nesta lista">
+</div>
+<div class="filterbox beta-layout-wrap">
+<button type="button" class="btn" id="beta-column-layout-btn" aria-label="Alternar alinhamento das colunas" title="Alinhamento padrão · clique para alinhar à esquerda">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16M4 9h10M4 13h16M4 17h10M4 21h16"/></svg>
+</button>
+<span id="beta-column-save-status" class="beta-layout-sr-only" role="status" aria-live="polite"></span>
+</div>
+<div class="filterbox">
+<button class="btn" id="filterBtn">
+<svg>
+<use href="#beta-icon-filter"/>
+</svg> Filtros <span id="filterCount">
+</span>
+</button>
+</div>
+<div class="filterbox">
+<button class="btn" id="colsBtn">
+<svg>
+<use href="#beta-icon-cols"/>
+</svg> Colunas</button>
+</div>
+<button class="btn" id="export">
+<svg>
+<use href="#beta-icon-download"/>
+</svg> Exportar</button>
+</div>
+</div>
+<div class="tabbar" id="tabs"></div>
+<div class="filters-active" id="activeFilters">
+</div>
+</div>
+<section class="trip-section booked-section" aria-label="Agenciado">
+<div class="section-label">
+<h3>Agenciado</h3>
+</div>
+<div class="tablewrap secondary">
+<table>
+<colgroup id="colgroupBooked">
+</colgroup>
+<thead id="theadBooked">
+</thead>
+<tbody id="tbodyBooked">
+</tbody>
+</table>
+</div>
+</section>
+<section class="trip-section billed-section" aria-label="Faturado">
+<div class="section-label">
+<h3>Faturado</h3>
+</div>
+<div class="tablewrap">
+<table>
+<colgroup id="colgroupMain">
+</colgroup>
+<thead id="thead">
+</thead>
+<tbody id="tbody">
+</tbody>
+</table>
+</div>
+</section>
+<section class="trip-section completed-section" aria-label="Concluídos">
+<div class="section-label">
+<h3>Concluídos</h3>
+<button class="completed-toggle" type="button" id="toggleCompleted" aria-expanded="false" aria-controls="completedContent">
+<span id="completedToggleLabel">Expandir</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
+</button>
+</div>
+<div class="tablewrap" id="completedContent" hidden>
+<table id="table-concluidos">
+<thead><tr></tr></thead>
+<tbody id="tbody-concluidos"></tbody>
+</table>
+</div>
+</section>
+<div class="footer">
+<span id="footCount">
+</span>
+<span>Beta · Somente leitura</span>
+</div>
+</section>
+<section class="panel report-panel" aria-labelledby="reportTitle">
+<div class="report-header">
+<div class="report-heading">
+<svg>
+<use href="#beta-icon-report"/>
+</svg>
+<div>
+<h2 id="reportTitle">Resumo consolidado</h2>
+<p>Desempenho operacional por destino · volume em kg</p>
+</div>
+</div>
+<div class="report-context" id="reportContext">
+</div>
+</div>
+<div class="metric-band" id="summaryMetrics">
+</div>
+<div class="progress-area">
+<div class="progress-meta">
+<span>Atendimento da meta · faturado + agenciado</span>
+<strong id="coverage">—</strong>
+</div>
+<div class="progress-track" role="img" id="progressTrack" aria-label="Atendimento da meta">
+<span class="progress-actual" id="progressActual">
+</span>
+<span class="progress-booked" id="progressBooked">
+</span>
+</div>
+<div class="progress-legend">
+<span>
+<i class="actual">
+</i>Faturado</span>
+<span>
+<i class="booked">
+</i>Agenciado</span>
+<span>
+<i>
+</i>Saldo da meta</span>
+</div>
+</div>
+<div class="matrixwrap">
+<table class="matrix" aria-label="Consolidado por destino">
+<thead id="summaryHead">
+</thead>
+<tbody id="summaryBody">
+</tbody>
+</table>
+</div>
+<details id="beta-breakdown">
+<summary>Detalhes por operação</summary>
+</details>
+</section>
+</main>
+
+<main class="workspace" id="beta-fretes" aria-label="Tabela de Fretes" hidden></main>
+<main class="workspace" id="beta-espera" aria-labelledby="espera-title" hidden>
+  <header class="pagehead"><h1 id="espera-title">Lista de Espera</h1></header>
+  <section id="espera-cadastro" class="queue-panel" aria-labelledby="espera-add-title" hidden>
+    <h2 id="espera-add-title">Adicionar motorista</h2>
+  </section>
+  <section id="espera-fila" class="queue-panel" aria-labelledby="espera-list-title">
+    <header><h2 id="espera-list-title">Fila de motoristas</h2><span id="espera-count"></span></header>
+  </section>
+</main>
+
+<main class="workspace" id="beta-settings" aria-labelledby="beta-settings-title" hidden>
+  <header class="pagehead beta-settings-head">
+    <div><h1 id="beta-settings-title">Configurações</h1><p>Administração do sistema e parâmetros operacionais</p></div>
+    <div class="beta-settings-search"><svg aria-hidden="true"><use href="#beta-icon-search"/></svg><input id="beta-settings-search" type="search" placeholder="Buscar nas configurações..." aria-label="Buscar nas configurações"></div>
+  </header>
+  <div id="beta-settings-overview" class="beta-settings-overview" aria-label="Visão geral"></div>
+  <div class="beta-settings-tabs" role="group" aria-label="Seções de configurações">
+    <button type="button" data-settings-tab="all" aria-pressed="true">Geral</button>
+    <button type="button" data-settings-tab="catalog" aria-pressed="false">Cadastros</button>
+    <button type="button" data-settings-tab="messages" aria-pressed="false">Mensagens</button>
+    <button type="button" data-settings-tab="operational" aria-pressed="false">Operacionais</button>
+  </div>
+  <p class="beta-settings-notice" id="beta-settings-notice" role="status">As alterações são salvas por seção ou automaticamente, conforme o controle.</p>
+  <div id="beta-settings-content"></div>
+  <div id="beta-settings-empty" hidden>Nenhuma configuração encontrada.</div>
+</main>
+
+<main class="workspace" id="beta-users" aria-labelledby="beta-users-title" hidden>
+  <header class="pagehead beta-users-head">
+    <div><h1 id="beta-users-title">Usuários</h1><p>Gerencie contas, perfis de acesso e segurança do sistema.</p></div>
+    <div class="beta-users-actions"><button type="button" id="beta-users-refresh">Atualizar</button><button type="button" id="beta-users-new" class="beta-users-primary">+ Novo usuário</button></div>
+  </header>
+  <div class="beta-users-overview" id="beta-users-overview" aria-label="Visão geral dos usuários"></div>
+  <section id="beta-users-create" class="beta-users-card" hidden></section>
+  <section class="beta-users-card" aria-labelledby="beta-users-list-title">
+    <div class="beta-users-card-head"><div><h2 id="beta-users-list-title">Gerenciamento de usuários</h2><p>Contas cadastradas no sistema</p></div><span id="beta-users-count" aria-live="polite"></span></div>
+    <div class="beta-users-filters">
+      <label>Pesquisar<input type="search" id="beta-users-search" placeholder="Nome ou e-mail"></label>
+      <label>Perfil<select id="beta-users-role"><option value="">Todos</option><option value="admin">Administrador</option><option value="operador">Operador</option><option value="visualizador">Visualizador</option></select></label>
+      <label>Status<select id="beta-users-status"><option value="">Todos</option><option value="active">Ativos</option><option value="inactive">Inativos</option></select></label>
+    </div>
+    <div id="beta-users-message" role="status" aria-live="polite"></div>
+    <div id="beta-users-table"></div>
+  </section>
+  <section class="beta-users-card beta-users-editor" id="beta-users-editor" hidden aria-labelledby="beta-users-edit-title">
+    <div class="beta-users-card-head"><div><h2 id="beta-users-edit-title">Editar usuário</h2><p id="beta-users-edit-email"></p></div><button type="button" id="beta-users-edit-close">Fechar</button></div>
+    <form id="beta-users-edit-form">
+      <label>Nome<input id="beta-user-edit-name" required maxlength="100" autocomplete="off"></label>
+      <label>E-mail<input id="beta-user-edit-email" type="email" required maxlength="254" autocomplete="off"></label>
+      <label>Perfil<select id="beta-user-edit-role"><option value="admin">Administrador</option><option value="operador">Operador</option><option value="visualizador">Visualizador</option></select></label>
+      <label>Status<select id="beta-user-edit-status"><option value="active">Ativo</option><option value="inactive">Inativo</option></select></label>
+      <button type="submit" class="beta-users-primary">Salvar alterações</button>
+    </form>
+    <div class="beta-users-security">
+      <form id="beta-users-password-form" autocomplete="off">
+        <h3>Redefinir senha</h3><p>A senha atual não é exibida. A nova senha substitui a anterior no Supabase Auth.</p>
+        <label>Nova senha<input id="beta-user-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+        <label>Confirmar nova senha<input id="beta-user-password-confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+        <button type="submit" class="beta-users-primary">Redefinir senha</button>
+      </form>
+      <form id="beta-users-delete-form" autocomplete="off">
+        <h3>Excluir conta definitivamente</h3><p>Remove o login do Supabase Auth e o perfil do sistema compartilhado com a produção. Não apaga viagens.</p>
+        <label>Confirme digitando o e-mail da conta<input id="beta-user-delete-email" type="email" autocomplete="off" required></label>
+        <button type="submit" class="beta-users-danger">Excluir usuário</button>
+      </form>
+    </div>
+    <div id="beta-users-edit-message" role="status" aria-live="polite"></div>
+  </section>
+</main>

@@ -50,6 +50,7 @@ const state = {
   editingOperationId: null,
   ctxTargetId: null,
   agendamentoTargetId: null,
+  agendamentoTargetField: 'agendamento',
   contratoTargetId: null,
   contratoTargetField: '',
   contratoTargetCopyValue: '',
@@ -113,7 +114,7 @@ const DEFAULT_OPERACOES = [
   { origem: 'PEDRO LEOPOLDO', metaTipo: 'pedro_leopoldo', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS },
   { origem: 'BARROSO', metaTipo: 'barroso', produtos: ['CPII-F', 'CPIII', 'CPV'], resumoProdutos: ['CPII-F', 'CPIII', 'CPV'], resumoDestinos: DEFAULT_DESTINOS }
 ];
-const STATUS = ['CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
+const STATUS = ['ENVIAR PEDIDO', 'CRIAR DT / PROGRAMAR', 'CRIAR DT', 'PROGRAMAR', 'AGUARDANDO CARREGAMENTO', 'EMITIR CTE', ...(isBetaTripWorkspace()?['HORA NF']:[]), 'ADIANTAMENTO / DESCARGA', 'ADIANTAMENTO', 'AGENDAR DESCARGA', 'CONCLUIDO', 'SEM CADASTRO', 'SEM CADASTRO / DT CRIADA', 'CONFERIR MOTORISTA'];
 const DEFAULT_PRODUTOS = ['CPII-F', 'CPIII', 'CPV'];
 
 const DEFAULT_CONFIG_OPTIONS = {
@@ -157,6 +158,7 @@ const DEFAULT_CONFIG_COLORS = {
     'ADIANTAMENTO / DESCARGA': '#C2410C',
     ADIANTAMENTO: '#115927',
     'EMITIR CTE': '#2563EB',
+    ...(isBetaTripWorkspace()?{'HORA NF':'#0E7490'}:{}),
     MANIFESTO: '#2563EB',
     'FALTA ADIANTAMENTO': '#C2410C',
     'AGENDAR DESCARGA': '#39107B',
@@ -364,35 +366,74 @@ async function startApp() {
   state.userProfile = auth.profile;
   applyWhiteTheme();
   loadTableColumnsPreference();
+  if(isBetaTripWorkspace()) await loadBetaColumnPreference();
   loadTableSortPreference();
   state.metaGoalDismissed = loadMetaGoalDismissed();
   state.configColors = mergeConfigColors({});
-  initWS();
+  const production = !isBetaTripWorkspace() || document.body.dataset.workspaceRuntime === 'production';
+  if (!production) {
+    const badge = document.getElementById('ws-status');
+    badge.textContent = isBetaReadOnly() ? 'Beta | Somente leitura' : 'Beta | Banco compartilhado';
+    badge.title = 'Atualize a pagina para consultar dados recentes';
+  }
   initUI();
+  if(isBetaTripWorkspace()) initBetaColumnLayout();
   applyPermissions();
-  loadAll();
+  if(isBetaTripWorkspace() && location.hash==='#usuarios'){if(isAdmin())loadUsers();else location.hash='';}
+  await loadAll();
+  if (production) initWS();
 }
 
 // ─── WEBSOCKET ────────────────────────────────────────────────────────────────
+let wsWasAuthenticated=false;
+let wsRefreshPending=false;
+function refreshProductionAfterReconnect(){
+  if(!wsRefreshPending)return;
+  if(activeInlineEdit?.input?.isConnected||state.drawerSaving||state.drawerActiveField||
+    document.activeElement===document.getElementById('reminder-text')||
+    document.getElementById('reminder-status')?.dataset.state==='Salvando...'){
+    setTimeout(refreshProductionAfterReconnect,2000);return;
+  }
+  wsRefreshPending=false;
+  // Force a complete snapshot after a disconnected interval.
+  state.staticDataLoaded=false;
+  void loadAll();
+}
 function initWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${proto}://${location.host}`;
-  state.ws = new WebSocket(wsUrl);
-
-  state.ws.onopen = () => {
-    document.getElementById('ws-status').className = 'ws-status online';
-    document.getElementById('ws-status').textContent = 'Conectado';
+  const socket = new WebSocket(wsUrl);
+  state.ws = socket;
+  let authenticated=false;
+  const status=document.getElementById('ws-status');
+  socket.onopen = async () => {
+    try {
+      const token=await FrotasysAuth.getAccessToken();
+      if(socket.readyState!==WebSocket.OPEN)return;
+      if(!token){socket.close();return;}
+      socket.send(JSON.stringify({type:'authenticate',token}));
+    } catch(_error){socket.close();}
   };
-
-  state.ws.onclose = () => {
-    document.getElementById('ws-status').className = 'ws-status offline';
-    document.getElementById('ws-status').textContent = 'Desconectado';
-    setTimeout(initWS, 3000);
+  socket.onclose = () => {
+    if(state.ws!==socket)return;
+    status.className='ws-status offline';
+    status.textContent='Desconectado';
+    setTimeout(initWS,3000);
   };
-
-  state.ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    handleWsMessage(msg);
+  socket.onerror=()=>socket.close();
+  socket.onmessage = (event) => {
+    let msg;
+    try{msg=JSON.parse(event.data);}catch(_error){return;}
+    if(msg.type==='auth_ok'){
+      authenticated=true;
+      status.className='ws-status online';
+      status.textContent='Conectado';
+      if(msg.payload){state.userProfile=msg.payload;applyPermissions();}
+      if(wsWasAuthenticated&&!wsRefreshPending){wsRefreshPending=true;refreshProductionAfterReconnect();}
+      wsWasAuthenticated=true;
+      return;
+    }
+    if(authenticated)handleWsMessage(msg);
   };
 }
 
@@ -406,6 +447,11 @@ function handleWsMessage(msg) {
   } else if (type === 'viagem_atualizada') {
     if (state.selectedViagemDetails?._id === payload._id) {
       state.selectedViagemDetails.frete = payload.frete;
+      if(isBetaTripWorkspace()){
+        state.selectedViagemDetails.obs=payload.obs;
+        state.selectedViagemDetails.obsCriadaEm=payload.obsCriadaEm;
+        state.selectedViagemDetails.comentariosBeta=payload.comentariosBeta;
+      }
     }
     const idx = state.viagens.findIndex(v => v._id === payload._id);
     if (idx !== -1) {
@@ -414,6 +460,7 @@ function handleWsMessage(msg) {
       state.viagens.push(payload);
     }
     renderAllUnlessInlineEditing();
+    if(isBetaTripWorkspace())window.FrotasysBetaComments?.refreshTrip(payload._id);
   } else if (type === 'viagem_removida') {
     state.viagens = state.viagens.filter(v => v._id !== payload._id);
     renderAllUnlessInlineEditing();
@@ -468,7 +515,7 @@ function handleWsMessage(msg) {
     renderAllUnlessInlineEditing();
   } else if (type === 'frete_consultas_atualizada') {
     state.freteConsultas = mergeFreteConsultas(payload);
-    if (!document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
+    if (document.getElementById('beta-fretes')?.hidden === false || !document.getElementById('frete-consult-overlay')?.classList.contains('hidden')) renderFreteConsultas();
   }
 }
 
@@ -497,15 +544,25 @@ async function loadAll() {
   if ('configOptions' in data) state.configOptions = normalizeConfigOptions(data.configOptions);
   if ('configColors' in data) state.configColors = mergeConfigColors(data.configColors);
   if ('operacoes' in data) state.operacoes = normalizeOperacoes(data.operacoes);
-  if ('listaEspera' in data) state.listaEspera = normalizeListaEspera(data.listaEspera);
+  if ('listaEspera' in data) {
+    state.listaEspera = normalizeListaEspera(data.listaEspera);
+    if (document.getElementById('beta-espera')?.hidden === false) {
+      prepareWaitlistForm();
+      renderListaEspera();
+    }
+  }
   if ('lembrete' in data) state.lembrete = normalizeLembrete(data.lembrete);
   if ('operationMessages' in data) state.operationMessages = normalizeOperationMessages(data.operationMessages);
   if ('workTypes' in data) state.workTypes = normalizeWorkTypes(data.workTypes);
   if ('workSessions' in data) state.workSessions = normalizeWorkSessions(data.workSessions);
-  if ('freteConsultas' in data) state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
+  if ('freteConsultas' in data) {
+    state.freteConsultas = mergeFreteConsultas(data.freteConsultas || state.freteConsultas);
+    if (document.getElementById('beta-fretes')?.hidden === false) renderFreteConsultas();
+  }
   state.staticDataLoaded = true;
   clearReminderStatus();
   renderAll();
+  if (document.getElementById('beta-settings')?.hidden === false) renderSettingsModal();
 }
 
 async function apiFetch(url, opts = {}) {
@@ -526,7 +583,11 @@ async function apiFetch(url, opts = {}) {
       alert(data.error || 'N\u00e3o foi poss\u00edvel salvar.');
       return null;
     }
-    if (res.headers.get('X-Viagem-Evento') === '1') showEventWarning(data.frete);
+    if (res.headers.get('X-Viagem-Evento') === '1') {
+      const beta=isBetaTripWorkspace();
+      const warning=beta?[String(data.frete||'').trim(),String(data.obs||'').trim()].filter(Boolean).filter((value,index,all)=>all.indexOf(value)===index).join('\n\n'):data.frete;
+      showEventWarning(warning,beta?data._id:null,beta?data.placa:'');
+    }
     return data;
   } catch (e) {
     console.error('API error:', e);
@@ -536,23 +597,53 @@ async function apiFetch(url, opts = {}) {
 
 // ─── UI INIT ──────────────────────────────────────────────────────────────────
 const pendingEventWarnings = [];
+const acknowledgedEventWarnings = new Set();
+let activeEventWarning=null;
 
-function showEventWarning(text) {
+function showEventWarning(text,id=null,plate='') {
   const dialog = document.getElementById('event-warning');
+  if(id && (acknowledgedEventWarnings.has(id)||activeEventWarning?.id===id||pendingEventWarnings.some(item=>item.id===id)))return;
   if (dialog.open) {
-    pendingEventWarnings.push(text);
+    pendingEventWarnings.push({text,id,plate});
     return;
   }
-  document.getElementById('event-warning-text').textContent = text;
+  activeEventWarning={text,id,plate};
+  document.getElementById('event-warning-text').textContent = id ? (plate?plate+'\n\n':'')+text : text;
+  document.getElementById('event-warning-error').textContent='';
   dialog.showModal();
 }
 
 function initUI() {
-  document.getElementById('event-warning').addEventListener('close', () => {
-    if (pendingEventWarnings.length) showEventWarning(pendingEventWarnings.shift());
+  const eventDialog=document.getElementById('event-warning');
+  eventDialog.addEventListener('cancel',event=>{if(activeEventWarning?.id)event.preventDefault();});
+  eventDialog.querySelector('form').addEventListener('submit',async event=>{
+    const warning=activeEventWarning;
+    if(!warning?.id)return;
+    event.preventDefault();
+    const button=eventDialog.querySelector('button');
+    if(button.disabled)return;
+    button.disabled=true;
+    const error=document.getElementById('event-warning-error');
+    error.textContent='';
+    try{
+      const saved=await apiFetch('/api/viagens/'+encodeURIComponent(warning.id)+'/evento-cte-confirmacao',{method:'POST'});
+      if(!saved?.ok){error.textContent='Não foi possível confirmar. Clique em OK novamente.';return;}
+      acknowledgedEventWarnings.add(warning.id);
+      eventDialog.close();
+    }finally{button.disabled=false;}
+  });
+  eventDialog.addEventListener('close', () => {
+    activeEventWarning=null;
+    while(pendingEventWarnings.length){
+      const next=pendingEventWarnings.shift();
+      if(next.id && acknowledgedEventWarnings.has(next.id))continue;
+      showEventWarning(next.text,next.id,next.plate);
+      break;
+    }
   });
   document.getElementById('date-picker').addEventListener('change', e => {
     state.currentDate = e.target.value;
+    if (isBetaTripWorkspace()) renderDateWeekday();
     clearTripFilterScope();
     loadAll();
   });
@@ -686,6 +777,7 @@ function initUI() {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (isBetaTripWorkspace()) e.stopPropagation();
       state.drawerActiveField = '';
       state.drawerDraft = null;
       renderTravelDrawer();
@@ -705,7 +797,7 @@ function initUI() {
   document.addEventListener('click', e => {
     if (!e.target.closest('.row-action-menu')) closeRowActionMenus();
     if (!e.target.closest('.column-picker-wrap')) closeColumnPicker();
-    if (state.lembreteOpen && !e.target.closest('.header-reminder')) closeReminderNote();
+    if (state.lembreteOpen && !isBetaTripWorkspace() && !e.target.closest('.header-reminder')) closeReminderNote();
     if (!e.target.closest('.ctx-menu')) hideCtxMenu();
     if (!e.target.closest('#agendamento-menu')) hideAgendamentoMenu();
     if (!e.target.closest('#contrato-menu')) hideContratoMenu();
@@ -746,7 +838,7 @@ function initUI() {
       return;
     }
 
-    const td = e.target.closest('td[data-field="agendamento"]:not(.cell-select)');
+    const td = e.target.closest(isBetaTripWorkspace() ? 'td[data-field="agendamento"]:not(.cell-select), td[data-field="descarga"]:not(.cell-select)' : 'td[data-field="agendamento"]:not(.cell-select)');
     if (!td) return;
     e.stopPropagation();
     showAgendamentoMenu(e, td);
@@ -766,9 +858,10 @@ function initUI() {
   initTripFilters();
   document.getElementById('agendamento-edit').addEventListener('click', () => {
     const id = state.agendamentoTargetId;
+    const field = state.agendamentoTargetField;
     hideAgendamentoMenu();
     if (!id) return;
-    const cell = document.querySelector(`td[data-field="agendamento"][data-id="${CSS.escape(id)}"]`);
+    const cell = document.querySelector(`td[data-field="${field}"][data-id="${CSS.escape(id)}"]`);
     if (cell) startInlineEdit(cell);
   });
   document.getElementById('contrato-copy').addEventListener('click', event => copyContratoMenuValue(event));
@@ -804,6 +897,8 @@ function initUI() {
     }
 
     if (e.key === 'Escape') {
+      if(isBetaTripWorkspace() && betaColumnDragKey){clearBetaColumnDrag();e.preventDefault();return;}
+      const closeBetaDrawer = shouldCloseBetaDrawerOnEscape(e);
       closeModal();
       closeSearchModal();
       closeFreteConsultModal();
@@ -819,6 +914,10 @@ function initUI() {
       hideContratoMenu();
       hidePhoneChoiceMenu();
       cancelInlineEdit();
+      if (closeBetaDrawer) {
+        e.preventDefault();
+        closeTravelDrawer();
+      }
     }
   });
 
@@ -838,6 +937,7 @@ function isAdmin() {
 }
 
 function canEditViagens() {
+  if (isBetaReadOnly()) return false;
   return ['admin', 'operador'].includes(state.userProfile?.role);
 }
 
@@ -846,17 +946,19 @@ function isViagemConcluida(viagem) {
 }
 
 function canEditViagem(viagem) {
+  if (isBetaReadOnly()) return false;
   return isAdmin() || (canEditViagens() && !isViagemConcluida(viagem));
 }
 
 function canEditViagemField(viagem, field) {
-  if (!canEditViagens()) return false;
+  if (!canEditViagens() || (isBetaTripWorkspace() && field === 'secao')) return false;
   if (isAdmin()) return true;
   if (!isViagemConcluida(viagem)) return true;
-  return LOCKED_EDITABLE_FIELDS.includes(field);
+  return LOCKED_EDITABLE_FIELDS.includes(field) || (isBetaTripWorkspace() && field === 'descargaVerde');
 }
 
 function canDeleteViagem(viagem) {
+  if (isBetaReadOnly() || (isBetaTripWorkspace() && !canEditViagens())) return false;
   return isAdmin() || !isViagemConcluida(viagem);
 }
 
@@ -868,6 +970,23 @@ function applyPermissions() {
   document.getElementById('btn-users-admin').classList.toggle('is-hidden', !isAdmin());
   document.getElementById('btn-settings').classList.remove('is-hidden');
   document.getElementById('btn-nova-viagem').classList.toggle('is-hidden', !canEditViagens());
+  if (isBetaTripWorkspace()) {
+    const canEdit = canEditViagens();
+    const button = document.getElementById('newTrip');
+    if (button) {
+      button.disabled = !canEdit;
+      button.title = canEdit ? 'Cadastrar viagem' : 'Somente leitura';
+    }
+    const label = canEdit ? 'Edicao ativa' : 'Somente leitura';
+    const userMode = document.querySelector('#beta-shell .connected')?.parentElement;
+    if (userMode) {
+      const indicator = userMode.querySelector('.connected');
+      userMode.replaceChildren(indicator, document.createTextNode(' ' + label));
+    }
+    const footer = document.querySelector('#beta-shell .operations-panel > .footer > span:last-child');
+    if (footer) footer.textContent = (document.body.dataset.workspaceRuntime === 'production' ? 'Frotasys · ' : 'Beta · ') + label + (canEdit ? ' · Banco compartilhado' : '');
+    document.getElementById('f-secao').disabled = true;
+  }
 }
 
 function loggedUserDisplayName() {
@@ -993,6 +1112,7 @@ function renderReminderNote() {
 
   if (document.activeElement !== textarea) textarea.value = state.lembrete.texto || '';
   if (!status.dataset.state) status.textContent = hasReminderContent(state.lembrete.texto) ? 'Salvo' : 'Sem lembrete';
+  if (isBetaTripWorkspace() && typeof syncBetaReminderPanel === 'function') syncBetaReminderPanel(hasReminderContent(state.lembrete.texto));
 }
 
 function handleReminderInput(event) {
@@ -1001,6 +1121,7 @@ function handleReminderInput(event) {
   if (textarea.value !== texto) textarea.value = texto;
   state.lembrete = { data: '', texto };
   document.getElementById('btn-lembretes')?.classList.toggle('has-text', hasReminderContent(texto));
+  if (isBetaTripWorkspace() && typeof syncBetaReminderPanel === 'function') syncBetaReminderPanel(hasReminderContent(texto));
   setReminderStatus('Salvando...');
   clearTimeout(state.lembreteSaveTimer);
   state.lembreteSaveTimer = setTimeout(() => saveReminder(texto), 450);
@@ -1084,8 +1205,152 @@ async function undoLastAction() {
   if (!undone) setUndoAction(action);
 }
 
+
+let betaUsers=[], betaUserSelected=null, betaUsersRequest=0, betaUsersBusy=false;
+const betaUserRoles={admin:'Administrador',operador:'Operador',visualizador:'Visualizador'};
+
+function prepareBetaUsersPage(){
+  const page=document.getElementById('beta-users');
+  if(!page)return;
+  const el=id=>document.getElementById(id);
+  const create=el('user-create-form');
+  el('beta-users-create').append(create);
+  create.autocomplete='off';
+  el('user-create-email').autocomplete='off';
+  el('user-create-password').autocomplete='new-password';
+  el('beta-users-new').onclick=()=>{
+    if(!isAdmin()||isBetaReadOnly())return;
+    const panel=el('beta-users-create');panel.hidden=!panel.hidden;
+    if(!panel.hidden){create.reset();el('user-create-message').textContent='';el('user-create-nome').focus();}
+    else{create.reset();el('user-create-password').value='';}
+  };
+  el('beta-users-refresh').onclick=()=>loadUsers();
+  for(const id of ['beta-users-search','beta-users-role','beta-users-status'])el(id).addEventListener('input',renderBetaUsers);
+  el('beta-users-table').addEventListener('click',e=>{
+    const button=e.target.closest('[data-beta-user-index]');
+    if(button)openBetaUserEditor(betaUsers[Number(button.dataset.betaUserIndex)]);
+  });
+  el('beta-users-edit-close').onclick=closeBetaUserEditor;
+  el('beta-users-edit-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const user=betaUserSelected;
+    if(!user)return;
+    const patch={nome:el('beta-user-edit-name').value.trim(),email:el('beta-user-edit-email').value.trim()};
+    if(!betaUserProtected(user)){patch.role=el('beta-user-edit-role').value;patch.ativo=el('beta-user-edit-status').value==='active';}
+    if(patch.email!==user.email&&!confirm('Alterar o e-mail de login desta conta no Supabase?'))return;
+    await mutateBetaUser('/api/users/'+encodeURIComponent(user.id),'PUT',patch,'Usuário atualizado com sucesso.',updated=>{
+      if(updated.user_id===state.userProfile?.user_id){state.userProfile={...state.userProfile,...updated};applyPermissions();}
+      openBetaUserEditor(updated,false);
+    });
+  });
+  el('beta-users-password-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const user=betaUserSelected,password=el('beta-user-password').value;
+    if(!user)return;
+    if(password!==el('beta-user-password-confirm').value){betaUserEditMessage('As senhas não coincidem.',true);return;}
+    if(!confirm('Redefinir a senha de '+user.nome+'?'))return;
+    await mutateBetaUser('/api/users/'+encodeURIComponent(user.id)+'/password','PUT',{password},'Senha redefinida no Supabase Auth.',()=>e.target.reset());
+  });
+  el('beta-users-delete-form').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const user=betaUserSelected;
+    if(!user||betaUserProtected(user))return;
+    const confirmEmail=el('beta-user-delete-email').value.trim();
+    if(confirmEmail!==user.email){betaUserEditMessage('Digite o e-mail exato da conta.',true);return;}
+    if(!confirm('Excluir definitivamente '+user.nome+' do Supabase Auth e do sistema compartilhado? Esta ação não pode ser desfeita.'))return;
+    await mutateBetaUser('/api/users/'+encodeURIComponent(user.id),'DELETE',{confirmEmail},'Usuário excluído do Supabase Auth e do cadastro.',()=>{
+      closeBetaUserEditor();
+      el('beta-users-message').textContent='Usuário excluído do Supabase Auth e do cadastro.';
+    });
+  });
+  window.addEventListener('hashchange',()=>{
+    if(location.hash!=='#usuarios'){
+      closeBetaUserEditor();create.reset();el('beta-users-create').hidden=true;
+    }
+  });
+}
+
+function betaUserProtected(user){
+  return !!user && user.user_id===state.userProfile?.user_id;
+}
+function betaUserEditMessage(message,error=false){
+  const el=document.getElementById('beta-users-edit-message');
+  el.textContent=message;el.classList.toggle('is-error',error);
+}
+function closeBetaUserEditor(){
+  betaUserSelected=null;
+  const panel=document.getElementById('beta-users-editor');
+  if(!panel)return;
+  panel.hidden=true;
+  panel.querySelectorAll('form').forEach(form=>form.reset());
+  betaUserEditMessage('');
+}
+function openBetaUserEditor(user,scroll=true){
+  if(!user||!isAdmin()||isBetaReadOnly()||betaUsersBusy&&scroll)return;
+  const el=id=>document.getElementById(id);
+  betaUserSelected=user;
+  el('beta-users-editor').hidden=false;
+  el('beta-users-edit-title').textContent='Editar usuário · '+user.nome;
+  el('beta-users-edit-email').textContent=user.email;
+  el('beta-user-edit-name').value=user.nome;
+  el('beta-user-edit-email').value=user.email;
+  el('beta-user-edit-role').value=user.role;
+  el('beta-user-edit-status').value=user.ativo?'active':'inactive';
+  const protectedUser=betaUserProtected(user);
+  el('beta-user-edit-role').disabled=protectedUser;
+  el('beta-user-edit-status').disabled=protectedUser;
+  el('beta-users-delete-form').hidden=protectedUser;
+  el('beta-users-password-form').reset();
+  el('beta-users-delete-form').reset();
+  betaUserEditMessage(protectedUser?'Sua conta está protegida contra desativação, exclusão e alteração de perfil.':'');
+  if(scroll){el('beta-users-editor').scrollIntoView({block:'start',behavior:'smooth'});el('beta-user-edit-name').focus({preventScroll:true});}
+}
+async function mutateBetaUser(url,method,body,success,after){
+  if(betaUsersBusy||!isAdmin()||isBetaReadOnly())return;
+  betaUsersBusy=true;
+  const editor=document.getElementById('beta-users-editor');
+  const buttons=[...editor.querySelectorAll('button')];
+  buttons.forEach(button=>button.disabled=true);
+  betaUserEditMessage('Salvando...');
+  try{
+    const result=await apiFetch(url,{method,body:JSON.stringify(body)});
+    if(!result){betaUserEditMessage('A operação não foi confirmada. Verifique a mensagem de erro.',true);return;}
+    after?.(result);
+    await loadUsers();
+    if(!editor.hidden)betaUserEditMessage(success);
+    else document.getElementById('beta-users-message').textContent=success;
+  }finally{betaUsersBusy=false;buttons.forEach(button=>button.disabled=false);}
+}
+async function loadBetaUsers(){
+  if(!isAdmin())return;
+  const request=++betaUsersRequest;
+  const message=document.getElementById('beta-users-message');
+  message.textContent='Carregando usuários...';
+  document.getElementById('beta-users-new').disabled=isBetaReadOnly();
+  const users=await apiFetch('/api/users');
+  if(request!==betaUsersRequest)return;
+  if(!Array.isArray(users)){betaUsers=[];renderBetaUsers();message.textContent='Não foi possível carregar os usuários. Clique em Atualizar.';return;}
+  betaUsers=users;
+  message.textContent=isBetaReadOnly()?'Modo somente leitura.':'';
+  renderBetaUsers();
+}
+function renderBetaUsers(){
+  const el=id=>document.getElementById(id);
+  const query=normalizeOption(el('beta-users-search').value.trim()),role=el('beta-users-role').value,status=el('beta-users-status').value;
+  const stats=[['Total de usuários',betaUsers.length],['Contas ativas',betaUsers.filter(u=>u.ativo).length],['Administradores',betaUsers.filter(u=>u.ativo&&u.role==='admin').length],['Contas inativas',betaUsers.filter(u=>!u.ativo).length]];
+  el('beta-users-overview').innerHTML=stats.map(([label,value])=>'<div class="beta-users-kpi"><span>'+label+'</span><strong>'+value+'</strong></div>').join('');
+  const filtered=betaUsers.map((user,index)=>({user,index})).filter(({user})=>(!query||normalizeOption(user.nome+' '+user.email).includes(query))&&(!role||role===user.role)&&(!status||(status==='active')===!!user.ativo));
+  el('beta-users-count').textContent=filtered.length+' de '+betaUsers.length+' usuários';
+  el('beta-users-table').innerHTML='<div class="beta-users-table-wrap"><table class="beta-users-table"><thead><tr><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Perfil</th><th scope="col">Status</th><th scope="col">Ações</th></tr></thead><tbody>'+
+    (filtered.length?filtered.map(({user,index})=>{
+      const initials=String(user.nome||'?').trim().split(/\s+/).slice(0,2).map(n=>n[0]||'').join('').toUpperCase();
+      return '<tr><td><div class="beta-users-person"><span class="beta-users-avatar">'+escapeHtml(initials)+'</span><span>'+escapeHtml(user.nome||'—')+(betaUserProtected(user)?'<small>Minha conta</small>':'')+'</span></div></td><td>'+escapeHtml(user.email||'—')+'</td><td>'+escapeHtml(betaUserRoles[user.role]||user.role||'—')+'</td><td><span class="beta-users-state '+(user.ativo?'is-active':'is-inactive')+'">'+(user.ativo?'Ativo':'Inativo')+'</span></td><td><button type="button" data-beta-user-index="'+index+'"'+(isBetaReadOnly()?' disabled':'')+'>Gerenciar</button></td></tr>';
+    }).join(''):'<tr><td colspan="5" class="beta-users-empty">Nenhum usuário encontrado.</td></tr>')+'</tbody></table></div>';
+}
+
 async function openUsersModal() {
   if (!isAdmin()) return;
+  if(isBetaTripWorkspace()) {if(location.hash!=='#usuarios')location.hash='usuarios';else await loadUsers();return;}
   document.getElementById('users-modal-overlay').classList.remove('hidden');
   await loadUsers();
 }
@@ -1095,6 +1360,7 @@ function closeUsersModal() {
 }
 
 async function loadUsers() {
+  if(isBetaTripWorkspace())return loadBetaUsers();
   const users = await apiFetch('/api/users');
   const tbody = document.getElementById('users-table-body');
   if (!users) {
@@ -1122,7 +1388,7 @@ async function loadUsers() {
 
 async function createUserProfile(event) {
   event.preventDefault();
-  if (!isAdmin()) return;
+  if (!isAdmin() || isBetaReadOnly()) return;
 
   const form = document.getElementById('user-create-form');
   const button = document.getElementById('user-create-submit');
@@ -1148,11 +1414,12 @@ async function createUserProfile(event) {
   button.disabled = false;
   button.textContent = 'Criar usu\u00e1rio';
 
-  if (!created) return;
+  if (!created) {message.textContent='Não foi possível criar o usuário.';return;}
   form.reset();
   document.getElementById('user-create-ativo').checked = true;
   message.textContent = 'Usu\u00e1rio criado com sucesso.';
   message.classList.add('success');
+  if(isBetaTripWorkspace())document.getElementById('user-create-password').value='';
   await loadUsers();
 }
 
@@ -1169,6 +1436,15 @@ async function submitHeaderSearch(event) {
   event?.preventDefault();
   const input = document.getElementById('header-search-input');
   const term = v('header-search-input');
+  if (isBetaTripWorkspace()) {
+    openSearchModal();
+    clearAdvancedSearch({focus:false});
+    const searchInput = document.getElementById('beta-search-term');
+    searchInput.value = term;
+    searchInput.focus();
+    if (term) await searchBetaCarregamentos();
+    return;
+  }
   if (!term) {
     input?.focus();
     return;
@@ -1179,11 +1455,13 @@ async function submitHeaderSearch(event) {
 }
 
 function openAdvancedSearchModal() {
+  if (isBetaTripWorkspace()) return submitHeaderSearch();
   openSearchModal();
   document.getElementById('search-dt')?.focus();
 }
 
 function openSearchModal() {
+  if (isBetaTripWorkspace()) prepareBetaSearchModal();
   document.getElementById('search-modal-overlay').classList.remove('hidden');
 }
 
@@ -1194,6 +1472,7 @@ function closeSearchModal() {
 
 async function submitAdvancedSearch(event) {
   event?.preventDefault();
+  if (isBetaTripWorkspace()) return searchBetaCarregamentos();
   await searchCarregamento('', collectAdvancedSearchFilters());
 }
 
@@ -1216,6 +1495,13 @@ function hasSearchFilters(filters = {}) {
 }
 
 function clearAdvancedSearch({ focus = true } = {}) {
+  if (isBetaTripWorkspace()) {
+    betaSearchRequest++;
+    const term = document.getElementById('beta-search-term');
+    if (term) term.value = '';
+    const btn = document.getElementById('search-btn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Buscar'; }
+  }
   ['search-dt', 'search-nota', 'search-contrato', 'search-cte', 'search-nome', 'search-placa', 'search-evento', 'search-data-inicio', 'search-data-fim']
     .forEach(id => {
       const input = document.getElementById(id);
@@ -1223,10 +1509,14 @@ function clearAdvancedSearch({ focus = true } = {}) {
     });
   document.getElementById('search-status').textContent = '';
   document.getElementById('search-results').innerHTML = '';
-  if (focus) document.getElementById('search-dt')?.focus();
+  if (focus) document.getElementById(isBetaTripWorkspace() ? 'beta-search-term' : 'search-dt')?.focus();
 }
 
 async function openFreteConsultModal() {
+  if (isBetaTripWorkspace()) {
+    if (location.hash !== '#fretes') location.hash = 'fretes';
+    return;
+  }
   const saved = await apiFetch('/api/frete-consultas');
   state.freteConsultas = saved ? mergeFreteConsultas(saved) : loadFreteConsultas();
   renderFreteConsultas();
@@ -1238,6 +1528,7 @@ function closeFreteConsultModal() {
 }
 
 function openReportsModal() {
+  if (isBetaTripWorkspace() && window.FrotasysBetaReports) return window.FrotasysBetaReports.open();
   syncDynamicSelects();
   const start = document.getElementById('report-start-date');
   const end = document.getElementById('report-end-date');
@@ -1251,6 +1542,7 @@ function openReportsModal() {
 }
 
 function closeReportsModal() {
+  window.FrotasysBetaReports?.close();
   document.body.classList.remove('reports-page-active');
   document.getElementById('reports-overlay').classList.add('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1569,8 +1861,8 @@ function buildReportsData(viagens, metas, filters) {
   const operations = reportOperations(filters.operation);
   const dates = dateRangeList(filters.start, filters.end);
   const rows = filterReportRows(viagens, operations);
-  const fatRows = rows.filter(v => v.secao === 'arcos' && hasNotaPreenchida(v));
-  const agencRows = rows.filter(v => v.secao === 'agenciando' || (v.secao === 'arcos' && !hasNotaPreenchida(v)));
+  const fatRows = rows.filter(isFaturadoForSummary);
+  const agencRows = rows.filter(isAgenciadoForSummary);
   const loadedTotal = sumPeso(rows);
   const fatTotal = sumPeso(fatRows);
   const agencTotal = sumPeso(agencRows);
@@ -1660,8 +1952,8 @@ function buildReportSummaryCards(rows, metas, dates, operations) {
     const destinos = summaryDestinationsForOperation(operation);
     const productSet = new Set(produtos.map(normalizeOption));
     const operationRows = rows.filter(row => row.origem === origem && productSet.has(normalizeOption(row.produto)));
-    const faturadoRows = operationRows.filter(row => row.secao === 'arcos' && hasNotaPreenchida(row));
-    const agenciadoRows = operationRows.filter(row => row.secao === 'agenciando' || (row.secao === 'arcos' && !hasNotaPreenchida(row)));
+    const faturadoRows = operationRows.filter(isFaturadoForSummary);
+    const agenciadoRows = operationRows.filter(isAgenciadoForSummary);
     const totals = { meta: 0, fat: 0, agenc: 0, total: 0, falta: 0 };
 
     const columns = destinos.map(destino => {
@@ -2094,13 +2386,21 @@ function dateRangeList(start, end) {
 }
 
 async function openListaEsperaModal() {
-  syncDynamicSelects();
-  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
-  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
-  document.getElementById('waitlist-data').value = todayStr();
+  if (isBetaTripWorkspace()) {
+    location.hash = 'lista-espera';
+    return;
+  }
+  prepareWaitlistForm();
   document.getElementById('waitlist-overlay').classList.remove('hidden');
   await loadListaEspera();
   document.getElementById('waitlist-placa').focus();
+}
+
+function prepareWaitlistForm() {
+  setSelectOptions(document.getElementById('waitlist-tipo'), ['', ...configOptionList('tipo')]);
+  setSelectOptions(document.getElementById('waitlist-origem'), ['', ...originList()]);
+  const date = document.getElementById('waitlist-data');
+  if (!isBetaTripWorkspace() || !date.value) date.value = todayStr();
 }
 
 function closeListaEsperaModal() {
@@ -2142,12 +2442,25 @@ function listaEsperaPositionValue(item = {}) {
 function renderListaEspera() {
   const tbody = document.getElementById('waitlist-body-rows');
   if (!tbody) return;
+  const beta = isBetaTripWorkspace();
+  const editable = !beta || canEditViagens();
+  if (beta) {
+    document.getElementById('espera-cadastro').hidden = !editable;
+    document.getElementById('espera-count').textContent = String(state.listaEspera.length);
+    document.getElementById('beta-espera').classList.toggle('queue-readonly',!editable);
+  }
 
   if (!state.listaEspera.length) {
     tbody.innerHTML = '<tr><td colspan="9" class="waitlist-empty">Nenhum motorista na lista de espera.</td></tr>';
     return;
   }
 
+  if (!editable) {
+    tbody.innerHTML = state.listaEspera.map((item,index) => '<tr><td>'+(index+1)+'º</td>'+
+      [item.placa,item.nome,item.tipo,item.origem,item.data ? formatDateBR(item.data) : '',item.hora,item.obs]
+        .map(value => '<td>'+escapeHtml(value || '—')+'</td>').join('')+'</tr>').join('');
+    return;
+  }
   tbody.innerHTML = state.listaEspera.map((item, index) => `
     <tr data-id="${escapeAttr(item._id)}">
       <td>${index + 1}&ordm;</td>
@@ -2334,8 +2647,9 @@ function loadFreteConsultas() {
 
 function mergeFreteConsultas(saved = {}) {
   if (Array.isArray(saved?.routes)) {
-    const routes = saved.routes.map(normalizeFreteRoute).filter(route => route.rota && route.rows.length);
+    const routes = saved.routes.map(normalizeFreteRoute).filter(route => route.rota && (route.rows.length || route.agregado.length));
     return {
+      revision: String(saved.revision || ''),
       updatedAt: String(saved.updatedAt || ''),
       source: String(saved.source || ''),
       routes: routes.length ? routes : DEFAULT_FRETE_ROUTES.map(normalizeFreteRoute)
@@ -2358,12 +2672,16 @@ function mergeFreteConsultas(saved = {}) {
 }
 
 async function saveFreteConsultas() {
-  localStorage.setItem(FRETE_CONSULT_KEY, JSON.stringify(state.freteConsultas));
   const saved = await apiFetch('/api/frete-consultas', {
     method: 'PUT',
     body: JSON.stringify({ tables: state.freteConsultas })
   });
-  if (saved) state.freteConsultas = mergeFreteConsultas(saved);
+  if (!saved) {
+    await refreshFreteConsultas();
+    return;
+  }
+  state.freteConsultas = mergeFreteConsultas(saved);
+  localStorage.setItem(FRETE_CONSULT_KEY, JSON.stringify(state.freteConsultas));
 }
 
 function renderFreteConsultas() {
@@ -2396,7 +2714,7 @@ function renderFreteTools(routeFilter = '') {
       <input type="search" id="frete-route-filter" value="${escapeAttr(routeFilter)}" placeholder="Digite origem ou destino" oninput="updateFreteRouteBoard()">
     </label>
     <button type="button" onclick="toggleFreteAlphabeticSort()" class="${state.freteSort?.alphabetic ? 'is-active' : ''}">A-Z</button>
-    ${isAdmin() ? '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
+    ${isAdmin() && !isBetaReadOnly() ? '<button type="button" onclick="addFreteRoute()">Adicionar rota</button>' : ''}
   </section>`;
 }
 
@@ -2411,10 +2729,10 @@ function renderFreteQueryPanel() {
     <div class="frete-query-head">
       <div>
         <strong>Consulta R&aacute;pida</strong>
-        <span>Selecione origem, destino e eixo para localizar o valor cadastrado.</span>
+        <span>${isBetaTripWorkspace() ? "Selecione origem, destino e eixos para comparar Agregado e Terceiros." : "Selecione origem, destino e eixo para localizar o valor cadastrado."}</span>
       </div>
     </div>
-    <div class="frete-query-form">
+    <div class="frete-query-form" ${isBetaTripWorkspace() ? 'onchange="document.getElementById(\'frete-query-result\').textContent=\'\'"' : ''}>
       <label>
         <span>ORIGEM</span>
         <select id="frete-query-origem" onchange="updateFreteQueryDestinations()">
@@ -2428,16 +2746,17 @@ function renderFreteQueryPanel() {
       <label>
         <span>EIXOS</span>
         <select id="frete-query-eixo">
-          ${renderOptions(['', ...freteEixosOptions().map(eixo => `${eixo} EIXO`)], '')}
+          ${renderOptions(['', ...freteEixosOptions().map(eixo => `${eixo} Eixos`)], '')}
         </select>
       </label>
       <button type="button" class="btn-primary" onclick="consultarFreteValor()">Consultar</button>
     </div>
-    <div class="frete-query-result" id="frete-query-result"></div>
+    <div class="frete-query-result" id="frete-query-result" aria-live="polite"></div>
   </section>`;
 }
 
 function renderFreteRouteBoard(routes) {
+  if (isBetaTripWorkspace()) return renderBetaFreteBoard(routes);
   const canEditFrete = isAdmin();
   const routeRows = routes.map((route, index) => {
     const routeIndex = freteRoutes().indexOf(route);
@@ -2507,7 +2826,13 @@ function normalizeFreteRoute(route = {}) {
     rota,
     origem: normalizeOption(route.origem || parts.origem),
     destino: normalizeOption(route.destino || parts.destino),
-    rows: (Array.isArray(route.rows) ? route.rows : []).map(row => {
+    rows: normalizeRateRows(route.rows),
+    agregado: normalizeRateRows(route.agregado)
+  };
+}
+
+function normalizeRateRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(row => {
       const pj = parseFreteCurrency(row.pj ?? row.valorPj ?? row.valor_pj);
       const pf = parseFreteCurrency(row.pf ?? row.valorPf ?? row.valor_pf);
       return {
@@ -2515,8 +2840,7 @@ function normalizeFreteRoute(route = {}) {
         pj: Number.isFinite(pj) ? pj : null,
         pf: Number.isFinite(pf) ? pf : null
       };
-    }).filter(row => row.eixos).sort((a, b) => a.eixos - b.eixos)
-  };
+    }).filter(row => row.eixos).sort((a, b) => a.eixos - b.eixos);
 }
 
 function normalizeFreteRouteName(value = '') {
@@ -2578,14 +2902,14 @@ async function addFreteRoute() {
   renderFreteConsultas();
 }
 
-async function addFreteEixo(routeIndex) {
+async function addFreteEixo(routeIndex, group = 'rows') {
   if (!isAdmin()) return;
   const route = freteRoutes()[routeIndex];
   if (!route) return;
-  const existing = new Set((route.rows || []).map(row => Number(row.eixos)));
+  const existing = new Set((route[group] || []).map(row => Number(row.eixos)));
   let next = 5;
   while (existing.has(next)) next += 1;
-  route.rows = [...(route.rows || []), { eixos: next, pj: null, pf: null }]
+  route[group] = [...(route[group] || []), { eixos: next, pj: null, pf: null }]
     .sort((a, b) => Number(a.eixos) - Number(b.eixos));
   await saveFreteConsultas();
   renderFreteConsultas();
@@ -2602,19 +2926,23 @@ async function deleteFreteRoute(routeIndex) {
   renderFreteConsultas();
 }
 
-async function deleteFreteEixo(routeIndex, rowIndex) {
+async function deleteFreteEixo(routeIndex, rowIndex, group = 'rows') {
   if (!isAdmin()) return;
   const route = freteRoutes()[routeIndex];
-  const row = route?.rows?.[rowIndex];
+  const row = route?.[group]?.[rowIndex];
   if (!route || !row) return;
   if (!confirm(`Excluir o eixo ${row.eixos} da rota ${route.rota}?`)) return;
-  route.rows.splice(rowIndex, 1);
+  route[group].splice(rowIndex, 1);
   await saveFreteConsultas();
   renderFreteConsultas();
 }
 
 async function commitFreteBoardEdit(cell) {
   if (!isAdmin()) return;
+  if (isBetaTripWorkspace()) {
+    cell.removeAttribute('contenteditable');
+    if (isBetaReadOnly() || cell.textContent.trim() === cell.dataset.value) return;
+  }
   const field = cell.dataset.freteField;
   const routeIndex = Number(cell.dataset.routeIndex);
   const rowIndex = Number(cell.dataset.rowIndex);
@@ -2634,11 +2962,12 @@ async function commitFreteBoardEdit(cell) {
     route.origem = parts.origem;
     route.destino = parts.destino;
   } else {
-    const row = route.rows?.[rowIndex];
+    const group = cell.dataset.rateGroup || 'rows';
+    const row = route[group]?.[rowIndex];
     if (!row) return;
     if (field === 'eixos') {
       const eixos = Number(String(raw).replace(/\D/g, ''));
-      if (!eixos) {
+      if (!eixos || route[group].some((other,i) => i !== rowIndex && other.eixos === eixos)) {
         cell.textContent = previous || row.eixos;
         return;
       }
@@ -2647,7 +2976,7 @@ async function commitFreteBoardEdit(cell) {
       const value = parseFreteCurrency(raw);
       row[field] = Number.isFinite(value) ? value : null;
     }
-    route.rows = (route.rows || []).sort((a, b) => Number(a.eixos) - Number(b.eixos));
+    route[group] = (route[group] || []).sort((a, b) => Number(a.eixos) - Number(b.eixos));
   }
 
   await saveFreteConsultas();
@@ -2714,8 +3043,19 @@ function freteDestinationOptions(origin = '') {
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
+function freteQueryGroup() {
+  return document.getElementById('frete-query-group')?.value === 'agregado' ? 'agregado' : 'rows';
+}
+
+function updateFreteQueryGroup() {
+  const select = document.getElementById('frete-query-eixo');
+  setSelectOptions(select, ['', ...freteEixosOptions().map(eixo => eixo+' Eixos')]);
+  document.getElementById('frete-query-result').textContent = '';
+}
+
 function freteEixosOptions() {
-  return [...new Set(freteRoutes().flatMap(route => (route.rows || []).map(row => row.eixos)).filter(Boolean))]
+  const groups = isBetaTripWorkspace() ? ['agregado', 'rows'] : [freteQueryGroup()];
+  return [...new Set(freteRoutes().flatMap(route => groups.flatMap(group => (route[group] || []).map(row => row.eixos))).filter(Boolean))]
     .sort((a, b) => a - b);
 }
 
@@ -2743,7 +3083,11 @@ function consultarFreteValor() {
 
   const eixoNumber = Number(String(eixo).replace(/\D/g, ''));
   const route = freteRoutes().find(item => item.origem === normalizeOption(origem) && item.destino === normalizeOption(destino));
-  const row = route?.rows?.find(item => Number(item.eixos) === eixoNumber);
+  if (isBetaTripWorkspace()) {
+    result.innerHTML = renderBetaFreteQueryResult(route, eixoNumber);
+    return;
+  }
+  const row = route?.[freteQueryGroup()]?.find(item => Number(item.eixos) === eixoNumber);
 
   if (!row) {
     result.innerHTML = '<span class="is-error">Nenhum valor cadastrado para essa combina&ccedil;&atilde;o.</span>';
@@ -2812,6 +3156,75 @@ function closeMetaGoalDialog() {
   showNextMetaGoalDialog();
 }
 
+let betaSearchRequest = 0;
+
+function prepareBetaSearchModal() {
+  const overlay = document.getElementById('search-modal-overlay');
+  if (overlay.classList.contains('beta-search-ready')) return;
+  overlay.classList.add('beta-search-ready');
+  const modal = overlay.querySelector('.search-modal');
+  const title = modal.querySelector('.modal-header span');
+  title.id = 'beta-search-title';
+  title.textContent = 'Pesquisa de carregamentos';
+  modal.setAttribute('role','dialog');
+  modal.setAttribute('aria-modal','true');
+  modal.setAttribute('aria-labelledby',title.id);
+  const form = document.getElementById('advanced-search-form');
+  form.insertAdjacentHTML('afterbegin','<div class="form-group beta-search-term"><label for="beta-search-term">PESQUISA GERAL</label><input type="search" id="beta-search-term" maxlength="120" placeholder="Nota, CT-e, DT, contrato, placa, motorista ou evento"></div>');
+  for (const field of form.querySelectorAll('.form-group')) {
+    const input=field.querySelector('input');
+    if(input) field.querySelector('label')?.setAttribute('for',input.id);
+  }
+  document.getElementById('search-status').setAttribute('aria-live','polite');
+}
+
+async function searchBetaCarregamentos() {
+  const request=++betaSearchRequest;
+  const global=v('beta-search-term');
+  const filters=collectAdvancedSearchFilters();
+  const status=document.getElementById('search-status');
+  const results=document.getElementById('search-results');
+  const btn=document.getElementById('search-btn');
+  results.innerHTML='';
+  if (!global && !hasSearchFilters(filters)) {
+    btn.disabled=false;btn.textContent='Buscar';
+    status.textContent='Informe um termo ou pelo menos um filtro.';
+    return;
+  }
+  if(filters.dataInicio && filters.dataFim && filters.dataInicio>filters.dataFim) {
+    btn.disabled=false;btn.textContent='Buscar';
+    status.textContent='A data inicial não pode ser maior que a final.';
+    return;
+  }
+  btn.disabled=true;btn.textContent='Buscando...';
+  status.textContent='Pesquisando carregamentos...';
+  const found=await fetchCarregamentosSearch({...filters,global,reportFailure:true});
+  if(request!==betaSearchRequest) return;
+  btn.disabled=false;btn.textContent='Buscar';
+  if(!Array.isArray(found)) {
+    status.textContent='Não foi possível concluir a pesquisa. Tente novamente.';
+    return;
+  }
+  if(!found.length) {
+    status.textContent='Nenhum carregamento encontrado. Revise os filtros.';
+    return;
+  }
+  status.textContent=found.length+' '+(found.length===1?'carregamento encontrado':'carregamentos encontrados')+(global&&found.length>=200?' · limite de 200 resultados; refine os filtros.':'.');
+  results.innerHTML=renderBetaSearchResults(found);
+}
+
+function renderBetaSearchResults(found) {
+  const headers=['Data','Placa','Motorista','Rota','Nota','CT-e','Status','Ações'];
+  const val=(key,trip)=>escapeHtml(formatSearchValue(key,trip[key]));
+  const rows=found.map((trip,index)=>{
+    const id='beta-search-detail-'+index;
+    const route=[trip.origem,trip.destino].filter(Boolean).join(' → ')||'—';
+    const fields=SEARCH_RESULT_FIELDS.map(field=>'<div class="search-result-field"><span>'+escapeHtml(field.label)+'</span><strong>'+val(field.key,trip)+'</strong></div>').join('');
+    return '<tr class="beta-search-row"><td>'+val('data',trip)+'</td><td class="beta-search-plate">'+val('placa',trip)+'</td><td>'+val('nome',trip)+'</td><td>'+escapeHtml(route)+'</td><td>'+val('nota',trip)+'</td><td>'+val('cte',trip)+'</td><td><span class="beta-search-status-label">'+val('status',trip)+'</span></td><td><button type="button" data-beta-search-detail aria-expanded="false" aria-controls="'+id+'">Detalhes</button></td></tr><tr class="beta-search-detail-row" id="'+id+'" hidden><td colspan="8"><div class="beta-search-detail-title">Dados completos do carregamento</div><div class="search-result-grid">'+fields+'</div></td></tr>';
+  }).join('');
+  return '<div class="beta-search-table-wrap"><table class="beta-search-table"><thead><tr>'+headers.map(label=>'<th scope="col">'+label+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
 async function searchCarregamento(termOverride = '', filters = {}) {
   const term = String(termOverride || v('header-search-input')).trim();
   const status = document.getElementById('search-status');
@@ -2858,6 +3271,7 @@ async function fetchCarregamentosSearch(filters = {}) {
     dataFim = ''
   } = filters;
   const params = new URLSearchParams();
+  if (isBetaTripWorkspace() && filters.global) params.set('global', filters.global);
   if (term) params.set('q', term);
   if (dt) params.set('dt', dt);
   if (cte) params.set('cte', cte);
@@ -2877,7 +3291,7 @@ async function fetchCarregamentosSearch(filters = {}) {
     console.warn('Busca dedicada indispon\u00edvel.', e);
   }
 
-  return [];
+  return filters.reportFailure ? null : [];
 }
 
 function normalizeSearchTerm(value) {
@@ -2929,6 +3343,15 @@ function renderSearchResult(viagem, index = 0, total = 1) {
 }
 
 function handleSearchResultToggle(event) {
+  const detail = event.target.closest('[data-beta-search-detail]');
+  if (detail) {
+    const row = document.getElementById(detail.getAttribute('aria-controls'));
+    if (!row) return;
+    row.hidden = !row.hidden;
+    detail.setAttribute('aria-expanded',String(!row.hidden));
+    detail.textContent = row.hidden ? 'Detalhes' : 'Recolher';
+    return;
+  }
   const button = event.target.closest('.search-result-toggle');
   if (!button) return;
   const card = button.closest('[data-search-result-card]');
@@ -2963,7 +3386,7 @@ function initDragAndDrop() {
       zone.classList.remove('drag-over');
       const id = e.dataTransfer.getData('text/plain');
       const secao = zone.dataset.dropSecao;
-      if (!id || !secao) return;
+      if (!id || !secao || isBetaTripWorkspace()) return;
 
       const viagem = state.viagens.find(v => v._id === id);
       if (!viagem || viagem.secao === secao) return;
@@ -2989,6 +3412,7 @@ function changeDate(delta) {
   state.currentDate = d.toISOString().split('T')[0];
   clearTripFilterScope();
   document.getElementById('date-picker').value = state.currentDate;
+  if (isBetaTripWorkspace()) renderDateWeekday();
   loadAll();
 }
 
@@ -3057,6 +3481,13 @@ async function loadSelectedViagemDetails(id) {
   focusDrawerActiveField();
 }
 
+function shouldCloseBetaDrawerOnEscape(event) {
+  if (!isBetaTripWorkspace() || event.defaultPrevented || event.repeat || state.drawerSaving || state.drawerActiveField || state.lembreteOpen) return false;
+  const drawer = document.getElementById('travel-drawer');
+  if (!drawer?.classList.contains('is-open')) return false;
+  return ![...document.querySelectorAll('.modal-overlay')].some(overlay => !overlay.classList.contains('hidden'));
+}
+
 function closeTravelDrawer() {
   state.selectedViagemId = null;
   state.selectedViagemDetails = null;
@@ -3073,18 +3504,22 @@ function selectedViagem() {
     null;
 }
 
+const betaPedidosEnviados = new Map();
 function viagemStatusDisplay(viagem) {
+  if (viagem?.status === 'ENVIAR PEDIDO' && viagem.dt && betaPedidosEnviados.get(viagem._id) === String(viagem.dt).trim()) return 'PROGRAMAR';
   return String(viagem?.status || '').trim();
 }
 
 function statusColorStyle(status) {
   const normalized = normalizeOption(status);
+  if (isBetaTripWorkspace()) return colorPreviewStyle(configColor('status',status));
   if (STATUS_COLOR_OVERRIDES[normalized]) return colorPreviewStyle(STATUS_COLOR_OVERRIDES[normalized]);
   return selectColorStyle('status', status);
 }
 
 function statusHexColor(status) {
   const normalized = normalizeOption(status);
+  if (isBetaTripWorkspace()) return configColor('status',status || 'STATUS');
   if (STATUS_COLOR_OVERRIDES[normalized]) return STATUS_COLOR_OVERRIDES[normalized];
   return configColor('status', status || 'STATUS');
 }
@@ -3151,7 +3586,36 @@ function renderDrawerGerais() {
 }
 
 function renderDrawerDocuments() {
-  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time')), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
+  return `<div class="drawer-card-grid single">${drawerCard('DOCUMENTOS', [drawerField('dt','DT'), drawerField('cte','CT-e'), drawerField('manifesto','Manifesto'), drawerField('contrato','Contrato'), (isBetaTripWorkspace() ? renderBetaInvoiceRow(0) : drawerFieldRow(drawerField('nota','Nota Fiscal'), drawerField('hora_nf','Hora NF','time'))), ...(isBetaTripWorkspace() ? renderBetaExtraInvoices() : []), drawerField('num_pedagio','Numero pedagio'), drawerField('vlr_pedagio','Valor pedagio','number')], drawerScheduledTruckButton())}</div>`;
+}
+
+const BETA_INVOICE_FIELDS=['nota',...Array.from({length:14},(_,i)=>'nota'+(i+2))];
+const BETA_INVOICE_TIME_FIELDS=['hora_nf',...Array.from({length:14},(_,i)=>'hora_nf'+(i+2))];
+
+function renderBetaInvoiceRow(index){
+  return '<div class="drawer-field-row beta-invoice-row">'+
+    drawerField(BETA_INVOICE_FIELDS[index],index===0?'Nota Fiscal':'Nota Fiscal '+(index+1))+
+    drawerField(BETA_INVOICE_TIME_FIELDS[index],'Hora NF','time')+'</div>';
+}
+
+function isBetaInvoiceTimeField(field){
+  return isBetaTripWorkspace() && BETA_INVOICE_TIME_FIELDS.includes(field);
+}
+
+function renderBetaExtraInvoices(){
+  const trip=selectedViagem();
+  if(!trip)return [];
+  const lastStored=BETA_INVOICE_FIELDS.reduce((last,key,i)=>String(trip[key]||'').trim()?i:last,0);
+  const lastVisible=Math.max(lastStored,BETA_INVOICE_FIELDS.indexOf(state.drawerActiveField),BETA_INVOICE_TIME_FIELDS.indexOf(state.drawerActiveField),0);
+  const fields=[];
+  for(let index=1;index<=lastVisible;index++){
+    fields.push(renderBetaInvoiceRow(index));
+  }
+  if(lastStored<14 && canEditDrawerViagem(trip)){
+    const disabled=!String(trip[BETA_INVOICE_FIELDS[lastStored]]||'').trim() || !!state.drawerActiveField || state.drawerSaving;
+    fields.push('<div class="beta-invoice-add"><button type="button" data-drawer-action="add-invoice" title="Adicionar nota fiscal" aria-label="Adicionar nota fiscal"'+(disabled?' disabled':'')+'>+</button></div>');
+  }
+  return fields;
 }
 
 function renderDrawerAgendamento() {
@@ -3174,7 +3638,8 @@ function freteValuesForViagem(viagem = {}) {
     fretePlaceMatches(item.origem, viagem.origem) &&
     fretePlaceMatches(item.destino, viagem.destino)
   );
-  const row = route?.rows?.find(item => Number(item.eixos) === eixo);
+  const group = isBetaTripWorkspace() && normalizeTipo(viagem.tipo) === 'AGREGADO' ? 'agregado' : 'rows';
+  const row = route?.[group]?.find(item => Number(item.eixos) === eixo);
   return {
     pj: row && Number.isFinite(row.pj) ? formatFreteAccounting(row.pj) : '-',
     pf: row && Number.isFinite(row.pf) ? formatFreteAccounting(row.pf) : '-'
@@ -3246,7 +3711,7 @@ function drawerCardIcon(title) {
 function drawerField(field, label, type = 'text') {
   const isActive = state.drawerActiveField === field;
   const editable = canEditDrawerField(field);
-  const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : drawerValue(field);
+  const value = field === 'descarga' && isActive ? descargaToInputValue(drawerValue(field)) : isBetaInvoiceTimeField(field) ? normalizeHours(drawerValue(field)) : drawerValue(field);
   const display = field === 'peso' ? formatPeso(value) : field === 'vlr_pedagio' ? formatMoney(value) : field === 'descarga' ? formatDescargaDateTime(value) : field === 'data' ? formatDateBR(value) : value;
   if (!isActive || !editable) return `<label class="drawer-field ${editable ? 'is-click-editable' : ''}" data-drawer-field-name="${escapeAttr(field)}" data-drawer-edit-field="${escapeAttr(field)}" ${drawerCopyAttrs(field, display)}><span>${escapeHtml(label)}</span><strong>${escapeHtml(display || '-')}</strong></label>`;
   const inputType = type === 'number' ? 'number' : type === 'time' ? 'time' : type === 'date' ? 'date' : type === 'datetime-local' ? 'datetime-local' : 'text';
@@ -3342,8 +3807,8 @@ function rowActionMenu(viagem) {
     isAdmin() ? `<button type="button" onclick="openHistoryModal('${id}')" title="Hist&oacute;rico" aria-label="Hist&oacute;rico"><span class="table-history-icon" aria-hidden="true"></span></button>` : '',
     hasPhone ? `<button type="button" class="request-arrow-action" data-phone-choice-trigger="true" onclick="showRequestPhoneMenu(event,'${id}')" title="Enviar pedido" aria-label="Enviar pedido"><img src="img/enviarpedido.png?v=20260717" alt=""></button>` : '',
     rowConversationAction(viagem),
-    viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
-    viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
+    !isBetaTripWorkspace() && viagem.secao === 'agenciando' && canEditViagem(viagem) ? `<button type="button" onclick="promoteToFaturado(event,'${id}')" title="Enviar para faturado" aria-label="Enviar para faturado">&uarr;</button>` : '',
+    !isBetaTripWorkspace() && viagem.secao === 'arcos' && canEditViagem(viagem) ? `<button type="button" onclick="demoteToAgenciado(event,'${id}')" title="Voltar para agenciado" aria-label="Voltar para agenciado">&darr;</button>` : '',
     `<button type="button" onclick="copyViagem(event,'${id}')" title="Copiar dados" aria-label="Copiar dados"><span class="table-copy-icon" aria-hidden="true"></span></button>`,
     canDeleteViagem(viagem) ? `<button type="button" class="danger" onclick="deleteViagem('${id}')" title="Excluir" aria-label="Excluir"><span class="table-delete-icon" aria-hidden="true"></span></button>` : ''
   ].filter(Boolean).join('');
@@ -3487,6 +3952,10 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
   if (!viagem) return;
 
   const pendingWindow = window.open('about:blank', '_blank');
+  if (!pendingWindow) {
+    alert('Permita a abertura do WhatsApp e tente novamente.');
+    return;
+  }
   let message = copyViagemText(viagem);
   const extra = await apiFetch(`/api/viagens/${encodeURIComponent(id)}/whatsapp-extra-message`);
   const extraMessage = String(extra?.message || '').trim();
@@ -3497,16 +3966,19 @@ async function openWhatsAppForViagem(event, id, phoneField = 'telefone') {
     pendingWindow?.close?.();
     return;
   }
-  if (pendingWindow) {
-    pendingWindow.opener = null;
-    pendingWindow.location.href = href;
-  } else {
-    window.open(href, '_blank', 'noopener');
-  }
-
-  if (viagem.secao === 'agenciando' && canEditViagem(viagem)) {
-    closeRowActionMenus();
-    await updateViagemField(id, 'secao', 'arcos');
+  if (pendingWindow.closed) return;
+  pendingWindow.opener = null;
+  pendingWindow.location.href = href;
+  if (viagemStatusDisplay(viagem) !== 'ENVIAR PEDIDO' || !viagem.dt) return;
+  const dt = String(viagem.dt).trim();
+  closeRowActionMenus();
+  if (isBetaReadOnly()) {
+    if (['admin', 'operador'].includes(state.userProfile?.role)) {
+      betaPedidosEnviados.set(id, dt);
+      renderAll();
+    }
+  } else if (canEditViagem(viagem)) {
+    await updateViagemField(id, 'pedidoEnviadoDt', dt, {skipUndo:true});
   }
 }
 
@@ -3535,6 +4007,13 @@ async function handleDrawerClick(event) {
   const action = event.target.closest('[data-drawer-action]')?.dataset.drawerAction;
   if (!action) return;
   if (action === 'close') return closeTravelDrawer();
+  if(action==='add-invoice' && isBetaTripWorkspace()){
+    const trip=selectedViagem();
+    if(!trip||!canEditDrawerViagem(trip)||state.drawerSaving||state.drawerActiveField||!String(trip.nota||'').trim())return;
+    const index=BETA_INVOICE_FIELDS.findIndex((key,i)=>i>0&&!String(trip[key]||'').trim());
+    if(index>0)activateDrawerField(BETA_INVOICE_FIELDS[index]);
+    return;
+  }
   if (action === 'toggle-programado') {
     await toggleDrawerProgramado();
     return;
@@ -3571,7 +4050,7 @@ function handleDrawerContextMenu(event) {
 }
 
 function isDrawerDocumentCopyField(field) {
-  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field);
+  return ['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^(?:nota|hora_nf)(?:[2-9]|1[0-5])$/.test(field));
 }
 
 function showDrawerCopyMenu(event, id, { field = '', value = '', copyType = '' } = {}) {
@@ -3620,7 +4099,7 @@ function handleMasterCellDrawerShortcut(event) {
 }
 
 function drawerTabForField(field) {
-  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field)) return 'documentos';
+  if (['dt', 'cte', 'manifesto', 'contrato', 'nota', 'hora_nf', 'num_pedagio', 'vlr_pedagio'].includes(field) || (isBetaTripWorkspace() && /^(?:nota|hora_nf)(?:[2-9]|1[0-5])$/.test(field))) return 'documentos';
   if (['agendamento', 'descarga'].includes(field)) return 'agendamento';
   if (['valor_adiantamento'].includes(field)) return 'financeiro';
   if (field === 'obs' || field === 'frete') return 'observacoes';
@@ -3634,6 +4113,11 @@ function canEditDrawerFieldForViagem(viagem, field) {
 function activateDrawerField(field) {
   const viagem = selectedViagem();
   if (!viagem || !canEditDrawerField(field)) return;
+  // Keep a pending invoice number from being discarded when moving to its time.
+  if (isBetaInvoiceTimeField(field)) {
+    const index=BETA_INVOICE_TIME_FIELDS.indexOf(field);
+    if (index>0 && !String(viagem[BETA_INVOICE_FIELDS[index]]||'').trim()) return;
+  }
   state.drawerActiveField = field;
   state.drawerDraft = { ...viagem };
   renderTravelDrawer();
@@ -3786,6 +4270,8 @@ const EXTRA_FIELDS = [
 const FIELDS = BASE_FIELDS;
 
 function renderTable(secao) {
+  // Every existing refresh of the booked table also refreshes the beta's completed table.
+  if (secao === 'agenciando' && isBetaTripWorkspace()) renderTable('concluidos');
   renderTableHeader(secao);
   const tbody = document.getElementById(`tbody-${secao}`);
   const rows = filteredRows(secao);
@@ -3814,6 +4300,7 @@ function renderTable(secao) {
     separator,
     ...pendingRows.map(renderTableRow)
   ].join('');
+  if(isBetaTripWorkspace()) applyBetaColumnAlignment(tbody);
   updateTableScrollControls(secao);
 }
 
@@ -3838,16 +4325,20 @@ function renderTableRow(v) {
   </tr>`;
 }
 
+function optionalTableFields() {
+  return isBetaTripWorkspace() ? EXTRA_FIELDS.filter(field => !['produto','descarga'].includes(field.key)) : EXTRA_FIELDS;
+}
+
 function visibleTableFields() {
+  const base = isBetaTripWorkspace() ? BASE_FIELDS.flatMap(field => {
+    const fixedAfter = {destino:'produto',agendamento:'descarga'}[field.key];
+    return fixedAfter ? [field, EXTRA_FIELDS.find(item => item.key === fixedAfter)] : [field];
+  }) : BASE_FIELDS;
   const selected = new Set((state.additionalColumns || []).map(String));
-  const extras = EXTRA_FIELDS.filter(field => selected.has(field.key));
-  const agendamentoIndex = BASE_FIELDS.findIndex(field => field.key === 'agendamento');
-  if (agendamentoIndex === -1) return [...BASE_FIELDS, ...extras];
-  return [
-    ...BASE_FIELDS.slice(0, agendamentoIndex + 1),
-    ...extras,
-    ...BASE_FIELDS.slice(agendamentoIndex + 1)
-  ];
+  const extras = optionalTableFields().filter(field => selected.has(field.key));
+  const agendamentoIndex = base.findIndex(field => field.key === 'agendamento');
+  const fields = agendamentoIndex === -1 ? [...base,...extras] : [...base.slice(0,agendamentoIndex+1),...extras,...base.slice(agendamentoIndex+1)];
+  return isBetaTripWorkspace() ? window.FrotasysBetaTableLayout.orderFields(fields,state.betaColumnPreference) : fields;
 }
 
 function allSortableTableFields() {
@@ -3883,9 +4374,12 @@ function renderTableCell(v, field, context = {}) {
       <strong>${escapeHtml(formatPeso(v.peso || '') || '-')}</strong>
     </td>`;
   }
-  if (field.key === 'agendamento') {
-    return `<td data-field="agendamento" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(v.agendamento || '')}" class="quick-edit ${v.agendamentoVerde ? 'has-agendamento' : ''}">
-      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(formatAgendamentoDisplay(v.agendamento || '') || '-')}</span></span>
+  if (field.key === 'agendamento' || (isBetaTripWorkspace() && field.key === 'descarga')) {
+    const descarga = field.key === 'descarga';
+    const confirmed = descarga ? v.descargaVerde === true : v.agendamentoVerde;
+    const display = descarga ? formatDescargaDateTime(raw) : formatAgendamentoDisplay(raw);
+    return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${escapeAttr(raw)}" class="quick-edit ${confirmed ? 'has-agendamento' : ''}">
+      <span class="modern-badge schedule-chip"><svg class="schedule-chip-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg><span>${escapeHtml(display || '-')}</span></span>
     </td>`;
   }
   if (field.key === 'status') {
@@ -4343,12 +4837,24 @@ function renderTableHeader(secao) {
     return `<th class="${active}" data-field="${escapeAttr(field.key)}" title="Clique para ordenar por ${escapeAttr(field.label)}">${escapeHtml(field.label)}${arrow}${escapeHtml(order)}</th>`;
   }).join('')}<th class="col-actions">A&Ccedil;&Otilde;ES</th>`;
 
+  if(isBetaTripWorkspace()) {
+    applyBetaColumnAlignment(headRow);
+    for(const th of headRow.querySelectorAll('th[data-field]')) {
+      th.draggable = true;
+      th.tabIndex = 0;
+      if(th.dataset.field==='descarga'){
+        th.draggable = false;
+        th.title += ' · Fixa após Agendamento';
+      }else th.title += (th.title ? ' · ' : '')+'Arraste para mover a coluna; Alt + setas para reordenar';
+    }
+  }
   headRow.querySelectorAll('th[data-field]:not([data-field="trabalho"])').forEach(th => {
-    th.onclick = () => sortTableBy(th.dataset.field);
+    th.onclick = () => {if(!isBetaTripWorkspace() || Date.now()>=betaColumnSuppressSortUntil) sortTableBy(th.dataset.field);};
   });
 }
 
 function hasDocumentosCompletos(viagem) {
+  if(isBetaTripWorkspace())return window.FrotasysBetaTripSections.hasBillingDocuments(viagem);
   return ['cte', 'manifesto', 'contrato'].every(field => String(viagem[field] || '').trim() !== '');
 }
 
@@ -4363,6 +4869,29 @@ function hasAdiantamentoLiberado(viagem) {
 
 function hasNotaPreenchida(viagem) {
   return String(viagem?.nota || '').trim() !== '';
+}
+
+function isBetaTripWorkspace() {
+  return document.body?.classList.contains('workspace-beta') === true;
+}
+
+function isBetaReadOnly() {
+  return isBetaTripWorkspace() && document.body.dataset.betaMode !== 'editable';
+}
+
+function operationalTripSection(viagem) {
+  return isBetaTripWorkspace() ? window.FrotasysBetaTripSections.classify(viagem) : viagem.secao;
+}
+
+// Completed trips remain in the financial totals; only their operational table changes.
+function isFaturadoForSummary(viagem) {
+  if (isBetaTripWorkspace()) return window.FrotasysBetaTripSections.isBilled(viagem);
+  return viagem.secao === 'arcos' && hasNotaPreenchida(viagem);
+}
+
+function isAgenciadoForSummary(viagem) {
+  if (isBetaTripWorkspace()) return !window.FrotasysBetaTripSections.isBilled(viagem);
+  return viagem.secao === 'agenciando' || (viagem.secao === 'arcos' && !hasNotaPreenchida(viagem));
 }
 
 function hasPamcardOk(pamcard = '') {
@@ -4405,7 +4934,7 @@ function renderCell(v, field) {
   if (field.key === 'telefone') display = firstPhone(raw);
 
   if (field.key === 'placa') {
-    const canPromote = v.secao === 'agenciando' && canEditViagem(v);
+    const canPromote = !isBetaTripWorkspace() && v.secao === 'agenciando' && canEditViagem(v);
     return `<td data-field="${field.key}" data-id="${escapeAttr(v._id)}" data-raw="${safeRaw}" class="quick-edit placa-cell">
       <span class="placa-content">
         <button class="promote-row-btn ${canPromote ? '' : 'is-disabled'}" onclick="promoteToFaturado(event,'${escapeAttr(v._id)}')" title="${canPromote ? 'Enviar para faturado' : 'J\u00e1 est\u00e1 faturado'}">&#8593;</button>
@@ -4562,7 +5091,153 @@ function setReportOperationOptions() {
   select.value = preferred;
 }
 
+
+let betaSettingsTab = 'all';
+
+function prepareBetaSettingsPage() {
+  const page=document.getElementById('beta-settings');
+  const target=document.getElementById('beta-settings-content');
+  const body=document.querySelector('#settings-modal-overlay .modal-body');
+  if(!page||!target||!body)return;
+  body.classList.add('beta-settings-body');
+  target.append(body);
+  const primary=document.createElement('div');
+  primary.className='beta-settings-primary';
+  const profile=document.createElement('div');
+  profile.id='settings-profile-top';profile.className='settings-profile-top';
+  const extra=document.createElement('div');extra.id='beta-settings-extra';
+  primary.append(profile,body.querySelector('.settings-export-section'),document.getElementById('settings-operations'),extra);
+  body.prepend(primary);
+  document.getElementById('beta-settings-search').addEventListener('input',filterBetaSettingsPage);
+  page.addEventListener('click',event=>{
+    const tab=event.target.closest('[data-settings-tab]');
+    if(tab){betaSettingsTab=tab.dataset.settingsTab;filterBetaSettingsPage();return;}
+    const card=event.target.closest('[data-settings-jump]');
+    if(card){
+      betaSettingsTab='all';
+      document.getElementById('beta-settings-search').value='';
+      filterBetaSettingsPage();
+      page.querySelector(card.dataset.settingsJump)?.scrollIntoView({block:'start',behavior:'smooth'});
+      return;
+    }
+    const edit=event.target.closest('[data-settings-edit]');
+    if(edit){editBetaSettingsName(edit);return;}
+    const remove=event.target.closest('[data-settings-delete]');
+    if(remove){
+      const field=remove.dataset.settingsDelete;
+      const value=configOptionList(field)[Number(remove.dataset.settingsIndex)];
+      if(value)deleteConfigOption(field,value);
+    }
+  });
+}
+
+function syncBetaSettingsPage() {
+  const page=document.getElementById('beta-settings');
+  if(!page)return;
+  const extra=document.getElementById('beta-settings-extra');
+  const destination=page.querySelector('#settings-grid [data-field="destino"]');
+  const work=page.querySelector('#settings-grid .settings-work-section');
+  if(destination)extra.append(destination);
+  if(work)extra.append(work);
+  const cards=page.querySelectorAll('.settings-section');
+  for(const card of cards){
+    card.dataset.settingsCategory=card.matches('.settings-operation-messages-section')?'messages':
+      card.matches('.settings-work-section,.settings-operations-section,[data-field="tipo"],[data-field="status"]')?'operational':
+      card.hasAttribute('data-field')?'catalog':'general';
+  }
+  const admin=isAdmin();
+  const overview=document.getElementById('beta-settings-overview');
+  const entries=admin?[
+    ['Operações',operationsList().length,'Operações configuradas','.settings-operations-section','#beta-icon-truck'],
+    ['Categorias',CONFIG_FIELDS.length,'Listas de cadastro','#settings-grid [data-field]','#beta-icon-list'],
+    ['Mensagens',operationsList().filter(op=>String(state.operationMessages[operationMessageKey(op)]||'').trim()).length,'Mensagens preenchidas','.settings-operation-messages-section','#beta-icon-bell'],
+    ['Exportação','Excel por período','Exportar viagens','.settings-export-section','#beta-icon-download']
+  ]:[['Perfil',loggedUserDisplayName(),'Preferências pessoais','.settings-profile-section','#beta-icon-users']];
+  overview.innerHTML=entries.map(([label,value,description,selector,icon])=>'<button type="button" class="beta-settings-kpi" data-settings-jump="'+escapeAttr(selector)+'"><span class="beta-settings-kpi-icon"><svg aria-hidden="true"><use href="'+icon+'"/></svg></span><span><small>'+escapeHtml(label)+'</small><strong>'+escapeHtml(String(value))+'</strong><span>'+escapeHtml(description)+'</span></span><svg class="beta-settings-chevron" aria-hidden="true"><use href="#beta-icon-right"/></svg></button>').join('');
+  if(isBetaReadOnly()){
+    page.querySelectorAll('#beta-settings-content input,#beta-settings-content textarea,#beta-settings-content select,#beta-settings-content button').forEach(el=>{if(!el.closest('.settings-export-section'))el.disabled=true;});
+    document.getElementById('beta-settings-notice').textContent='Modo somente leitura. As configurações não podem ser alteradas.';
+  }
+  page.querySelectorAll('[data-settings-tab]:not([data-settings-tab="all"])').forEach(btn=>btn.hidden=!admin);
+  if(!admin)betaSettingsTab='all';
+  filterBetaSettingsPage();
+}
+
+function filterBetaSettingsPage() {
+  const page=document.getElementById('beta-settings');
+  if(!page)return;
+  const term=normalizeOption(document.getElementById('beta-settings-search').value);
+  let shown=0;
+  for(const card of page.querySelectorAll('.settings-section')){
+    const allowed=!card.classList.contains('is-hidden')&&(isAdmin()||card.matches('.settings-profile-section'));
+    const text=normalizeOption(card.textContent+' '+[...card.querySelectorAll('input,textarea')].map(el=>el.value).join(' '));
+    card.hidden=!(allowed&&(betaSettingsTab==='all'||card.dataset.settingsCategory===betaSettingsTab)&&(!term||text.includes(term)));
+    if(!card.hidden)shown++;
+  }
+  for(const tab of page.querySelectorAll('[data-settings-tab]'))tab.setAttribute('aria-pressed',String(tab.dataset.settingsTab===betaSettingsTab));
+  document.getElementById('beta-settings-empty').hidden=shown>0;
+}
+
+function renderBetaStatusSettings() {
+  const statuses=[...new Set([...STATUS,...Object.keys(DEFAULT_CONFIG_COLORS.status)])];
+  return '<section class="settings-section has-colors beta-status-settings" data-field="status"><div class="settings-section-head"><strong>STATUS OPERACIONAIS</strong><span>'+statuses.length+' status</span></div><p class="beta-settings-section-help">Cores personalizáveis. Os nomes e a sequência são definidos pelo fluxo da viagem.</p><div class="settings-list">'+statuses.map(value=>'<div class="settings-item"><span>'+escapeHtml(value)+'</span>'+renderConfigColorPicker('status',value)+'</div>').join('')+'</div></section>';
+}
+
+function renderBetaConfigEditButton(field,value,index) {
+  if(field==='origem'){
+    const op=operationsList().find(item=>item.origem===value);
+    if(!op?._id)return '';
+    return '<button type="button" class="beta-settings-edit" data-settings-edit="origem" data-settings-index="'+index+'" title="Editar nome da operação" aria-label="Editar nome da operação">&#9998;</button>';
+  }
+  if(['tipo','pamcard'].includes(field)&&(DEFAULT_CONFIG_OPTIONS[field]||[]).includes(value))return '';
+  return '<button type="button" class="beta-settings-edit" data-settings-edit="'+escapeAttr(field)+'" data-settings-index="'+index+'" title="Editar nome" aria-label="Editar nome">&#9998;</button>';
+}
+
+function editBetaSettingsName(button) {
+  if(!isAdmin()||isBetaReadOnly())return;
+  const field=button.dataset.settingsEdit,index=Number(button.dataset.settingsIndex);
+  const work=field==='work'?state.workTypes[index]:null;
+  const current=work?work.name:configOptionList(field)[index];
+  if(!current)return;
+  if(field==='origem'){
+    const op=operationsList().find(item=>item.origem===current);
+    if(op?._id)openOperationModal(op._id);
+    return;
+  }
+  const row=button.closest('.settings-item');
+  if(!row||row.querySelector('.beta-settings-inline-edit'))return;
+  const name=row.firstElementChild;
+  const editor=document.createElement('form');
+  editor.className='beta-settings-inline-edit';
+  const input=document.createElement('input');
+  input.type='text';input.maxLength=100;input.value=current;input.setAttribute('aria-label','Novo nome');
+  const save=document.createElement('button');save.type='submit';save.textContent='Salvar';
+  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar';
+  editor.append(input,save,cancel);
+  name.hidden=true;row.insertBefore(editor,name);button.disabled=true;
+  const cleanup=()=>{editor.remove();name.hidden=false;button.disabled=false;};
+  cancel.onclick=cleanup;
+  editor.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();cleanup();}});
+  editor.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const next=input.value.trim();
+    if(!next||next===current){cleanup();return;}
+    save.disabled=true;cancel.disabled=true;
+    if(work){await updateWorkType(work._id,{name:next});if(editor.isConnected){save.disabled=false;cancel.disabled=false;}return;}
+    const saved=await apiFetch('/api/config-options/'+encodeURIComponent(field)+'/rename',{method:'PUT',body:JSON.stringify({previous:current,value:next})});
+    if(!saved){save.disabled=false;cancel.disabled=false;return;}
+    state.configOptions=normalizeConfigOptions(saved.options);state.configColors=mergeConfigColors(saved.colors);
+    renderSettingsModal();renderAll();
+  });
+  input.focus();input.select();
+}
+
 function openSettingsModal() {
+  if (isBetaTripWorkspace()) {
+    if (location.hash !== '#configuracoes') location.hash = 'configuracoes';
+    else { resetExportViagensForm(); renderSettingsModal(); }
+    return;
+  }
   resetExportViagensForm();
   renderSettingsModal();
   document.getElementById('settings-modal-overlay').classList.remove('hidden');
@@ -4573,7 +5248,8 @@ function closeSettingsModal() {
 }
 
 function renderSettingsModal() {
-  const body = document.querySelector('#settings-modal-overlay .modal-body');
+  const body = document.querySelector(isBetaTripWorkspace() ? '#beta-settings-content .beta-settings-body' : '#settings-modal-overlay .modal-body');
+  if(isBetaTripWorkspace()) document.getElementById('beta-settings-extra')?.replaceChildren();
   let profileTop = document.getElementById('settings-profile-top');
   if (body && !profileTop) {
     body.insertAdjacentHTML('afterbegin', '<div id="settings-profile-top" class="settings-profile-top"></div>');
@@ -4588,6 +5264,7 @@ function renderSettingsModal() {
   const grid = document.getElementById('settings-grid');
   if (!isAdmin()) {
     grid.innerHTML = '';
+    if (isBetaTripWorkspace()) syncBetaSettingsPage();
     return;
   }
   grid.innerHTML = renderWorkSettingsSection() + CONFIG_FIELDS.map(field => {
@@ -4610,11 +5287,13 @@ function renderSettingsModal() {
             <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">&#8593;</button>
             <button type="button" class="settings-move-btn" onclick="moveConfigOption('${field.key}', ${index}, 1)" ${index === values.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
           </div>
-          <button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>
+          ${isBetaTripWorkspace() ? renderBetaConfigEditButton(field.key, value, index) : ''}
+          ${isBetaTripWorkspace() ? `<button type="button" data-settings-delete="${field.key}" data-settings-index="${index}" title="Excluir">Excluir</button>` : `<button type="button" onclick="deleteConfigOption('${field.key}','${escapeAttr(value)}')" title="Excluir">Excluir</button>`}
         </div>`).join('')}
       </div>
     </section>`;
   }).join('');
+  if (isBetaTripWorkspace()) { grid.insertAdjacentHTML('beforeend',renderBetaStatusSettings()); syncBetaSettingsPage(); }
 }
 
 function renderProfileSettingsSection() {
@@ -4672,6 +5351,7 @@ function renderWorkSettingsSection() {
           <button type="button" class="settings-move-btn" onclick="moveWorkType(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Subir">&#8593;</button>
           <button type="button" class="settings-move-btn" onclick="moveWorkType(${index}, 1)" ${index === items.length - 1 ? 'disabled' : ''} title="Descer">&#8595;</button>
         </div>
+        ${isBetaTripWorkspace() ? `<button type="button" class="beta-settings-edit" data-settings-edit="work" data-settings-index="${index}" title="Editar nome" aria-label="Editar nome da atividade">&#9998;</button>` : ''}
         <button type="button" onclick="updateWorkType('${escapeAttr(type._id)}', { isActive: ${type.isActive ? 'false' : 'true'} })">${type.isActive ? 'Desativar' : 'Ativar'}</button>
         <button type="button" onclick="deleteWorkType('${escapeAttr(type._id)}')" title="Excluir">Excluir</button>
         <small>${type.usageCount || 0} usos</small>
@@ -4990,6 +5670,13 @@ function renderConfigColorPicker(field, value) {
 
 async function setConfigColor(field, value, color) {
   if (!CONFIG_COLOR_FIELDS.includes(field) || !isHexColor(color)) return;
+  if (isBetaTripWorkspace()) {
+    if(!isAdmin()||isBetaReadOnly())return;
+    const saved=await apiFetch(`/api/config-colors/${encodeURIComponent(field)}/${encodeURIComponent(value)}`,{method:'PUT',body:JSON.stringify({color})});
+    if(saved){state.configColors=mergeConfigColors(saved);renderAll();showSummaryToast('Cor salva');}
+    renderSettingsModal();
+    return;
+  }
   const normalized = normalizeOption(value);
   state.configColors[field] = { ...(state.configColors[field] || {}), [normalized]: color };
   renderAll();
@@ -5021,11 +5708,25 @@ async function addConfigOption(field) {
 }
 
 async function deleteConfigOption(field, value) {
+  const beta=isBetaTripWorkspace();
+  if (beta && (!isAdmin() || isBetaReadOnly())) return;
+  const linked=field==='origem' && operationsList().some(op=>normalizeOption(op.origem)===normalizeOption(value));
+  if (beta && !confirm('Excluir '+value+' das opções cadastradas?'+(linked?' A operação vinculada também será removida.':''))) return;
   const updated = await apiFetch(`/api/config-options/${field}/${encodeURIComponent(value)}`, { method: 'DELETE' });
-  if (!updated) return;
+  if (!updated) { if(beta)showSummaryToast('Não foi possível confirmar a exclusão.', 'error'); return; }
+  if (beta && (!Array.isArray(updated[field]) || updated[field].some(item=>normalizeOption(item)===normalizeOption(value)))) {
+    showSummaryToast('A opção ainda consta no cadastro. Tente novamente.', 'error');
+    return;
+  }
   state.configOptions = normalizeConfigOptions(updated);
+  if(beta && field==='origem'){
+    const operations=await apiFetch('/api/operacoes');
+    if(Array.isArray(operations))state.operacoes=normalizeOperacoes(operations);
+    else state.operacoes=state.operacoes.filter(op=>normalizeOption(op.origem)!==normalizeOption(value));
+  }
   renderSettingsModal();
   renderAll();
+  if(beta)showSummaryToast('Opção excluída: '+value);
 }
 
 async function deleteOperation(operationId) {
@@ -5058,10 +5759,11 @@ async function moveConfigOption(field, index, direction) {
 
 const TRIP_FILTER_FIELDS = {
   origem: 'Origem', destino: 'Destino', placa: 'Placa', nome: 'Motorista',
-  status: 'Status', frete: 'Evento', evento: 'Presença de evento'
+  tipo: 'Tipo', status: 'Status', frete: 'Evento', evento: 'Presença de evento'
 };
 
 function tripFilterValue(viagem, field) {
+  if (field === 'tipo') return normalizeTipo(viagem.tipo);
   if (field === 'status') return viagemStatusDisplay(viagem);
   if (field === 'evento') return String(viagem.frete ?? '').trim() ? 'Com evento' : 'Sem evento';
   if (field === 'frete') return String(formatTableCellValue(field, viagem.frete) ?? '').trim();
@@ -5070,7 +5772,7 @@ function tripFilterValue(viagem, field) {
 
 function tripInFilterScope(v) {
   return v.data === state.currentDate && (!state.originFilter || v.origem === state.originFilter ||
-    (v.secao === 'agenciando' && !v.origem));
+    (operationalTripSection(v) === 'agenciando' && !v.origem));
 }
 
 function renderTripFilterFields() {
@@ -5174,7 +5876,7 @@ function matchesTripFilters(viagem, filters) {
 
 function filteredRows(secao) {
   return sortRows(state.viagens
-    .filter(v => v.secao === secao)
+    .filter(v => operationalTripSection(v) === secao)
     .filter(tripInFilterScope)
     .filter(v => matchesTripFilters(v, state.tripFilters)));
 }
@@ -5262,7 +5964,7 @@ function saveTableSortPreference() {
 }
 
 function normalizeAdditionalColumns(values) {
-  const allowed = new Set(EXTRA_FIELDS.map(field => field.key));
+  const allowed = new Set(optionalTableFields().map(field => field.key));
   const seen = new Set();
   return (Array.isArray(values) ? values : [])
     .map(String)
@@ -5286,6 +5988,184 @@ function saveTableColumnsPreference() {
   }
 }
 
+
+const BETA_COLUMN_PREF_KEY='beta-column-layout-v1';
+let betaColumnSaveQueue=Promise.resolve(),betaColumnSaveVersion=0,betaColumnSaveMessage='',betaColumnDragKey='',betaColumnSuppressSortUntil=0;
+function betaColumnPref(){
+  return window.FrotasysBetaTableLayout.normalizePreference(state.betaColumnPreference);
+}
+async function loadBetaColumnPreference(){
+  let local=null;
+  try{local=JSON.parse(localStorage.getItem(userPreferenceStorageKey(BETA_COLUMN_PREF_KEY))||'null');}catch(e){}
+  state.betaColumnPreference=window.FrotasysBetaTableLayout.normalizePreference(local);
+  const saved=await apiFetch('/api/auth/table-preferences');
+  if(saved?.preference && !(isBetaReadOnly()&&local))state.betaColumnPreference=window.FrotasysBetaTableLayout.normalizePreference(saved.preference);
+  if(Array.isArray(state.betaColumnPreference.extra))state.additionalColumns=normalizeAdditionalColumns(state.betaColumnPreference.extra);
+  betaColumnSaveMessage=isBetaReadOnly()?'Preferências salvas neste navegador.':saved?'Preferências da sua conta.':'Sincronização indisponível; usando preferências locais.';
+}
+function setBetaColumnMessage(message){
+  betaColumnSaveMessage=message;
+  const el=document.getElementById('beta-column-save-status');
+  if(el)el.textContent=message;
+  updateBetaAlignmentButton();
+}
+function saveBetaColumnPreference(){
+  const preference=window.FrotasysBetaTableLayout.normalizePreference({...betaColumnPref(),extra:state.additionalColumns});
+  state.betaColumnPreference=preference;
+  let stored=false;
+  try{localStorage.setItem(userPreferenceStorageKey(BETA_COLUMN_PREF_KEY),JSON.stringify(preference));stored=true;}catch(e){}
+  if(isBetaReadOnly()){setBetaColumnMessage(stored?'Salvo neste navegador (modo somente leitura).':'Não foi possível salvar localmente.');return;}
+  const version=++betaColumnSaveVersion;
+  setBetaColumnMessage('Salvando preferências...');
+  const run=async()=>{
+    if(version!==betaColumnSaveVersion)return;
+    const saved=await apiFetch('/api/auth/table-preferences',{method:'PUT',body:JSON.stringify(preference)});
+    if(version!==betaColumnSaveVersion)return;
+    setBetaColumnMessage(saved?.preference?'Salvo na sua conta.':stored?'Salvo neste navegador; sincronização falhou.':'Não foi possível salvar as preferências.');
+  };
+  betaColumnSaveQueue=betaColumnSaveQueue.then(run,run);
+}
+function applyBetaColumnAlignment(root){
+  const alignment=betaColumnPref().alignment;
+  for(const cell of root.querySelectorAll('th[data-field],td[data-field],td.work-cell')){
+    const key=cell.dataset.field||'trabalho';
+    if(alignment[key])cell.dataset.betaAlign=alignment[key];
+    else delete cell.dataset.betaAlign;
+  }
+}
+function betaAlignIcon(mode){
+  const paths={default:'M4 5h16M7 10h10M4 15h12M10 20h10',left:'M4 5h16M4 10h10M4 15h16M4 20h10',center:'M4 5h16M7 10h10M4 15h16M7 20h10',right:'M4 5h16M10 10h10M4 15h16M10 20h10'};
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="'+paths[mode]+'"/></svg>';
+}
+function betaGlobalAlignment(){
+  const alignment=betaColumnPref().alignment;
+  const keys=allSortableTableFields().map(f=>f.key);
+  const modes=new Set(keys.map(key=>alignment[key]||'default'));
+  return modes.size===1?[...modes][0]:'mixed';
+}
+function nextBetaAlignment(mode){
+  return ({default:'left',mixed:'left',left:'center',center:'right',right:'default'})[mode]||'left';
+}
+function updateBetaAlignmentButton(){
+  const button=document.getElementById('beta-column-layout-btn');
+  if(!button)return;
+  const mode=betaGlobalAlignment();
+  const labels={default:'Padrão',mixed:'Personalizado',left:'Esquerda',center:'Centralizado',right:'Direita'};
+  if(button.dataset.alignment!==mode){
+    button.dataset.alignment=mode;
+    button.innerHTML=betaAlignIcon(mode==='mixed'?'default':mode);
+  }
+  button.title='Alinhamento: '+labels[mode]+' · Próximo: '+labels[nextBetaAlignment(mode)]+(betaColumnSaveMessage?' · '+betaColumnSaveMessage:'');
+  button.setAttribute('aria-label','Alinhamento atual: '+labels[mode]+'. Clique para alternar para '+labels[nextBetaAlignment(mode)]);
+}
+function cycleBetaColumnAlignment(){
+  const mode=nextBetaAlignment(betaGlobalAlignment()),pref=betaColumnPref();
+  pref.alignment=mode==='default'?{}:Object.fromEntries(allSortableTableFields().map(field=>[field.key,mode]));
+  state.betaColumnPreference=pref;
+  document.querySelectorAll('#beta-shell .trip-section table').forEach(applyBetaColumnAlignment);
+  updateBetaAlignmentButton();
+  const icon=document.querySelector('#beta-column-layout-btn svg');
+  if(icon?.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)icon.animate([{opacity:.4,transform:'scale(.88)'},{opacity:1,transform:'scale(1)'}],{duration:160,easing:'ease-out'});
+  saveBetaColumnPreference();
+}
+function clearBetaColumnDrag(){
+  betaColumnDragKey='';
+  document.querySelectorAll('#beta-shell .trip-section th.is-dragging,#beta-shell .trip-section th.is-drop-target').forEach(th=>th.classList.remove('is-dragging','is-drop-target'));
+}
+function betaColumnAnimationItems(){
+  const items=[...document.querySelectorAll('#beta-shell .trip-section thead th[data-field]')];
+  for(const row of [...document.querySelectorAll('#beta-shell .trip-section tr[data-id]:not([hidden])')].filter(row=>row.getBoundingClientRect().height>0).slice(0,60)){
+    items.push(...row.querySelectorAll('td[data-field],td.work-cell'));
+  }
+  return items;
+}
+function betaColumnAnimationKey(el){
+  return el.closest('table').id+':'+(el.closest('tr').dataset.id||'header')+':'+(el.dataset.field||'trabalho');
+}
+function betaColumnRects(){
+  const map=new Map();
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return map;
+  for(const el of betaColumnAnimationItems())map.set(betaColumnAnimationKey(el),el.getBoundingClientRect());
+  return map;
+}
+function refreshBetaColumnLayout(before){
+  if(activeInlineEdit?.input?.isConnected){setBetaColumnMessage('Conclua a edição do campo antes de reordenar.');return false;}
+  renderTable('arcos');renderTable('agenciando');
+  requestAnimationFrame(()=>{
+    updateAllTableScrollControls();
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    for(const el of betaColumnAnimationItems()){
+      const key=betaColumnAnimationKey(el);
+      const old=before.get(key),now=el.getBoundingClientRect();
+      if(old&&now.width&&now.height&&(old.left!==now.left||old.top!==now.top)&&typeof el.animate==='function')el.animate([{transform:'translate('+(old.left-now.left)+'px,'+(old.top-now.top)+'px)'},{transform:'translate(0,0)'}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
+    }
+  });
+  return true;
+}
+function changeBetaColumnOrder(key,target){
+  if(activeInlineEdit?.input?.isConnected){setBetaColumnMessage('Conclua a edição do campo antes de reordenar.');return;}
+  const before=betaColumnRects(),pref=betaColumnPref(),visible=visibleTableFields().map(f=>f.key);
+  const order=window.FrotasysBetaTableLayout.moveField(visible,key,target);
+  if(order.join()===visible.join())return;
+  state.betaColumnPreference={...pref,order:[...order,...pref.order.filter(k=>!visible.includes(k))]};
+  if(refreshBetaColumnLayout(before))saveBetaColumnPreference();
+}
+function initBetaColumnLayout(){
+  const shell=document.getElementById('beta-shell'),button=document.getElementById('beta-column-layout-btn');
+  if(!shell||!button)return;
+  updateBetaAlignmentButton();
+  button.addEventListener('click',cycleBetaColumnAlignment);
+  const header=event=>event.target.closest('#beta-shell .trip-section thead th[data-field]');
+  shell.addEventListener('dragstart',event=>{
+    const th=header(event);
+    if(!th)return;
+    if(th.dataset.field==='descarga'){event.preventDefault();return;}
+    if(activeInlineEdit?.input?.isConnected){event.preventDefault();setBetaColumnMessage('Conclua a edição do campo antes de reordenar.');return;}
+    clearBetaColumnDrag();
+    betaColumnDragKey=th.dataset.field;
+    event.dataTransfer.effectAllowed='move';
+    event.dataTransfer.setData('text/plain',betaColumnDragKey);
+    th.classList.add('is-dragging');
+  });
+  shell.addEventListener('dragover',event=>{
+    const th=header(event);
+    if(!th||!betaColumnDragKey)return;
+    event.preventDefault();event.dataTransfer.dropEffect='move';
+    shell.querySelectorAll('th.is-drop-target').forEach(item=>item.classList.remove('is-drop-target'));
+    if(th.dataset.field!==betaColumnDragKey)th.classList.add('is-drop-target');
+  });
+  shell.addEventListener('dragleave',event=>{
+    const th=header(event);
+    if(th&&!th.contains(event.relatedTarget))th.classList.remove('is-drop-target');
+  });
+  shell.addEventListener('drop',event=>{
+    const th=header(event);
+    if(!th||!betaColumnDragKey)return;
+    event.preventDefault();
+    const key=betaColumnDragKey,target=th.dataset.field;
+    betaColumnSuppressSortUntil=Date.now()+350;
+    clearBetaColumnDrag();
+    changeBetaColumnOrder(key,target);
+  });
+  document.addEventListener('dragend',()=>{
+    if(betaColumnDragKey){betaColumnSuppressSortUntil=Date.now()+350;clearBetaColumnDrag();}
+  });
+  shell.addEventListener('keydown',event=>{
+    const th=header(event);
+    if(!th)return;
+    if(event.altKey&&['ArrowLeft','ArrowRight'].includes(event.key)){
+      event.preventDefault();
+      const key=th.dataset.field;
+      if(key==='descarga')return;
+      const fields=visibleTableFields().filter(f=>f.key!=='descarga'),index=fields.findIndex(f=>f.key===key),target=fields[index+(event.key==='ArrowLeft'?-1:1)]?.key;
+      const tableId=th.closest('table').id;
+      if(target){changeBetaColumnOrder(key,target);document.getElementById(tableId)?.querySelector('th[data-field="'+key+'"]')?.focus({preventScroll:true});}
+    }else if(!event.altKey&&['Enter',' '].includes(event.key)&&th.dataset.field!=='trabalho'){
+      event.preventDefault();sortTableBy(th.dataset.field);
+    }
+  });
+}
+
 function renderColumnPicker() {
   const menu = document.getElementById('column-picker-menu');
   if (!menu) return;
@@ -5293,7 +6173,7 @@ function renderColumnPicker() {
   menu.innerHTML = `<div class="column-picker-title">Adicionar colunas</div>
     <div class="column-picker-fixed">As colunas atuais ficam sempre vis&iacute;veis.</div>
     <div class="column-picker-options">
-      ${EXTRA_FIELDS.map(field => `<label class="column-picker-option">
+      ${optionalTableFields().map(field => `<label class="column-picker-option">
         <input type="checkbox" value="${escapeAttr(field.key)}" ${selected.has(field.key) ? 'checked' : ''} onchange="toggleAdditionalColumn('${escapeAttr(field.key)}', this.checked)">
         <span>${escapeHtml(field.label)}</span>
       </label>`).join('')}
@@ -5319,6 +6199,7 @@ function toggleAdditionalColumn(key, enabled) {
   state.additionalColumns = normalizeAdditionalColumns([...current]);
   applyAdditionalColumnState();
   saveTableColumnsPreference();
+  if(isBetaTripWorkspace())saveBetaColumnPreference();
   renderTable('arcos');
   renderTable('agenciando');
   requestAnimationFrame(updateAllTableScrollControls);
@@ -5952,8 +6833,8 @@ function renderOriginSummaryCard(operacao) {
   const destinos = summaryDestinationsForOperation(operacao);
   const productSet = new Set(produtos.map(normalizeOption));
   const summaryRows = state.viagens.filter(v => v.data === state.currentDate && v.origem === origem && productSet.has(normalizeOption(v.produto)));
-  const faturadoRows = summaryRows.filter(v => v.secao === 'arcos' && hasNotaPreenchida(v));
-  const agenciadoRows = summaryRows.filter(v => v.secao === 'agenciando' || (v.secao === 'arcos' && !hasNotaPreenchida(v)));
+  const faturadoRows = summaryRows.filter(isFaturadoForSummary);
+  const agenciadoRows = summaryRows.filter(isAgenciadoForSummary);
   const totals = { meta: 0, fat: 0, agenc: 0, total: 0, falta: 0 };
 
   const metaCells = [];
@@ -6149,7 +7030,7 @@ function renderProductSummary(rows) {
 
 function toggleProductSummary() {
   state.productSummaryOpen = !state.productSummaryOpen;
-  renderProductSummary([...filteredRows('arcos'), ...filteredRows('agenciando')]);
+  renderProductSummary([...filteredRows('arcos'), ...filteredRows('agenciando'), ...(isBetaTripWorkspace() ? filteredRows('concluidos') : [])]);
 }
 
 function setSummaryCell(row, dest, value) {
@@ -6457,6 +7338,7 @@ async function updateInlineSelect(select) {
 
 async function promoteToFaturado(event, id) {
   event.stopPropagation();
+  if (isBetaTripWorkspace()) return;
   if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
@@ -6466,6 +7348,7 @@ async function promoteToFaturado(event, id) {
 
 async function demoteToAgenciado(event, id) {
   event.stopPropagation();
+  if (isBetaTripWorkspace()) return;
   if (!canEditViagens()) return;
   const viagem = state.viagens.find(v => v._id === id);
   if (!canEditViagem(viagem)) return;
@@ -6697,6 +7580,9 @@ async function persistTripField(id, field, value) {
     method: 'PUT',
     body: JSON.stringify({ [field]: value })
   });
+  if (updated && isBetaTripWorkspace() && ['descargaVerde','descarga','adiantamentoOk','conclusaoContrato','tipo','nota','data','programado','cte','manifesto','contrato'].includes(field)) {
+    document.dispatchEvent(new Event('beta-discharge-changed'));
+  }
   if (field === 'frete') {
     if (!updated || updated._id !== id || (updated.frete ?? '') !== value) {
       showSummaryToast('N\u00e3o foi poss\u00edvel confirmar a grava\u00e7\u00e3o do evento.', 'error');
@@ -6719,12 +7605,12 @@ function cancelInlineEdit() {
 
 function normalizeFieldValue(field, value) {
   if (field === 'marcadoAmarelo') return Boolean(value);
-  if (field === 'agendamentoVerde') return Boolean(value);
+  if (field === 'agendamentoVerde' || field === 'descargaVerde') return Boolean(value);
   if (field === 'trocaMotoristaConcluida') return Boolean(value);
   if (field === 'programado') return Boolean(value);
   if (field === 'adiantamentoOk') return Boolean(value);
   if (field === 'descarga') return normalizeDescargaDateTime(value);
-  if (TIME_FIELDS.includes(field)) return normalizeHours(value);
+  if (TIME_FIELDS.includes(field) || isBetaInvoiceTimeField(field)) return normalizeHours(value);
   if (field === 'telefone' || field === 'telefone2') return normalizePhoneList(value);
   if (field === 'status') return normalizeOption(value) === 'CONCLUIDO' ? 'CONCLUIDO' : value;
   if (field === 'tipo') return normalizeTipo(value);
@@ -6754,7 +7640,7 @@ function formatCellValue(field, value) {
   if (field === 'peso' && value !== '') return formatPeso(value);
   if (field === 'descarga' && value !== '') return formatDescargaDateTime(value);
   if (field === 'agendamento' && value !== '') return formatAgendamentoDisplay(value);
-  if (TIME_FIELDS.includes(field) && value !== '') return normalizeHours(value);
+  if ((TIME_FIELDS.includes(field) || isBetaInvoiceTimeField(field)) && value !== '') return normalizeHours(value);
   if ((field === 'telefone' || field === 'telefone2') && value !== '') return firstPhone(value);
   if (field === 'data' && value !== '') return formatDateBR(value);
   return value || '';
@@ -6767,13 +7653,13 @@ function formatAgendamentoDisplay(value) {
 function inputPlaceholder(field) {
   if (field === 'telefone' || field === 'telefone2') return '(00) 00000-0000';
   if (field === 'descarga') return '00:00 00/00/0000';
-  if (TIME_FIELDS.includes(field)) return '00:00';
+  if (TIME_FIELDS.includes(field) || isBetaInvoiceTimeField(field)) return '00:00';
   if (isDocumentNumberField(field)) return field === 'contrato' ? '000.000 ou -' : '000.000';
   return '';
 }
 
 function isDocumentNumberField(field) {
-  return DOCUMENT_NUMBER_FIELDS.includes(field);
+  return DOCUMENT_NUMBER_FIELDS.includes(field) || (isBetaTripWorkspace() && /^nota(?:[2-9]|1[0-5])$/.test(field));
 }
 
 function formatDocumentNumber(value, field = '') {
@@ -7061,6 +7947,7 @@ async function saveViagem() {
     obs: v('f-obs'),
     data: state.currentDate
   };
+  if (isBetaTripWorkspace()) delete data.secao;
   const eventoInput = document.getElementById('f-frete');
   if (eventoInput.value !== eventoInput.defaultValue) data.frete = eventoInput.value.trim();
   const quantidade = state.editingId ? 1 : Math.max(1, Math.min(20, Number(v('f-quantidade')) || 1));
@@ -7246,14 +8133,15 @@ function showCtxMenu(e, id, mode = 'row') {
   const driverSwapItem = document.getElementById('ctx-driver-swap');
   copyItem.style.display = mode === 'placa' ? '' : 'none';
   editItem.style.display = mode === 'placa' ? 'none' : canEditViagem(viagem) ? '' : 'none';
-  yellowItem.style.display = mode === 'placa' || !canEditViagens() || !viagem ? 'none' : '';
+  yellowItem.style.display = isBetaTripWorkspace() || mode === 'placa' || !canEditViagens() || !viagem ? 'none' : '';
   driverSwapItem.style.display = mode === 'nome' && isConferirMotoristaPendente(viagem) && canEditViagem(viagem) ? '' : 'none';
   yellowItem.textContent = viagem?.marcadoAmarelo ? 'Remover amarelo' : 'Marcar amarelo';
+  if (isBetaTripWorkspace()) window.FrotasysBetaComments?.configureMenu(mode, viagem);
   if (copyItem.style.display === 'none' && editItem.style.display === 'none' && yellowItem.style.display === 'none' && driverSwapItem.style.display === 'none') return;
   const menu = document.getElementById('ctx-menu');
-  menu.style.left = `${Math.min(e.clientX, window.innerWidth - 160)}px`;
-  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 90)}px`;
   menu.classList.remove('hidden');
+  menu.style.left = `${Math.max(4, Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(4, Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8))}px`;
 }
 
 function hideCtxMenu() {
@@ -7284,10 +8172,14 @@ async function copyPlacaMenuValue(event, id) {
 function showAgendamentoMenu(e, cell) {
   e.preventDefault();
   state.agendamentoTargetId = cell.dataset.id;
+  state.agendamentoTargetField = isBetaTripWorkspace() && cell.dataset.field === 'descarga' ? 'descarga' : 'agendamento';
   const viagem = state.viagens.find(item => item._id === state.agendamentoTargetId);
+  const descarga = state.agendamentoTargetField === 'descarga';
   const mark = document.getElementById('agendamento-mark');
-  mark.textContent = viagem?.agendamentoVerde ? 'Remover agendamento' : 'Agendado';
-  document.getElementById('agendamento-palete').textContent = normalizeOption(viagem?.agendamento) === 'PALETE' ? 'Remover Palete' : 'Palete';
+  mark.textContent = (descarga ? viagem?.descargaVerde === true : viagem?.agendamentoVerde) ? 'Remover agendamento' : 'Agendado';
+  const palete = document.getElementById('agendamento-palete');
+  palete.hidden = descarga;
+  palete.textContent = normalizeOption(viagem?.agendamento) === 'PALETE' ? 'Remover Palete' : 'Palete';
   document.getElementById('agendamento-edit').textContent = 'Editar';
 
   const menu = document.getElementById('agendamento-menu');
@@ -7299,6 +8191,7 @@ function showAgendamentoMenu(e, cell) {
 function hideAgendamentoMenu() {
   document.getElementById('agendamento-menu').classList.add('hidden');
   state.agendamentoTargetId = null;
+  state.agendamentoTargetField = 'agendamento';
 }
 
 function showContratoMenu(e, cell) {
@@ -7403,16 +8296,35 @@ async function toggleAgendamentoVerde() {
   const id = state.agendamentoTargetId;
   if (!id) return;
   const viagem = state.viagens.find(item => item._id === id);
+  const field = state.agendamentoTargetField === 'descarga' ? 'descargaVerde' : 'agendamentoVerde';
   hideAgendamentoMenu();
-  await updateViagemField(id, 'agendamentoVerde', !viagem?.agendamentoVerde);
+  if (!viagem) return;
+  const updated = await updateViagemField(id, field, !viagem[field]);
+  if (updated && isBetaTripWorkspace() && field === 'descargaVerde') {
+    document.dispatchEvent(new Event('beta-discharge-changed'));
+  }
 }
 
 async function marcarAgendamentoPalete() {
+  if (state.agendamentoTargetField === 'descarga') return;
   const id = state.agendamentoTargetId;
   if (!id) return;
   const viagem = state.viagens.find(item => item._id === id);
   const isPalete = normalizeOption(viagem?.agendamento) === 'PALETE';
   hideAgendamentoMenu();
+  if(isBetaTripWorkspace()){
+    if(!canEditViagemField(viagem,'agendamento') || !canEditViagemField(viagem,'agendamentoVerde'))return;
+    const updated=await apiFetch('/api/viagens/'+encodeURIComponent(id),{
+      method:'PUT',body:JSON.stringify({agendamento:isPalete?'':'PALETE',agendamentoVerde:!isPalete})
+    });
+    if(updated){
+      const index=state.viagens.findIndex(item=>item._id===id);
+      if(index!==-1)state.viagens[index]=updated;
+      if(state.selectedViagemId===id)state.selectedViagemDetails=updated;
+    }
+    renderAll();
+    return;
+  }
   const updated = await updateViagemField(id, 'agendamento', isPalete ? '' : 'PALETE', { skipRender: true });
   if (!updated) return renderAll();
   await updateViagemField(id, 'agendamentoVerde', !isPalete);
