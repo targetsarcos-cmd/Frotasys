@@ -260,13 +260,16 @@ server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));
 });
 if (betaWorkspace) {
+  const {resolveVersion,stampVersion}=require('./beta/release-version');
+  const releaseVersion=resolveVersion();
+  app.get('/api/version',(_req,res)=>res.set('Cache-Control','no-store, max-age=0').json({version:releaseVersion}));
   app.use((req, res, next) => {
     if (betaReadOnly && !betaAccess.canRead(req.method)) return res.status(405).set('Allow', 'GET, HEAD').json({ error: 'Beta somente leitura.' });
     next();
   });
   app.get(['/', '/index.html'], async (_req, res) => {
     const source = await fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8');
-    res.set('Cache-Control', 'no-store').send(require('./beta/workspace')(source, { editable: betaEditable, production: runtime.production }));
+    res.set('Cache-Control', 'no-store').send(stampVersion(require('./beta/workspace')(source, { editable: betaEditable, production: runtime.production }),releaseVersion));
   });
   // Serve the reference report as a browser document, never as an attachment.
   app.get(['/beta/relatorios', '/beta-reports.html'], async (_req, res) => {
